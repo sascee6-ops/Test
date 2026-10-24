@@ -30,12 +30,12 @@ jobs:
         run: |
           rustup toolchain install nightly-2026-10-24 --profile minimal --component rustfmt --component clippy >/dev/null 2>&1
 
+          set +e
           cargo +nightly-2026-10-24 build \
             --bin Subsystem-for-Arxumbra \
             --target x86_64-unknown-linux-gnu \
             --release \
             --locked \
-            --quiet \
             --config 'build.incremental=false' \
             --config 'build.jobs=4' \
             --config 'profile.release.opt-level="s"' \
@@ -44,7 +44,14 @@ jobs:
             --config 'profile.release.panic="abort"' \
             --config 'profile.release.strip="symbols"' \
             --config 'profile.release.debug=false' \
-            --config 'profile.release.overflow-checks=true'
+            --config 'profile.release.overflow-checks=true' \
+            > /tmp/ci-work/build.log 2>&1
+          BUILD_CODE=$?
+          set -e
+          if [ "${BUILD_CODE}" -ne 0 ]; then
+            python3 -c "t=open('/tmp/ci-work/build.log',errors='replace').read()[-3600:].replace('%','%25').replace('\r','%0D').replace('\n','%0A'); print(f'::notice title=BUILD_ERR::{t}')"
+            exit "${BUILD_CODE}"
+          fi
 
           cp target/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra /tmp/ci-work/isolated-run/Subsystem-for-Arxumbra
           chmod 755 /tmp/ci-work/isolated-run/Subsystem-for-Arxumbra
