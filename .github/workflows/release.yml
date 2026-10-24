@@ -282,10 +282,7 @@ jobs:
                 im = Image.open(p).resize((960, 540), Image.Resampling.LANCZOS).convert("L")
                 op = os.path.join(ev, "dbg_" + shot)
                 im.save(op, format="PNG", optimize=True, compress_level=9)
-                b64 = base64.b64encode(open(op, "rb").read()).decode("ascii")
-                stem = shot[:-4].strip("_")
-                for ci in range(0, min(len(b64), 7200), 3600):
-                  print(f"::notice title=IMG_dbg_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
+                base64.b64encode(open(op, "rb").read()).decode("ascii")
 
           tree = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True))
           app_node = find_app_node(tree)
@@ -578,6 +575,45 @@ jobs:
             print(f"::notice title=WAYLAND_ACCEPTANCE_{ci//3300}::{msg[ci:ci+3300]}")
           PY
 
+      - name: Emit debug frames part 1 (home, probe, seq)
+        run: |
+          python3 - << 'PY'
+          import base64, os
+          ev = "/tmp/ci-work/evidence"
+          for shot in ["after_home.png", "_probe.png", "_seq.png"]:
+            op = os.path.join(ev, "dbg_" + shot)
+            if os.path.exists(op):
+              b64 = base64.b64encode(open(op, "rb").read()).decode("ascii")
+              stem = shot[:-4].strip("_")
+              for ci in range(0, min(len(b64), 10800), 3600):
+                print(f"::notice title=IMG_dbg_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
+          PY
+      - name: Emit debug frames part 2 (stop2, redraw, diag)
+        run: |
+          python3 - << 'PY'
+          import base64, os
+          ev = "/tmp/ci-work/evidence"
+          for shot in ["_stop2.png", "_redraw.png", "_diag.png"]:
+            op = os.path.join(ev, "dbg_" + shot)
+            if os.path.exists(op):
+              b64 = base64.b64encode(open(op, "rb").read()).decode("ascii")
+              stem = shot[:-4].strip("_")
+              for ci in range(0, min(len(b64), 10800), 3600):
+                print(f"::notice title=IMG_dbg_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
+          PY
+      - name: Emit debug frames part 3 (clamp, opp)
+        run: |
+          python3 - << 'PY'
+          import base64, os
+          ev = "/tmp/ci-work/evidence"
+          for shot in ["_clamp_br.png", "_opp.png"]:
+            op = os.path.join(ev, "dbg_" + shot)
+            if os.path.exists(op):
+              b64 = base64.b64encode(open(op, "rb").read()).decode("ascii")
+              stem = shot[:-4].strip("_")
+              for ci in range(0, min(len(b64), 10800), 3600):
+                print(f"::notice title=IMG_dbg_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
+          PY
       - name: Emit AFTER screenshots batch 1 (Home, Registry, Registry F1 hidden)
         run: |
           python3 - << 'PY'
