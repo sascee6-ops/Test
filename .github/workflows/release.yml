@@ -158,7 +158,7 @@ jobs:
                 x1 = x
                 while x1 + 1 < w and px[x1 + 1, y][0] >= 250:
                   x1 += 1
-                if not (9 <= x1 - x0 + 1 <= 11):
+                if not (7 <= x1 - x0 + 1 <= 11):
                   continue
                 y0 = y
                 while y0 - 1 >= 0 and px[x, y0 - 1][0] >= 250:
@@ -166,20 +166,20 @@ jobs:
                 y1 = y
                 while y1 + 1 < h and px[x, y1 + 1][0] >= 250:
                   y1 += 1
-                if not (9 <= y1 - y0 + 1 <= 11):
+                if not (7 <= y1 - y0 + 1 <= 11):
                   continue
                 cx = (x0 + x1) // 2
                 cy = (y0 + y1) // 2
-                chord = sum(1 for dx in range(-8, 9) if px[cx + dx, cy - 4][0] >= 250)
-                if not (5 <= chord <= 9):
+                chord = sum(1 for dx in range(-8, 9) if px[cx + dx, cy - 3][0] >= 250)
+                if not (4 <= chord <= 9):
                   continue
-                if px[cx - 8, cy][0] >= 250 or px[cx + 8, cy][0] >= 250:
+                if px[cx - 7, cy][0] >= 250 or px[cx + 7, cy][0] >= 250:
                   continue
-                if px[cx, cy - 8][0] >= 250 or px[cx, cy + 8][0] >= 250:
+                if px[cx, cy - 7][0] >= 250 or px[cx, cy + 7][0] >= 250:
                   continue
-                if px[cx - 6, cy - 6][0] >= 250 or px[cx + 6, cy - 6][0] >= 250:
+                if px[cx - 5, cy - 5][0] >= 250 or px[cx + 5, cy - 5][0] >= 250:
                   continue
-                if px[cx - 6, cy + 6][0] >= 250 or px[cx + 6, cy + 6][0] >= 250:
+                if px[cx - 5, cy + 5][0] >= 250 or px[cx + 5, cy + 5][0] >= 250:
                   continue
                 return (cx, cy)
             return None
@@ -330,9 +330,18 @@ jobs:
           reg_img = grab("after_registry.png")
           tests["registry_panel_visible"] = (reg_img.getpixel((600, 60))[0] > bg_rgb[0] + 3)
 
+          f1_pre = grab("_f1_pre.png")
           subprocess.run(["wtype", "-k", "F1"], env=env, check=True)
           time.sleep(0.32)
           reg_hidden_img = grab("after_registry_menu_hidden.png")
+          tests["f1_tap_diff_px"] = sum(1 for a, b in zip(f1_pre.getdata(), reg_hidden_img.getdata()) if a != b)
+          f1_pre2 = grab("_f1_pre2.png")
+          subprocess.run(["wtype", "-P", "F1", "-s", "420", "-p", "F1"], env=env, check=True)
+          time.sleep(0.32)
+          f1_post2 = grab("_f1_hold.png")
+          tests["f1_hold_diff_px"] = sum(1 for a, b in zip(f1_pre2.getdata(), f1_post2.getdata()) if a != b)
+          subprocess.run(["wtype", "-k", "F1"], env=env, check=True)
+          time.sleep(0.32)
           reg_panel_left_vis = min(x for x in range(350, 500) if reg_img.getpixel((x, 540))[0] > bg_rgb[0] + 4)
           reg_panel_left_hid = min(x for x in range(350, 500) if reg_hidden_img.getpixel((x, 540))[0] > bg_rgb[0] + 4)
           tests["f1_hides_left_menu_keeps_right_panel_fixed"] = (
