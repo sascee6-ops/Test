@@ -288,6 +288,15 @@ jobs:
                 time.sleep(0.05)
             return find_dot_center(grab("_probe.png"))
 
+          def goto(tx, ty):
+            c = None
+            for _ in range(4):
+              move_dot_to(tx, ty)
+              c = find_dot_center(grab("_probe.png"))
+              if c and abs(c[0] - tx) <= 3 and abs(c[1] - ty) <= 3:
+                return c
+            return c
+
           YD = {"ctrl": 29, "shift": 42, "alt": 56, "w": 17, "a": 30, "s": 31, "d": 32, "e": 18, "F1": 59, "Escape": 1, "Tab": 15, "Return": 28, "space": 57, "Right": 106}
 
           BG = []
@@ -456,7 +465,7 @@ jobs:
           tests["clamped_bottom_right_center"] = clamp_br
           tests["dot_fully_inside_viewport"] = (clamp_br is not None and 1912 <= clamp_br[0] <= 1916 and 1072 <= clamp_br[1] <= 1076)
 
-          move_dot_to(190, 172)
+          goto(190, 172)
           subprocess.run(["python3", "/tmp/ci-work/vkinj.py", "d18", "s90", "d29", "s90", "u29", "s30", "u18"], env=env, check=True)
           time.sleep(0.3)
           preheld_img = grab("_preheld_e.png")
@@ -491,7 +500,7 @@ jobs:
             and max(f1_diff_xs) <= sidebar_right_x + 1
             and reg_hidden_img.getpixel((100, 540)) == bg_rgb
           )
-          move_dot_to(190, 116)
+          goto(190, 116)
           ctrl_e()
           still_reg_img = grab("_still_reg.png")
           tests["hidden_menu_controls_non_interactive"] = (still_reg_img.getpixel((600, 60))[0] > bg_rgb[0] + 3)
@@ -502,7 +511,7 @@ jobs:
           sw_px = sidebar_right_x + 1
           launch_cx = int(sw_px + 16 + 28 + 480 - 18 - 74)
           launch_cy = 235
-          move_dot_to(launch_cx, launch_cy)
+          goto(launch_cx, launch_cy)
           grab("after_registry_launch_hover.png")
           ctrl_e()
           ws_img = grab("after_workspace.png")
@@ -511,14 +520,14 @@ jobs:
           tests["workspace_create_project_row_present"] = (ws_img.getpixel((200, 116))[0] > ws_img.getpixel((200, 300))[0] + 5)
           tests["workspace_second_nav_row_removed"] = (ws_img.getpixel((200, 172)) == ws_img.getpixel((200, 300)))
 
-          move_dot_to(190, 116)
+          goto(190, 116)
           ctrl_e()
           modal_clean = grab("after_workspace_modal_clean.png")
           modal_interior_rgb = modal_clean.getpixel((960, 540))
           interior_colors = {modal_clean.getpixel((x, y)) for x in range(800, 1120, 8) for y in range(440, 640, 8)}
           tests["modal_centered_and_completely_empty"] = (len(interior_colors) == 1 and modal_interior_rgb[0] > 18)
 
-          move_dot_to(960, 540)
+          goto(960, 540)
           modal_dot_inside = grab("after_modal_dot_above.png")
           tests["dot_renders_above_modal"] = (find_dot_center(modal_dot_inside) is not None)
           ctrl_e()
@@ -532,7 +541,7 @@ jobs:
           ykey("59:d", "59:u")
           time.sleep(0.32)
 
-          move_dot_to(190, 116)
+          goto(190, 116)
           ctrl_e()
           dismissed_img = grab("_modal_dismissed.png")
           tests["backdrop_ctrl_e_dismisses_without_click_through"] = (dismissed_img.getpixel((960, 540)) == panel_bg)
