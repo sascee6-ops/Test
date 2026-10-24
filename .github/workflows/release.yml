@@ -248,9 +248,9 @@ jobs:
               dx = a[0] - c[0]
               dy = a[1] - c[1]
               if abs(dx) > 3:
-                yhold(["ctrl", "d" if dx > 0 else "a"], max(16, int(abs(dx) / PPM[0] * 0.9)))
+                yhold(["ctrl", "d" if dx > 0 else "a"], max(24, int(abs(dx) / PPM[0] * 1.25)))
               if abs(dy) > 3:
-                yhold(["ctrl", "s" if dy > 0 else "w"], max(16, int(abs(dy) / PPM[0] * 0.9)))
+                yhold(["ctrl", "s" if dy > 0 else "w"], max(24, int(abs(dy) / PPM[0] * 1.25)))
               time.sleep(0.06)
 
           def move_dot_to(tx, ty):
@@ -265,12 +265,12 @@ jobs:
                 return cur
               if abs(dx) > 4:
                 k = "d" if dx > 0 else "a"
-                ms = max(16, min(1400, int(abs(dx) / PPM[0] * 0.9)))
+                ms = max(24, min(1400, int(abs(dx) / PPM[0] * (1.25 if abs(dx) < 60 else 0.95))))
                 yhold(["ctrl", k], ms)
                 time.sleep(0.05)
               if abs(dy) > 4:
                 k = "s" if dy > 0 else "w"
-                ms = max(16, min(1400, int(abs(dy) / PPM[0] * 0.9)))
+                ms = max(24, min(1400, int(abs(dy) / PPM[0] * (1.25 if abs(dy) < 60 else 0.95))))
                 yhold(["ctrl", k], ms)
                 time.sleep(0.05)
             return find_dot_center(grab("_probe.png"))
