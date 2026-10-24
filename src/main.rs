@@ -104,7 +104,7 @@ fn main() {
         )
         .add_systems(
             bevy::app::Update,
-            |(keys, windows, time): (
+            |(keys, windows): (
                 bevy::ecs::system::Res<
                     '_,
                     bevy::input::ButtonInput<bevy::input::keyboard::KeyCode>,
@@ -115,20 +115,22 @@ fn main() {
                     &bevy::window::Window,
                     bevy::ecs::query::With<bevy::window::PrimaryWindow>,
                 >,
-                bevy::ecs::system::Res<'_, bevy::time::Time<bevy::time::Real>>,
             ),
-             (mut exits, mut images, mut commands, mut settings): (
+             (time, mut exits): (
+                bevy::ecs::system::Res<'_, bevy::time::Time<bevy::time::Real>>,
                 bevy::ecs::message::MessageWriter<'_, bevy::app::AppExit>,
+            ),
+             (mut images, mut commands): (
                 bevy::ecs::system::ResMut<'_, bevy::asset::Assets<bevy::image::Image>>,
                 bevy::ecs::system::Commands<'_, '_>,
-                bevy::ecs::system::ResMut<'_, bevy::winit::WinitSettings>,
             ),
+             mut settings: bevy::ecs::system::ResMut<'_, bevy::winit::WinitSettings>,
              sprites: bevy::ecs::system::Query<
                 '_,
                 '_,
                 (
-                    std::option::Option<&bevy::sprite::Sprite>,
-                    std::option::Option<&bevy::transform::components::Transform>,
+                    &bevy::sprite::Sprite,
+                    &bevy::transform::components::Transform,
                     &bevy::camera::visibility::Visibility,
                 ),
                 bevy::ecs::query::Without<bevy::text::TextColor>,
@@ -137,8 +139,8 @@ fn main() {
                 '_,
                 '_,
                 (
-                    std::option::Option<&bevy::text::TextColor>,
-                    std::option::Option<&bevy::transform::components::Transform>,
+                    &bevy::text::TextColor,
+                    &bevy::transform::components::Transform,
                     &bevy::camera::visibility::Visibility,
                 ),
                 bevy::ecs::query::Without<bevy::sprite::Sprite>,
@@ -1703,16 +1705,18 @@ fn main() {
 
                     match (
                         window.focused,
-                        (keys.pressed(bevy::input::keyboard::KeyCode::ControlLeft) as u16)
-                            | ((keys.pressed(bevy::input::keyboard::KeyCode::ControlRight) as u16)
-                                << 1)
-                            | ((keys.pressed(bevy::input::keyboard::KeyCode::KeyW) as u16) << 2)
-                            | ((keys.pressed(bevy::input::keyboard::KeyCode::KeyA) as u16) << 3)
-                            | ((keys.pressed(bevy::input::keyboard::KeyCode::KeyS) as u16) << 4)
-                            | ((keys.pressed(bevy::input::keyboard::KeyCode::KeyD) as u16) << 5)
-                            | ((keys.pressed(bevy::input::keyboard::KeyCode::KeyE) as u16) << 6)
-                            | ((keys.pressed(bevy::input::keyboard::KeyCode::F1) as u16) << 7)
-                            | ((keys.pressed(bevy::input::keyboard::KeyCode::Escape) as u16) << 8),
+                        u16::from(keys.pressed(bevy::input::keyboard::KeyCode::ControlLeft))
+                            | (u16::from(
+                                keys.pressed(bevy::input::keyboard::KeyCode::ControlRight),
+                            ) << 1)
+                            | (u16::from(keys.pressed(bevy::input::keyboard::KeyCode::KeyW)) << 2)
+                            | (u16::from(keys.pressed(bevy::input::keyboard::KeyCode::KeyA)) << 3)
+                            | (u16::from(keys.pressed(bevy::input::keyboard::KeyCode::KeyS)) << 4)
+                            | (u16::from(keys.pressed(bevy::input::keyboard::KeyCode::KeyD)) << 5)
+                            | (u16::from(keys.pressed(bevy::input::keyboard::KeyCode::KeyE)) << 6)
+                            | (u16::from(keys.pressed(bevy::input::keyboard::KeyCode::F1)) << 7)
+                            | (u16::from(keys.pressed(bevy::input::keyboard::KeyCode::Escape))
+                                << 8),
                     ) {
                         (false, _) => {
                             focus_state.0 = false;
@@ -1868,69 +1872,70 @@ fn main() {
                             bevy::math::Vec2,
                             bevy::math::Vec2,
                         )| {
-                            match bevy::math::Vec2::new(
-                                if focus_state.3 {
-                                    ((keys.pressed(bevy::input::keyboard::KeyCode::KeyD)
-                                        && (focus_state.1 & 32u16) == 0)
-                                        as u8 as f32)
-                                        - ((keys.pressed(bevy::input::keyboard::KeyCode::KeyA)
-                                            && (focus_state.1 & 8u16) == 0)
-                                            as u8 as f32)
-                                } else {
-                                    0.0
-                                },
-                                if focus_state.3 {
-                                    ((keys.pressed(bevy::input::keyboard::KeyCode::KeyS)
-                                        && (focus_state.1 & 16u16) == 0)
-                                        as u8 as f32)
-                                        - ((keys.pressed(bevy::input::keyboard::KeyCode::KeyW)
-                                            && (focus_state.1 & 4u16) == 0)
-                                            as u8 as f32)
-                                } else {
-                                    0.0
-                                },
-                            )
-                            .normalize_or_zero()
-                            {
-                                move_dir => {
-                                    match if move_dir == bevy::math::Vec2::ZERO {
-                                        bevy::math::Vec2::ZERO
+                            std::iter::once(
+                                bevy::math::Vec2::new(
+                                    if focus_state.3 {
+                                        f32::from(u8::from(
+                                            keys.pressed(bevy::input::keyboard::KeyCode::KeyD)
+                                                && (focus_state.1 & 32u16) == 0,
+                                        )) - f32::from(u8::from(
+                                            keys.pressed(bevy::input::keyboard::KeyCode::KeyA)
+                                                && (focus_state.1 & 8u16) == 0,
+                                        ))
                                     } else {
-                                        prev_vel
-                                            + (move_dir * 540.0 - prev_vel)
-                                                * (1.0
-                                                    - (-(if prev_vel.dot(move_dir) < 0.0 {
-                                                        32.0f32
-                                                    } else {
-                                                        22.0f32
-                                                    }) * metrics_state.3)
-                                                        .exp())
-                                    } {
-                                        next_vel => {
-                                            *dot_state = std::option::Option::Some((
-                                                dot_entity,
-                                                (prev_pos + next_vel * metrics_state.3).clamp(
-                                                    bevy::math::Vec2::new(
-                                                        5.5f32.min(metrics_state.2.x * 0.5),
-                                                        5.5f32.min(metrics_state.2.y * 0.5),
-                                                    ),
-                                                    bevy::math::Vec2::new(
-                                                        (metrics_state.2.x - 5.5f32)
-                                                            .max(metrics_state.2.x * 0.5),
-                                                        (metrics_state.2.y - 5.5f32)
-                                                            .max(metrics_state.2.y * 0.5),
-                                                    ),
-                                                ),
-                                                next_vel,
-                                            ));
-                                        }
-                                    }
-                                }
-                            }
+                                        0.0
+                                    },
+                                    if focus_state.3 {
+                                        f32::from(u8::from(
+                                            keys.pressed(bevy::input::keyboard::KeyCode::KeyS)
+                                                && (focus_state.1 & 16u16) == 0,
+                                        )) - f32::from(u8::from(
+                                            keys.pressed(bevy::input::keyboard::KeyCode::KeyW)
+                                                && (focus_state.1 & 4u16) == 0,
+                                        ))
+                                    } else {
+                                        0.0
+                                    },
+                                )
+                                .normalize_or_zero(),
+                            )
+                            .for_each(|move_dir: bevy::math::Vec2| {
+                                std::iter::once(if move_dir == bevy::math::Vec2::ZERO {
+                                    bevy::math::Vec2::ZERO
+                                } else {
+                                    prev_vel
+                                        + (move_dir * 540.0 - prev_vel)
+                                            * (1.0
+                                                - (-(if prev_vel.dot(move_dir) < 0.0 {
+                                                    32.0f32
+                                                } else {
+                                                    22.0f32
+                                                }) * metrics_state.3)
+                                                    .exp())
+                                })
+                                .for_each(|next_vel: bevy::math::Vec2| {
+                                    *dot_state = std::option::Option::Some((
+                                        dot_entity,
+                                        (prev_pos + next_vel * metrics_state.3).clamp(
+                                            bevy::math::Vec2::new(
+                                                5.5f32.min(metrics_state.2.x * 0.5),
+                                                5.5f32.min(metrics_state.2.y * 0.5),
+                                            ),
+                                            bevy::math::Vec2::new(
+                                                (metrics_state.2.x - 5.5f32)
+                                                    .max(metrics_state.2.x * 0.5),
+                                                (metrics_state.2.y - 5.5f32)
+                                                    .max(metrics_state.2.y * 0.5),
+                                            ),
+                                        ),
+                                        next_vel,
+                                    ));
+                                });
+                            });
                         },
                     );
 
-                    match (
+                    std::iter::once((
                         metrics_state.2.x,
                         metrics_state.2.y,
                         metrics_state.1,
@@ -1962,118 +1967,65 @@ fn main() {
                                 )| pos,
                             )
                             .unwrap_or(metrics_state.2 * 0.5),
-                    ) {
-                        (vw, vh, sw, row_one_rect, row_two_rect, panel_rect, modal_rect, dot_pos) => {
-                            match bevy::math::Rect::new(
+                    ))
+                    .for_each(
+                        |(vw, vh, sw, row_one_rect, row_two_rect, panel_rect, modal_rect, dot_pos): (
+                            f32,
+                            f32,
+                            f32,
+                            bevy::math::Rect,
+                            bevy::math::Rect,
+                            bevy::math::Rect,
+                            bevy::math::Rect,
+                            bevy::math::Vec2,
+                        )| {
+                            std::iter::once(bevy::math::Rect::new(
                                 panel_rect.min.x + 28.0,
                                 122.0,
                                 (panel_rect.min.x + 28.0 + 480.0)
                                     .min((panel_rect.max.x - 28.0).max(panel_rect.min.x + 200.0)),
                                 273.0,
-                            ) {
-                                card_rect => {
-                                    match bevy::math::Rect::new(
-                                        card_rect.max.x - 18.0 - 148.0,
-                                        213.0,
-                                        card_rect.max.x - 18.0,
-                                        257.0,
-                                    ) {
-                                        launch_rect => {
-                                            (*app_state).into_iter().for_each(
-                                                |(cur_mode, cur_menu, cur_modal, _prev_hover): (
-                                                    u8,
-                                                    bool,
-                                                    bool,
-                                                    std::option::Option<u8>,
-                                                )| {
-                                                    match match if !window.focused {
+                            ))
+                            .for_each(|card_rect: bevy::math::Rect| {
+                                std::iter::once(bevy::math::Rect::new(
+                                    card_rect.max.x - 18.0 - 148.0,
+                                    213.0,
+                                    card_rect.max.x - 18.0,
+                                    257.0,
+                                ))
+                                .for_each(|launch_rect: bevy::math::Rect| {
+                                    (*app_state).into_iter().for_each(
+                                        |(cur_mode, cur_menu, cur_modal, _prev_hover): (
+                                            u8,
+                                            bool,
+                                            bool,
+                                            std::option::Option<u8>,
+                                        )| {
+                                            std::iter::once(
+                                                match if !window.focused {
+                                                    std::option::Option::None
+                                                } else if cur_modal && cur_mode == 2u8 {
+                                                    if modal_rect.contains(dot_pos)
+                                                        && ((dot_pos.x - modal_rect.center().x)
+                                                            .abs()
+                                                            - (modal_rect.width() * 0.5 - 14.0))
+                                                            .max(0.0)
+                                                            .hypot(
+                                                                ((dot_pos.y
+                                                                    - modal_rect.center().y)
+                                                                    .abs()
+                                                                    - (modal_rect.height() * 0.5
+                                                                        - 14.0))
+                                                                    .max(0.0),
+                                                            )
+                                                            <= 14.0
+                                                    {
                                                         std::option::Option::None
-                                                    } else if cur_modal && cur_mode == 2u8 {
-                                                        if modal_rect.contains(dot_pos)
-                                                            && ((dot_pos.x - modal_rect.center().x)
-                                                                .abs()
-                                                                - (modal_rect.width() * 0.5 - 14.0))
-                                                                .max(0.0)
-                                                                .hypot(
-                                                                    ((dot_pos.y
-                                                                        - modal_rect.center().y)
-                                                                        .abs()
-                                                                        - (modal_rect.height()
-                                                                            * 0.5
-                                                                            - 14.0))
-                                                                        .max(0.0),
-                                                                )
-                                                                <= 14.0
-                                                        {
-                                                            std::option::Option::None
-                                                        } else {
-                                                            std::option::Option::Some(4u8)
-                                                        }
-                                                    } else if cur_mode != 2u8 {
-                                                        if cur_menu
-                                                            && row_one_rect.contains(dot_pos)
-                                                            && ((dot_pos.x
-                                                                - row_one_rect.center().x)
-                                                                .abs()
-                                                                - (row_one_rect.width() * 0.5
-                                                                    - 9.0))
-                                                                .max(0.0)
-                                                                .hypot(
-                                                                    ((dot_pos.y
-                                                                        - row_one_rect.center().y)
-                                                                        .abs()
-                                                                        - (row_one_rect.height()
-                                                                            * 0.5
-                                                                            - 9.0))
-                                                                        .max(0.0),
-                                                                )
-                                                                <= 9.0
-                                                        {
-                                                            std::option::Option::Some(0u8)
-                                                        } else if cur_menu
-                                                            && row_two_rect.contains(dot_pos)
-                                                            && ((dot_pos.x
-                                                                - row_two_rect.center().x)
-                                                                .abs()
-                                                                - (row_two_rect.width() * 0.5
-                                                                    - 9.0))
-                                                                .max(0.0)
-                                                                .hypot(
-                                                                    ((dot_pos.y
-                                                                        - row_two_rect.center().y)
-                                                                        .abs()
-                                                                        - (row_two_rect.height()
-                                                                            * 0.5
-                                                                            - 9.0))
-                                                                        .max(0.0),
-                                                                )
-                                                                <= 9.0
-                                                        {
-                                                            std::option::Option::Some(1u8)
-                                                        } else if cur_mode == 1u8
-                                                            && metrics_state.0 > 0.0
-                                                            && launch_rect.contains(dot_pos)
-                                                            && ((dot_pos.x
-                                                                - launch_rect.center().x)
-                                                                .abs()
-                                                                - (launch_rect.width() * 0.5 - 9.0))
-                                                                .max(0.0)
-                                                                .hypot(
-                                                                    ((dot_pos.y
-                                                                        - launch_rect.center().y)
-                                                                        .abs()
-                                                                        - (launch_rect.height()
-                                                                            * 0.5
-                                                                            - 9.0))
-                                                                        .max(0.0),
-                                                                )
-                                                                <= 9.0
-                                                        {
-                                                            std::option::Option::Some(2u8)
-                                                        } else {
-                                                            std::option::Option::None
-                                                        }
-                                                    } else if cur_menu
+                                                    } else {
+                                                        std::option::Option::Some(4u8)
+                                                    }
+                                                } else if cur_mode != 2u8 {
+                                                    if cur_menu
                                                         && row_one_rect.contains(dot_pos)
                                                         && ((dot_pos.x - row_one_rect.center().x)
                                                             .abs()
@@ -2089,16 +2041,69 @@ fn main() {
                                                             )
                                                             <= 9.0
                                                     {
-                                                        std::option::Option::Some(3u8)
+                                                        std::option::Option::Some(0u8)
+                                                    } else if cur_menu
+                                                        && row_two_rect.contains(dot_pos)
+                                                        && ((dot_pos.x - row_two_rect.center().x)
+                                                            .abs()
+                                                            - (row_two_rect.width() * 0.5 - 9.0))
+                                                            .max(0.0)
+                                                            .hypot(
+                                                                ((dot_pos.y
+                                                                    - row_two_rect.center().y)
+                                                                    .abs()
+                                                                    - (row_two_rect.height() * 0.5
+                                                                        - 9.0))
+                                                                    .max(0.0),
+                                                            )
+                                                            <= 9.0
+                                                    {
+                                                        std::option::Option::Some(1u8)
+                                                    } else if cur_mode == 1u8
+                                                        && metrics_state.0 > 0.0
+                                                        && launch_rect.contains(dot_pos)
+                                                        && ((dot_pos.x - launch_rect.center().x)
+                                                            .abs()
+                                                            - (launch_rect.width() * 0.5 - 9.0))
+                                                            .max(0.0)
+                                                            .hypot(
+                                                                ((dot_pos.y
+                                                                    - launch_rect.center().y)
+                                                                    .abs()
+                                                                    - (launch_rect.height() * 0.5
+                                                                        - 9.0))
+                                                                    .max(0.0),
+                                                            )
+                                                            <= 9.0
+                                                    {
+                                                        std::option::Option::Some(2u8)
                                                     } else {
                                                         std::option::Option::None
-                                                    } {
-                                                        std::option::Option::Some(
-                                                            0u8 | 1u8 | 3u8,
-                                                        ) if !(dot_pos.x >= 0.0
-                                                            && dot_pos.x <= sw
-                                                            && dot_pos.y >= 0.0
-                                                            && dot_pos.y <= vh
+                                                    }
+                                                } else if cur_menu
+                                                    && row_one_rect.contains(dot_pos)
+                                                    && ((dot_pos.x - row_one_rect.center().x)
+                                                        .abs()
+                                                        - (row_one_rect.width() * 0.5 - 9.0))
+                                                        .max(0.0)
+                                                        .hypot(
+                                                            ((dot_pos.y - row_one_rect.center().y)
+                                                                .abs()
+                                                                - (row_one_rect.height() * 0.5
+                                                                    - 9.0))
+                                                                .max(0.0),
+                                                        )
+                                                        <= 9.0
+                                                {
+                                                    std::option::Option::Some(3u8)
+                                                } else {
+                                                    std::option::Option::None
+                                                } {
+                                                    std::option::Option::Some(0u8 | 1u8 | 3u8)
+                                                        if !(bevy::math::Rect::new(
+                                                            0.0, 0.0, sw, vh,
+                                                        )
+                                                        .contains(dot_pos)
                                                             && (dot_pos.x - (sw - 14.0))
                                                                 .max(0.0)
                                                                 .hypot(
@@ -2107,896 +2112,1560 @@ fn main() {
                                                                         .max(0.0),
                                                                 )
                                                                 <= 14.0) =>
-                                                        {
-                                                            std::option::Option::None
+                                                    {
+                                                        std::option::Option::None
+                                                    }
+                                                    other => other,
+                                                },
+                                            )
+                                            .for_each(|hit_target: std::option::Option<u8>| {
+                                                std::iter::once(
+                                                    if !escape_state.3
+                                                        && focus_state.3
+                                                        && keys.just_pressed(
+                                                            bevy::input::keyboard::KeyCode::KeyE,
+                                                        )
+                                                        && (focus_state.1 & 64u16) == 0
+                                                    {
+                                                        match hit_target {
+                                                            std::option::Option::Some(0u8) => {
+                                                                (0u8, cur_menu, false)
+                                                            }
+                                                            std::option::Option::Some(1u8) => {
+                                                                (1u8, cur_menu, false)
+                                                            }
+                                                            std::option::Option::Some(2u8)
+                                                                if cur_mode == 1u8
+                                                                    && !cur_modal =>
+                                                            {
+                                                                *escape_state = (
+                                                                    std::option::Option::None,
+                                                                    false,
+                                                                    keys.pressed(
+                                                                        bevy::input::keyboard::KeyCode::Escape,
+                                                                    ),
+                                                                    escape_state.3,
+                                                                );
+                                                                (2u8, cur_menu, false)
+                                                            }
+                                                            std::option::Option::Some(3u8)
+                                                                if cur_mode == 2u8
+                                                                    && !cur_modal =>
+                                                            {
+                                                                (2u8, cur_menu, true)
+                                                            }
+                                                            std::option::Option::Some(4u8)
+                                                                if cur_mode == 2u8
+                                                                    && cur_modal =>
+                                                            {
+                                                                (2u8, cur_menu, false)
+                                                            }
+                                                            _ => (cur_mode, cur_menu, cur_modal),
                                                         }
-                                                        other => other,
-                                                    } {
-                                                        hit_target => {
-                                                            match if !escape_state.3
+                                                    } else {
+                                                        (cur_mode, cur_menu, cur_modal)
+                                                    },
+                                                )
+                                                .for_each(
+                                                    |(next_mode, next_menu, next_modal): (
+                                                        u8,
+                                                        bool,
+                                                        bool,
+                                                    )| {
+                                                        *app_state = std::option::Option::Some((
+                                                            next_mode,
+                                                            next_menu,
+                                                            next_modal,
+                                                            if !window.focused || next_modal {
+                                                                std::option::Option::None
+                                                            } else {
+                                                                match hit_target {
+                                                                    std::option::Option::Some(0u8)
+                                                                        if next_mode != 2u8
+                                                                            && next_menu =>
+                                                                    {
+                                                                        std::option::Option::Some(
+                                                                            0u8,
+                                                                        )
+                                                                    }
+                                                                    std::option::Option::Some(1u8)
+                                                                        if next_mode != 2u8
+                                                                            && next_menu =>
+                                                                    {
+                                                                        std::option::Option::Some(
+                                                                            1u8,
+                                                                        )
+                                                                    }
+                                                                    std::option::Option::Some(2u8)
+                                                                        if next_mode == 1u8 =>
+                                                                    {
+                                                                        std::option::Option::Some(
+                                                                            2u8,
+                                                                        )
+                                                                    }
+                                                                    std::option::Option::Some(3u8)
+                                                                        if next_mode == 2u8
+                                                                            && next_menu =>
+                                                                    {
+                                                                        std::option::Option::Some(
+                                                                            3u8,
+                                                                        )
+                                                                    }
+                                                                    _ => std::option::Option::None,
+                                                                }
+                                                            },
+                                                        ));
+                                                    },
+                                                );
+                                            });
+                                        },
+                                    );
+
+                                    (*app_state).into_iter().for_each(
+                                        |(final_mode, final_menu, final_modal, hovered): (
+                                            u8,
+                                            bool,
+                                            bool,
+                                            std::option::Option<u8>,
+                                        )| {
+                                            [0u8, 1u8, 2u8, 3u8].into_iter().for_each(
+                                                |idx: u8| {
+                                                    std::iter::once((
+                                                        usize::from(idx),
+                                                        f32::from(u8::from(
+                                                            hovered
+                                                                == std::option::Option::Some(idx),
+                                                        )),
+                                                        f32::from(u8::from(
+                                                            (hovered
+                                                                == std::option::Option::Some(idx))
                                                                 && focus_state.3
-                                                                && keys.just_pressed(
+                                                                && keys.pressed(
                                                                     bevy::input::keyboard::KeyCode::KeyE,
                                                                 )
-                                                                && (focus_state.1 & 64u16) == 0
-                                                            {
-                                                                match hit_target {
-                                                                    std::option::Option::Some(
-                                                                        0u8,
-                                                                    ) => (0u8, cur_menu, false),
-                                                                    std::option::Option::Some(
-                                                                        1u8,
-                                                                    ) => (1u8, cur_menu, false),
-                                                                    std::option::Option::Some(
-                                                                        2u8,
-                                                                    ) if cur_mode == 1u8
-                                                                        && !cur_modal =>
-                                                                    {
-                                                                        *escape_state = (
-                                                                            std::option::Option::None,
-                                                                            false,
-                                                                            keys.pressed(
-                                                                                bevy::input::keyboard::KeyCode::Escape,
-                                                                            ),
-                                                                            escape_state.3,
-                                                                        );
-                                                                        (2u8, cur_menu, false)
-                                                                    }
-                                                                    std::option::Option::Some(
-                                                                        3u8,
-                                                                    ) if cur_mode == 2u8
-                                                                        && !cur_modal =>
-                                                                    {
-                                                                        (2u8, cur_menu, true)
-                                                                    }
-                                                                    std::option::Option::Some(
-                                                                        4u8,
-                                                                    ) if cur_mode == 2u8
-                                                                        && cur_modal =>
-                                                                    {
-                                                                        (2u8, cur_menu, false)
-                                                                    }
-                                                                    _ => (
-                                                                        cur_mode, cur_menu,
-                                                                        cur_modal,
-                                                                    ),
-                                                                }
-                                                            } else {
-                                                                (cur_mode, cur_menu, cur_modal)
-                                                            } {
-                                                                (
-                                                                    next_mode,
-                                                                    next_menu,
-                                                                    next_modal,
-                                                                ) => {
-                                                                    *app_state =
-                                                                        std::option::Option::Some((
-                                                                            next_mode,
-                                                                            next_menu,
-                                                                            next_modal,
-                                                                            if !window.focused
-                                                                                || next_modal
-                                                                            {
-                                                                                std::option::Option::None
-                                                                            } else {
-                                                                                match hit_target {
-                                                                                    std::option::Option::Some(0u8)
-                                                                                        if next_mode != 2u8
-                                                                                            && next_menu =>
-                                                                                    {
-                                                                                        std::option::Option::Some(0u8)
-                                                                                    }
-                                                                                    std::option::Option::Some(1u8)
-                                                                                        if next_mode != 2u8
-                                                                                            && next_menu =>
-                                                                                    {
-                                                                                        std::option::Option::Some(1u8)
-                                                                                    }
-                                                                                    std::option::Option::Some(2u8)
-                                                                                        if next_mode == 1u8 =>
-                                                                                    {
-                                                                                        std::option::Option::Some(2u8)
-                                                                                    }
-                                                                                    std::option::Option::Some(3u8)
-                                                                                        if next_mode == 2u8
-                                                                                            && next_menu =>
-                                                                                    {
-                                                                                        std::option::Option::Some(3u8)
-                                                                                    }
-                                                                                    _ => std::option::Option::None,
-                                                                                }
-                                                                            },
-                                                                        ));
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                },
-                                            );
-
-                                            (*app_state).into_iter().for_each(
-                                                |(final_mode, final_menu, final_modal, hovered): (
-                                                    u8,
-                                                    bool,
-                                                    bool,
-                                                    std::option::Option<u8>,
-                                                )| {
-                                                    [0usize, 1usize, 2usize, 3usize]
-                                                        .into_iter()
-                                                        .for_each(|idx: usize| {
-                                                            match (
-                                                                (hovered
-                                                                    == std::option::Option::Some(
-                                                                        idx as u8,
-                                                                    ))
-                                                                    as u8
-                                                                    as f32,
-                                                                ((hovered
-                                                                    == std::option::Option::Some(
-                                                                        idx as u8,
-                                                                    ))
-                                                                    && focus_state.3
-                                                                    && keys.pressed(
-                                                                        bevy::input::keyboard::KeyCode::KeyE,
-                                                                    )
-                                                                    && (focus_state.1 & 64u16)
-                                                                        == 0)
-                                                                    as u8
-                                                                    as f32,
-                                                            ) {
-                                                                (h_target, p_target) => {
-                                                                    anim_state.0[idx] = if (h_target
-                                                                        - anim_state.0[idx])
-                                                                        .abs()
-                                                                        <= 0.002
-                                                                    {
-                                                                        h_target
-                                                                    } else {
-                                                                        (anim_state.0[idx]
-                                                                            + (h_target
-                                                                                - anim_state.0[idx])
-                                                                                * (1.0
-                                                                                    - (-20.0f32
-                                                                                        * metrics_state.3)
-                                                                                        .exp())
-                                                                            + (h_target
-                                                                                - anim_state.0[idx])
-                                                                                .signum()
-                                                                                * 1.6f32
-                                                                                * metrics_state.3)
-                                                                            .clamp(
-                                                                                anim_state.0[idx]
-                                                                                    .min(h_target),
-                                                                                anim_state.0[idx]
-                                                                                    .max(h_target),
-                                                                            )
-                                                                    };
-                                                                    anim_state.1[idx] = if (p_target
-                                                                        - anim_state.1[idx])
-                                                                        .abs()
-                                                                        <= 0.002
-                                                                    {
-                                                                        p_target
-                                                                    } else {
-                                                                        (anim_state.1[idx]
-                                                                            + (p_target
-                                                                                - anim_state.1[idx])
-                                                                                * (1.0
-                                                                                    - (-28.0f32
-                                                                                        * metrics_state.3)
-                                                                                        .exp())
-                                                                            + (p_target
-                                                                                - anim_state.1[idx])
-                                                                                .signum()
-                                                                                * 2.4f32
-                                                                                * metrics_state.3)
-                                                                            .clamp(
-                                                                                anim_state.1[idx]
-                                                                                    .min(p_target),
-                                                                                anim_state.1[idx]
-                                                                                    .max(p_target),
-                                                                            )
-                                                                    };
-                                                                }
-                                                            }
-                                                        });
-
-                                                    [
-                                                        (
-                                                            0usize,
-                                                            if final_mode == 0u8 {
-                                                                0.0f32
-                                                            } else {
-                                                                1.0f32
-                                                            },
-                                                            18.0f32,
-                                                        ),
-                                                        (
-                                                            1usize,
-                                                            if final_mode == 0u8 {
-                                                                0.0f32
-                                                            } else {
-                                                                1.0f32
-                                                            },
-                                                            16.0f32,
-                                                        ),
-                                                        (
-                                                            2usize,
-                                                            if final_mode == 2u8 {
-                                                                1.0f32
-                                                            } else {
-                                                                0.0f32
-                                                            },
-                                                            18.0f32,
-                                                        ),
-                                                        (
-                                                            3usize,
-                                                            if final_mode == 2u8 && final_modal {
-                                                                1.0f32
-                                                            } else {
-                                                                0.0f32
-                                                            },
-                                                            20.0f32,
-                                                        ),
-                                                        (
-                                                            4usize,
-                                                            if final_menu {
-                                                                1.0f32
-                                                            } else {
-                                                                0.0f32
-                                                            },
-                                                            20.0f32,
-                                                        ),
-                                                    ]
-                                                    .into_iter()
+                                                                && (focus_state.1 & 64u16) == 0,
+                                                        )),
+                                                    ))
                                                     .for_each(
-                                                        |(idx, target, rate): (usize, f32, f32)| {
-                                                            anim_state.2[idx] = if (target
-                                                                - anim_state.2[idx])
+                                                        |(slot, h_target, p_target): (
+                                                            usize,
+                                                            f32,
+                                                            f32,
+                                                        )| {
+                                                            anim_state.0[slot] = if (h_target
+                                                                - anim_state.0[slot])
                                                                 .abs()
                                                                 <= 0.002
                                                             {
-                                                                target
+                                                                h_target
                                                             } else {
-                                                                (anim_state.2[idx]
-                                                                    + (target - anim_state.2[idx])
+                                                                (anim_state.0[slot]
+                                                                    + (h_target
+                                                                        - anim_state.0[slot])
                                                                         * (1.0
-                                                                            - (-rate
+                                                                            - (-20.0f32
                                                                                 * metrics_state.3)
                                                                                 .exp())
-                                                                    + (target - anim_state.2[idx])
+                                                                    + (h_target
+                                                                        - anim_state.0[slot])
                                                                         .signum()
                                                                         * 1.6f32
                                                                         * metrics_state.3)
                                                                     .clamp(
-                                                                        anim_state.2[idx]
-                                                                            .min(target),
-                                                                        anim_state.2[idx]
-                                                                            .max(target),
+                                                                        anim_state.0[slot]
+                                                                            .min(h_target),
+                                                                        anim_state.0[slot]
+                                                                            .max(h_target),
+                                                                    )
+                                                            };
+                                                            anim_state.1[slot] = if (p_target
+                                                                - anim_state.1[slot])
+                                                                .abs()
+                                                                <= 0.002
+                                                            {
+                                                                p_target
+                                                            } else {
+                                                                (anim_state.1[slot]
+                                                                    + (p_target
+                                                                        - anim_state.1[slot])
+                                                                        * (1.0
+                                                                            - (-28.0f32
+                                                                                * metrics_state.3)
+                                                                                .exp())
+                                                                    + (p_target
+                                                                        - anim_state.1[slot])
+                                                                        .signum()
+                                                                        * 2.4f32
+                                                                        * metrics_state.3)
+                                                                    .clamp(
+                                                                        anim_state.1[slot]
+                                                                            .min(p_target),
+                                                                        anim_state.1[slot]
+                                                                            .max(p_target),
                                                                     )
                                                             };
                                                         },
                                                     );
+                                                },
+                                            );
 
-                                                    ui_entities
-                                                        .as_ref()
-                                                        .copied()
-                                                        .into_iter()
-                                                        .for_each(
-                                                            |e: [bevy::ecs::entity::Entity; 45]| {
-                                                                match (
-                                                                    anim_state.2[0],
-                                                                    anim_state.2[1],
-                                                                    anim_state.2[2],
-                                                                    anim_state.2[3],
-                                                                    anim_state.2[4],
-                                                                    0.97f32
-                                                                        + 0.03f32
-                                                                            * anim_state.2[3],
-                                                                ) {
-                                                                    (
-                                                                        nav_t,
-                                                                        panel_t,
-                                                                        ws_t,
-                                                                        modal_t,
-                                                                        menu_t,
-                                                                        m_scale,
-                                                                    ) => {
-                                                                        [
-                                                                            (
-                                                                                e[0],
-                                                                                bevy::math::Vec2::new(sw, vh),
-                                                                                bevy::math::Vec3::new(sw * 0.5 - vw * 0.5, 0.0, 1.0),
-                                                                                bevy::color::Color::srgba(0.180, 0.180, 0.180, menu_t),
-                                                                                menu_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[1],
-                                                                                bevy::math::Vec2::new((sw - 1.0).max(1.0), (vh - 2.0).max(1.0)),
-                                                                                bevy::math::Vec3::new((sw - 1.0).max(1.0) * 0.5 - vw * 0.5, 0.0, 1.1),
-                                                                                bevy::color::Color::srgba(0.086, 0.086, 0.086, menu_t),
-                                                                                menu_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[2],
-                                                                                bevy::math::Vec2::splat(44.0),
-                                                                                bevy::math::Vec3::new(40.0 - vw * 0.5, vh * 0.5 - 44.0, 2.0),
-                                                                                bevy::color::Color::srgba(0.149, 0.149, 0.149, menu_t),
-                                                                                menu_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[3],
-                                                                                bevy::math::Vec2::splat(26.0),
-                                                                                bevy::math::Vec3::new(40.0 - vw * 0.5, vh * 0.5 - 44.0, 3.0),
-                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, menu_t * (1.0 - ws_t)),
-                                                                                menu_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[4],
-                                                                                bevy::math::Vec2::splat(26.0),
-                                                                                bevy::math::Vec3::new(40.0 - vw * 0.5, vh * 0.5 - 44.0, 3.1),
-                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, menu_t * ws_t),
-                                                                                menu_t > 0.0 && ws_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[7],
-                                                                                bevy::math::Vec2::new((sw - 36.0).max(1.0), 1.0),
-                                                                                bevy::math::Vec3::new(sw * 0.5 - vw * 0.5, vh * 0.5 - 78.5, 2.0),
-                                                                                bevy::color::Color::srgba(0.176, 0.176, 0.176, menu_t),
-                                                                                menu_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[8],
-                                                                                row_one_rect.size(),
-                                                                                bevy::math::Vec3::new(row_one_rect.center().x - vw * 0.5, vh * 0.5 - row_one_rect.center().y, 2.0),
-                                                                                bevy::color::Color::srgba(
-                                                                                    (0.125 + 0.044 * anim_state.0[0] - 0.025 * anim_state.1[0]) * nav_t
-                                                                                        + (0.865 + 0.035 * anim_state.0[0] - 0.045 * anim_state.1[0]) * (1.0 - nav_t),
-                                                                                    (0.125 + 0.044 * anim_state.0[0] - 0.025 * anim_state.1[0]) * nav_t
-                                                                                        + (0.865 + 0.035 * anim_state.0[0] - 0.045 * anim_state.1[0]) * (1.0 - nav_t),
-                                                                                    (0.125 + 0.044 * anim_state.0[0] - 0.025 * anim_state.1[0]) * nav_t
-                                                                                        + (0.865 + 0.035 * anim_state.0[0] - 0.045 * anim_state.1[0]) * (1.0 - nav_t),
-                                                                                    menu_t * (1.0 - ws_t),
-                                                                                ),
-                                                                                menu_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[9],
-                                                                                row_one_rect.size(),
-                                                                                bevy::math::Vec3::new(row_one_rect.center().x - vw * 0.5, vh * 0.5 - row_one_rect.center().y, 2.5),
-                                                                                bevy::color::Color::srgba(0.520, 0.520, 0.520, anim_state.0[0] * menu_t * (1.0 - ws_t)),
-                                                                                menu_t > 0.0 && ws_t < 1.0 && anim_state.0[0] > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[10],
-                                                                                bevy::math::Vec2::splat(36.0),
-                                                                                bevy::math::Vec3::new(42.0 - vw * 0.5, vh * 0.5 - 116.0, 3.0),
-                                                                                bevy::color::Color::srgba(
-                                                                                    0.176 + 0.030 * anim_state.0[0] - 0.020 * anim_state.1[0] - 0.015 * (1.0 - nav_t),
-                                                                                    0.176 + 0.030 * anim_state.0[0] - 0.020 * anim_state.1[0] - 0.015 * (1.0 - nav_t),
-                                                                                    0.176 + 0.030 * anim_state.0[0] - 0.020 * anim_state.1[0] - 0.015 * (1.0 - nav_t),
-                                                                                    menu_t * (1.0 - ws_t),
-                                                                                ),
-                                                                                menu_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[11],
-                                                                                bevy::math::Vec2::splat(22.0),
-                                                                                bevy::math::Vec3::new(42.0 - vw * 0.5, vh * 0.5 - 116.0, 4.0),
-                                                                                bevy::color::Color::srgba(
-                                                                                    (0.780 + 0.157 * anim_state.0[0]) * nav_t + 0.937 * (1.0 - nav_t),
-                                                                                    (0.780 + 0.157 * anim_state.0[0]) * nav_t + 0.937 * (1.0 - nav_t),
-                                                                                    (0.780 + 0.157 * anim_state.0[0]) * nav_t + 0.937 * (1.0 - nav_t),
-                                                                                    menu_t * (1.0 - ws_t),
-                                                                                ),
-                                                                                menu_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[13],
-                                                                                row_two_rect.size(),
-                                                                                bevy::math::Vec3::new(row_two_rect.center().x - vw * 0.5, vh * 0.5 - row_two_rect.center().y, 2.0),
-                                                                                bevy::color::Color::srgba(
-                                                                                    (0.125 + 0.044 * anim_state.0[1] - 0.025 * anim_state.1[1]) * (1.0 - nav_t)
-                                                                                        + (0.865 + 0.035 * anim_state.0[1] - 0.045 * anim_state.1[1]) * nav_t,
-                                                                                    (0.125 + 0.044 * anim_state.0[1] - 0.025 * anim_state.1[1]) * (1.0 - nav_t)
-                                                                                        + (0.865 + 0.035 * anim_state.0[1] - 0.045 * anim_state.1[1]) * nav_t,
-                                                                                    (0.125 + 0.044 * anim_state.0[1] - 0.025 * anim_state.1[1]) * (1.0 - nav_t)
-                                                                                        + (0.865 + 0.035 * anim_state.0[1] - 0.045 * anim_state.1[1]) * nav_t,
-                                                                                    menu_t * (1.0 - ws_t),
-                                                                                ),
-                                                                                menu_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[14],
-                                                                                row_two_rect.size(),
-                                                                                bevy::math::Vec3::new(row_two_rect.center().x - vw * 0.5, vh * 0.5 - row_two_rect.center().y, 2.5),
-                                                                                bevy::color::Color::srgba(0.520, 0.520, 0.520, anim_state.0[1] * menu_t * (1.0 - ws_t)),
-                                                                                menu_t > 0.0 && ws_t < 1.0 && anim_state.0[1] > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[15],
-                                                                                bevy::math::Vec2::splat(36.0),
-                                                                                bevy::math::Vec3::new(42.0 - vw * 0.5, vh * 0.5 - 172.0, 3.0),
-                                                                                bevy::color::Color::srgba(
-                                                                                    0.176 + 0.030 * anim_state.0[1] - 0.020 * anim_state.1[1] - 0.015 * nav_t,
-                                                                                    0.176 + 0.030 * anim_state.0[1] - 0.020 * anim_state.1[1] - 0.015 * nav_t,
-                                                                                    0.176 + 0.030 * anim_state.0[1] - 0.020 * anim_state.1[1] - 0.015 * nav_t,
-                                                                                    menu_t * (1.0 - ws_t),
-                                                                                ),
-                                                                                menu_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[16],
-                                                                                bevy::math::Vec2::splat(22.0),
-                                                                                bevy::math::Vec3::new(42.0 - vw * 0.5, vh * 0.5 - 172.0, 4.0),
-                                                                                bevy::color::Color::srgba(
-                                                                                    (0.780 + 0.157 * anim_state.0[1]) * (1.0 - nav_t) + 0.937 * nav_t,
-                                                                                    (0.780 + 0.157 * anim_state.0[1]) * (1.0 - nav_t) + 0.937 * nav_t,
-                                                                                    (0.780 + 0.157 * anim_state.0[1]) * (1.0 - nav_t) + 0.937 * nav_t,
-                                                                                    menu_t * (1.0 - ws_t),
-                                                                                ),
-                                                                                menu_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[18],
-                                                                                row_one_rect.size(),
-                                                                                bevy::math::Vec3::new(row_one_rect.center().x - vw * 0.5, vh * 0.5 - row_one_rect.center().y, 2.1),
-                                                                                bevy::color::Color::srgba(
-                                                                                    0.145 + 0.050 * anim_state.0[3] - 0.030 * anim_state.1[3],
-                                                                                    0.145 + 0.050 * anim_state.0[3] - 0.030 * anim_state.1[3],
-                                                                                    0.145 + 0.050 * anim_state.0[3] - 0.030 * anim_state.1[3],
-                                                                                    menu_t * ws_t,
-                                                                                ),
-                                                                                menu_t > 0.0 && ws_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[19],
-                                                                                row_one_rect.size(),
-                                                                                bevy::math::Vec3::new(row_one_rect.center().x - vw * 0.5, vh * 0.5 - row_one_rect.center().y, 2.6),
-                                                                                bevy::color::Color::srgba(
-                                                                                    0.275 + 0.280 * anim_state.0[3],
-                                                                                    0.275 + 0.280 * anim_state.0[3],
-                                                                                    0.275 + 0.280 * anim_state.0[3],
-                                                                                    menu_t * ws_t,
-                                                                                ),
-                                                                                menu_t > 0.0 && ws_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[20],
-                                                                                bevy::math::Vec2::splat(36.0),
-                                                                                bevy::math::Vec3::new(42.0 - vw * 0.5, vh * 0.5 - 116.0, 3.1),
-                                                                                bevy::color::Color::srgba(
-                                                                                    0.200 + 0.045 * anim_state.0[3] - 0.025 * anim_state.1[3],
-                                                                                    0.200 + 0.045 * anim_state.0[3] - 0.025 * anim_state.1[3],
-                                                                                    0.200 + 0.045 * anim_state.0[3] - 0.025 * anim_state.1[3],
-                                                                                    menu_t * ws_t,
-                                                                                ),
-                                                                                menu_t > 0.0 && ws_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[21],
-                                                                                bevy::math::Vec2::splat(20.0),
-                                                                                bevy::math::Vec3::new(42.0 - vw * 0.5, vh * 0.5 - 116.0, 4.1),
-                                                                                bevy::color::Color::srgba(
-                                                                                    0.880 + 0.090 * anim_state.0[3],
-                                                                                    0.880 + 0.090 * anim_state.0[3],
-                                                                                    0.880 + 0.090 * anim_state.0[3],
-                                                                                    menu_t * ws_t,
-                                                                                ),
-                                                                                menu_t > 0.0 && ws_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[23],
-                                                                                panel_rect.size(),
-                                                                                bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - panel_rect.center().y, 1.0),
-                                                                                bevy::color::Color::srgba(0.180, 0.180, 0.180, panel_t),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[24],
-                                                                                bevy::math::Vec2::new((panel_rect.width() - 2.0).max(1.0), (panel_rect.height() - 2.0).max(1.0)),
-                                                                                bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - panel_rect.center().y, 1.1),
-                                                                                bevy::color::Color::srgba(0.063, 0.063, 0.063, panel_t),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[25],
-                                                                                bevy::math::Vec2::splat(44.0),
-                                                                                bevy::math::Vec3::new(panel_rect.min.x + 50.0 - vw * 0.5, vh * 0.5 - 60.0, 2.0),
-                                                                                bevy::color::Color::srgba(0.133, 0.133, 0.133, panel_t),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[26],
-                                                                                bevy::math::Vec2::splat(25.0),
-                                                                                bevy::math::Vec3::new(panel_rect.min.x + 50.0 - vw * 0.5, vh * 0.5 - 60.0, 3.0),
-                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, panel_t * (1.0 - ws_t)),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[27],
-                                                                                bevy::math::Vec2::splat(26.0),
-                                                                                bevy::math::Vec3::new(panel_rect.min.x + 50.0 - vw * 0.5, vh * 0.5 - 60.0, 3.1),
-                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, panel_t * ws_t),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[30],
-                                                                                bevy::math::Vec2::new((panel_rect.width() - 56.0).max(1.0), 1.0),
-                                                                                bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 98.5, 2.0),
-                                                                                bevy::color::Color::srgba(0.176, 0.176, 0.176, panel_t),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[31],
-                                                                                card_rect.size(),
-                                                                                bevy::math::Vec3::new(card_rect.center().x - vw * 0.5, vh * 0.5 - card_rect.center().y, 2.0),
-                                                                                bevy::color::Color::srgba(0.188, 0.188, 0.188, panel_t * (1.0 - ws_t)),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[32],
-                                                                                bevy::math::Vec2::new((card_rect.width() - 2.0).max(1.0), (card_rect.height() - 2.0).max(1.0)),
-                                                                                bevy::math::Vec3::new(card_rect.center().x - vw * 0.5, vh * 0.5 - card_rect.center().y, 2.1),
-                                                                                bevy::color::Color::srgba(0.090, 0.090, 0.090, panel_t * (1.0 - ws_t)),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[33],
-                                                                                bevy::math::Vec2::splat(42.0),
-                                                                                bevy::math::Vec3::new(card_rect.min.x + 39.0 - vw * 0.5, vh * 0.5 - 161.0, 3.0),
-                                                                                bevy::color::Color::srgba(0.157, 0.157, 0.157, panel_t * (1.0 - ws_t)),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[34],
-                                                                                bevy::math::Vec2::splat(25.0),
-                                                                                bevy::math::Vec3::new(card_rect.min.x + 39.0 - vw * 0.5, vh * 0.5 - 161.0, 4.0),
-                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, panel_t * (1.0 - ws_t)),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[36],
-                                                                                bevy::math::Vec2::new((card_rect.width() - 36.0).max(1.0), 1.0),
-                                                                                bevy::math::Vec3::new(card_rect.center().x - vw * 0.5, vh * 0.5 - 198.5, 3.0),
-                                                                                bevy::color::Color::srgba(0.176, 0.176, 0.176, panel_t * (1.0 - ws_t)),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[37],
-                                                                                launch_rect.size(),
-                                                                                bevy::math::Vec3::new(launch_rect.center().x - vw * 0.5, vh * 0.5 - launch_rect.center().y, 3.0),
-                                                                                bevy::color::Color::srgba(
-                                                                                    0.215 + 0.060 * anim_state.0[2] - 0.035 * anim_state.1[2],
-                                                                                    0.215 + 0.060 * anim_state.0[2] - 0.035 * anim_state.1[2],
-                                                                                    0.215 + 0.060 * anim_state.0[2] - 0.035 * anim_state.1[2],
-                                                                                    panel_t * (1.0 - ws_t),
-                                                                                ),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[38],
-                                                                                launch_rect.size(),
-                                                                                bevy::math::Vec3::new(launch_rect.center().x - vw * 0.5, vh * 0.5 - launch_rect.center().y, 3.5),
-                                                                                bevy::color::Color::srgba(
-                                                                                    0.360 + 0.360 * anim_state.0[2],
-                                                                                    0.360 + 0.360 * anim_state.0[2],
-                                                                                    0.360 + 0.360 * anim_state.0[2],
-                                                                                    panel_t * (1.0 - ws_t),
-                                                                                ),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[39],
-                                                                                bevy::math::Vec2::splat(32.0),
-                                                                                bevy::math::Vec3::new(launch_rect.min.x + 22.0 - vw * 0.5, vh * 0.5 - 235.0, 4.0),
-                                                                                bevy::color::Color::srgba(
-                                                                                    0.265 + 0.055 * anim_state.0[2] - 0.030 * anim_state.1[2],
-                                                                                    0.265 + 0.055 * anim_state.0[2] - 0.030 * anim_state.1[2],
-                                                                                    0.265 + 0.055 * anim_state.0[2] - 0.030 * anim_state.1[2],
-                                                                                    panel_t * (1.0 - ws_t),
-                                                                                ),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[40],
-                                                                                bevy::math::Vec2::splat(20.0),
-                                                                                bevy::math::Vec3::new(launch_rect.min.x + 22.0 - vw * 0.5, vh * 0.5 - 235.0, 5.0),
-                                                                                bevy::color::Color::srgba(
-                                                                                    0.910 + 0.075 * anim_state.0[2],
-                                                                                    0.910 + 0.075 * anim_state.0[2],
-                                                                                    0.910 + 0.075 * anim_state.0[2],
-                                                                                    panel_t * (1.0 - ws_t),
-                                                                                ),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[42],
-                                                                                bevy::math::Vec2::new(vw, vh),
-                                                                                bevy::math::Vec3::new(0.0, 0.0, 12.0),
-                                                                                bevy::color::Color::srgba(0.0, 0.0, 0.0, 0.58 * modal_t),
-                                                                                modal_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[43],
-                                                                                modal_rect.size() * m_scale,
-                                                                                bevy::math::Vec3::new(0.0, 0.0, 13.0),
-                                                                                bevy::color::Color::srgba(0.245, 0.245, 0.245, modal_t),
-                                                                                modal_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[44],
-                                                                                (modal_rect.size() - bevy::math::Vec2::splat(2.0)).max(bevy::math::Vec2::ONE) * m_scale,
-                                                                                bevy::math::Vec3::new(0.0, 0.0, 13.1),
-                                                                                bevy::color::Color::srgba(0.094, 0.094, 0.094, modal_t),
-                                                                                modal_t > 0.0,
-                                                                            ),
-                                                                        ]
-                                                                        .into_iter()
-                                                                        .for_each(
-                                                                            |(entity, size, pos, colour, shown): (
-                                                                                bevy::ecs::entity::Entity,
-                                                                                bevy::math::Vec2,
-                                                                                bevy::math::Vec3,
-                                                                                bevy::color::Color,
-                                                                                bool,
-                                                                            )| {
-                                                                                sprites
-                                                                                    .get(entity)
-                                                                                    .into_iter()
-                                                                                    .for_each(
-                                                                                        |(sprite, transform, visibility): (
-                                                                                            std::option::Option<&bevy::sprite::Sprite>,
-                                                                                            std::option::Option<&bevy::transform::components::Transform>,
-                                                                                            &bevy::camera::visibility::Visibility,
-                                                                                        )| {
-                                                                                            sprite.into_iter().for_each(
-                                                                                                |sprite: &bevy::sprite::Sprite| {
-                                                                                                    if sprite.color != colour
-                                                                                                        || sprite.custom_size
-                                                                                                            != std::option::Option::Some(size)
-                                                                                                    {
-                                                                                                        commands.entity(entity).insert(
-                                                                                                            bevy::sprite::Sprite {
-                                                                                                                color: colour,
-                                                                                                                custom_size:
-                                                                                                                    std::option::Option::Some(
-                                                                                                                        size,
-                                                                                                                    ),
-                                                                                                                ..sprite.clone()
-                                                                                                            },
-                                                                                                        );
-                                                                                                    }
-                                                                                                },
-                                                                                            );
-                                                                                            transform.into_iter().for_each(
-                                                                                                |transform: &bevy::transform::components::Transform| {
-                                                                                                    if transform.translation != pos {
-                                                                                                        commands.entity(entity).insert(
-                                                                                                            bevy::transform::components::Transform::from_translation(pos),
-                                                                                                        );
-                                                                                                    }
-                                                                                                },
-                                                                                            );
-                                                                                            if (*visibility
-                                                                                                == bevy::camera::visibility::Visibility::Inherited)
-                                                                                                != shown
-                                                                                            {
-                                                                                                commands.entity(entity).insert(if shown {
-                                                                                                    bevy::camera::visibility::Visibility::Inherited
-                                                                                                } else {
-                                                                                                    bevy::camera::visibility::Visibility::Hidden
-                                                                                                });
-                                                                                            }
-                                                                                        },
-                                                                                    );
-                                                                            },
-                                                                        );
+                                            [
+                                                (
+                                                    0usize,
+                                                    if final_mode == 0u8 { 0.0f32 } else { 1.0f32 },
+                                                    18.0f32,
+                                                ),
+                                                (
+                                                    1usize,
+                                                    if final_mode == 0u8 { 0.0f32 } else { 1.0f32 },
+                                                    16.0f32,
+                                                ),
+                                                (
+                                                    2usize,
+                                                    if final_mode == 2u8 { 1.0f32 } else { 0.0f32 },
+                                                    18.0f32,
+                                                ),
+                                                (
+                                                    3usize,
+                                                    if final_mode == 2u8 && final_modal {
+                                                        1.0f32
+                                                    } else {
+                                                        0.0f32
+                                                    },
+                                                    20.0f32,
+                                                ),
+                                                (
+                                                    4usize,
+                                                    if final_menu { 1.0f32 } else { 0.0f32 },
+                                                    20.0f32,
+                                                ),
+                                            ]
+                                            .into_iter()
+                                            .for_each(|(idx, target, rate): (usize, f32, f32)| {
+                                                anim_state.2[idx] =
+                                                    if (target - anim_state.2[idx]).abs() <= 0.002
+                                                    {
+                                                        target
+                                                    } else {
+                                                        (anim_state.2[idx]
+                                                            + (target - anim_state.2[idx])
+                                                                * (1.0
+                                                                    - (-rate * metrics_state.3)
+                                                                        .exp())
+                                                            + (target - anim_state.2[idx]).signum()
+                                                                * 1.6f32
+                                                                * metrics_state.3)
+                                                            .clamp(
+                                                                anim_state.2[idx].min(target),
+                                                                anim_state.2[idx].max(target),
+                                                            )
+                                                    };
+                                            });
 
-                                                                        [
-                                                                            (
-                                                                                e[5],
-                                                                                bevy::math::Vec3::new(76.0 - vw * 0.5, vh * 0.5 - 44.0, 3.0),
-                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, menu_t * (1.0 - ws_t)),
-                                                                                menu_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[6],
-                                                                                bevy::math::Vec3::new(76.0 - vw * 0.5, vh * 0.5 - 44.0, 3.1),
-                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, menu_t * ws_t),
-                                                                                menu_t > 0.0 && ws_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[12],
-                                                                                bevy::math::Vec3::new(72.0 - vw * 0.5, vh * 0.5 - 116.0, 4.0),
-                                                                                bevy::color::Color::srgba(
-                                                                                    (0.780 + 0.157 * anim_state.0[0]) * nav_t + 0.086 * (1.0 - nav_t),
-                                                                                    (0.780 + 0.157 * anim_state.0[0]) * nav_t + 0.086 * (1.0 - nav_t),
-                                                                                    (0.780 + 0.157 * anim_state.0[0]) * nav_t + 0.086 * (1.0 - nav_t),
-                                                                                    menu_t * (1.0 - ws_t),
-                                                                                ),
-                                                                                menu_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[17],
-                                                                                bevy::math::Vec3::new(72.0 - vw * 0.5, vh * 0.5 - 172.0, 4.0),
-                                                                                bevy::color::Color::srgba(
-                                                                                    (0.780 + 0.157 * anim_state.0[1]) * (1.0 - nav_t) + 0.086 * nav_t,
-                                                                                    (0.780 + 0.157 * anim_state.0[1]) * (1.0 - nav_t) + 0.086 * nav_t,
-                                                                                    (0.780 + 0.157 * anim_state.0[1]) * (1.0 - nav_t) + 0.086 * nav_t,
-                                                                                    menu_t * (1.0 - ws_t),
-                                                                                ),
-                                                                                menu_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[22],
-                                                                                bevy::math::Vec3::new(72.0 - vw * 0.5, vh * 0.5 - 116.0, 4.1),
-                                                                                bevy::color::Color::srgba(
-                                                                                    0.880 + 0.090 * anim_state.0[3],
-                                                                                    0.880 + 0.090 * anim_state.0[3],
-                                                                                    0.880 + 0.090 * anim_state.0[3],
-                                                                                    menu_t * ws_t,
-                                                                                ),
-                                                                                menu_t > 0.0 && ws_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[28],
-                                                                                bevy::math::Vec3::new(panel_rect.min.x + 86.0 - vw * 0.5, vh * 0.5 - 60.0, 3.0),
-                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, panel_t * (1.0 - ws_t)),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[29],
-                                                                                bevy::math::Vec3::new(panel_rect.min.x + 86.0 - vw * 0.5, vh * 0.5 - 60.0, 3.1),
-                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, panel_t * ws_t),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0,
-                                                                            ),
-                                                                            (
-                                                                                e[35],
-                                                                                bevy::math::Vec3::new(card_rect.min.x + 74.0 - vw * 0.5, vh * 0.5 - 161.0, 4.0),
-                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, panel_t * (1.0 - ws_t)),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                            (
-                                                                                e[41],
-                                                                                bevy::math::Vec3::new(launch_rect.min.x + 48.0 - vw * 0.5, vh * 0.5 - 235.0, 5.0),
-                                                                                bevy::color::Color::srgba(
-                                                                                    0.910 + 0.075 * anim_state.0[2],
-                                                                                    0.910 + 0.075 * anim_state.0[2],
-                                                                                    0.910 + 0.075 * anim_state.0[2],
-                                                                                    panel_t * (1.0 - ws_t),
-                                                                                ),
-                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
-                                                                            ),
-                                                                        ]
-                                                                        .into_iter()
-                                                                        .for_each(
-                                                                            |(entity, pos, colour, shown): (
-                                                                                bevy::ecs::entity::Entity,
-                                                                                bevy::math::Vec3,
-                                                                                bevy::color::Color,
-                                                                                bool,
-                                                                            )| {
-                                                                                texts
-                                                                                    .get(entity)
-                                                                                    .into_iter()
-                                                                                    .for_each(
-                                                                                        |(text_colour, transform, visibility): (
-                                                                                            std::option::Option<&bevy::text::TextColor>,
-                                                                                            std::option::Option<&bevy::transform::components::Transform>,
-                                                                                            &bevy::camera::visibility::Visibility,
-                                                                                        )| {
-                                                                                            text_colour.into_iter().for_each(
-                                                                                                |text_colour: &bevy::text::TextColor| {
-                                                                                                    if text_colour.0 != colour {
-                                                                                                        commands.entity(entity).insert(
-                                                                                                            bevy::text::TextColor(colour),
-                                                                                                        );
-                                                                                                    }
-                                                                                                },
-                                                                                            );
-                                                                                            transform.into_iter().for_each(
-                                                                                                |transform: &bevy::transform::components::Transform| {
-                                                                                                    if transform.translation != pos {
-                                                                                                        commands.entity(entity).insert(
-                                                                                                            bevy::transform::components::Transform::from_translation(pos),
-                                                                                                        );
-                                                                                                    }
-                                                                                                },
-                                                                                            );
-                                                                                            if (*visibility
-                                                                                                == bevy::camera::visibility::Visibility::Inherited)
-                                                                                                != shown
-                                                                                            {
-                                                                                                commands.entity(entity).insert(if shown {
-                                                                                                    bevy::camera::visibility::Visibility::Inherited
-                                                                                                } else {
-                                                                                                    bevy::camera::visibility::Visibility::Hidden
-                                                                                                });
-                                                                                            }
-                                                                                        },
-                                                                                    );
-                                                                            },
-                                                                        );
-                                                                    }
-                                                                }
-                                                            },
-                                                        );
-
-                                                    (*dot_state).into_iter().for_each(
-                                                        |(dot_entity, cur_dot_pos, cur_dot_vel): (
-                                                            bevy::ecs::entity::Entity,
-                                                            bevy::math::Vec2,
-                                                            bevy::math::Vec2,
+                                            ui_entities.as_ref().copied().into_iter().for_each(
+                                                |e: [bevy::ecs::entity::Entity; 45]| {
+                                                    std::iter::once((
+                                                        anim_state.2[0],
+                                                        anim_state.2[1],
+                                                        anim_state.2[2],
+                                                        anim_state.2[3],
+                                                        anim_state.2[4],
+                                                        0.97f32 + 0.03f32 * anim_state.2[3],
+                                                    ))
+                                                    .for_each(
+                                                        |(
+                                                            nav_t,
+                                                            panel_t,
+                                                            ws_t,
+                                                            modal_t,
+                                                            menu_t,
+                                                            m_scale,
+                                                        ): (
+                                                            f32,
+                                                            f32,
+                                                            f32,
+                                                            f32,
+                                                            f32,
+                                                            f32,
                                                         )| {
-                                                            sprites
-                                                                .get(dot_entity)
-                                                                .into_iter()
-                                                                .for_each(
-                                                                    |(_sprite, transform, visibility): (
-                                                                        std::option::Option<&bevy::sprite::Sprite>,
-                                                                        std::option::Option<&bevy::transform::components::Transform>,
-                                                                        &bevy::camera::visibility::Visibility,
-                                                                    )| {
-                                                                        transform.into_iter().for_each(
-                                                                            |transform: &bevy::transform::components::Transform| {
-                                                                                if transform.translation
-                                                                                    != bevy::math::Vec3::new(
-                                                                                        cur_dot_pos.x - vw * 0.5,
-                                                                                        vh * 0.5 - cur_dot_pos.y,
-                                                                                        20.0,
-                                                                                    )
+                                                            [
+                                                                (
+                                                                    e[0],
+                                                                    bevy::math::Vec2::new(sw, vh),
+                                                                    bevy::math::Vec3::new(
+                                                                        sw * 0.5 - vw * 0.5,
+                                                                        0.0,
+                                                                        1.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.180, 0.180, 0.180, menu_t,
+                                                                    ),
+                                                                    menu_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[1],
+                                                                    bevy::math::Vec2::new(
+                                                                        (sw - 1.0).max(1.0),
+                                                                        (vh - 2.0).max(1.0),
+                                                                    ),
+                                                                    bevy::math::Vec3::new(
+                                                                        (sw - 1.0).max(1.0) * 0.5
+                                                                            - vw * 0.5,
+                                                                        0.0,
+                                                                        1.1,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.086, 0.086, 0.086, menu_t,
+                                                                    ),
+                                                                    menu_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[2],
+                                                                    bevy::math::Vec2::splat(44.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        40.0 - vw * 0.5,
+                                                                        vh * 0.5 - 44.0,
+                                                                        2.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.149, 0.149, 0.149, menu_t,
+                                                                    ),
+                                                                    menu_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[3],
+                                                                    bevy::math::Vec2::splat(26.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        40.0 - vw * 0.5,
+                                                                        vh * 0.5 - 44.0,
+                                                                        3.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.937,
+                                                                        0.937,
+                                                                        0.937,
+                                                                        menu_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[4],
+                                                                    bevy::math::Vec2::splat(26.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        40.0 - vw * 0.5,
+                                                                        vh * 0.5 - 44.0,
+                                                                        3.1,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.937,
+                                                                        0.937,
+                                                                        0.937,
+                                                                        menu_t * ws_t,
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[7],
+                                                                    bevy::math::Vec2::new(
+                                                                        (sw - 36.0).max(1.0),
+                                                                        1.0,
+                                                                    ),
+                                                                    bevy::math::Vec3::new(
+                                                                        sw * 0.5 - vw * 0.5,
+                                                                        vh * 0.5 - 78.5,
+                                                                        2.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.176, 0.176, 0.176, menu_t,
+                                                                    ),
+                                                                    menu_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[8],
+                                                                    row_one_rect.size(),
+                                                                    bevy::math::Vec3::new(
+                                                                        row_one_rect.center().x
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5
+                                                                            - row_one_rect
+                                                                                .center()
+                                                                                .y,
+                                                                        2.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        (0.125
+                                                                            + 0.044
+                                                                                * anim_state.0[0]
+                                                                            - 0.025
+                                                                                * anim_state.1[0])
+                                                                            * nav_t
+                                                                            + (0.865
+                                                                                + 0.035
+                                                                                    * anim_state.0
+                                                                                        [0]
+                                                                                - 0.045
+                                                                                    * anim_state.1
+                                                                                        [0])
+                                                                                * (1.0 - nav_t),
+                                                                        (0.125
+                                                                            + 0.044
+                                                                                * anim_state.0[0]
+                                                                            - 0.025
+                                                                                * anim_state.1[0])
+                                                                            * nav_t
+                                                                            + (0.865
+                                                                                + 0.035
+                                                                                    * anim_state.0
+                                                                                        [0]
+                                                                                - 0.045
+                                                                                    * anim_state.1
+                                                                                        [0])
+                                                                                * (1.0 - nav_t),
+                                                                        (0.125
+                                                                            + 0.044
+                                                                                * anim_state.0[0]
+                                                                            - 0.025
+                                                                                * anim_state.1[0])
+                                                                            * nav_t
+                                                                            + (0.865
+                                                                                + 0.035
+                                                                                    * anim_state.0
+                                                                                        [0]
+                                                                                - 0.045
+                                                                                    * anim_state.1
+                                                                                        [0])
+                                                                                * (1.0 - nav_t),
+                                                                        menu_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[9],
+                                                                    row_one_rect.size(),
+                                                                    bevy::math::Vec3::new(
+                                                                        row_one_rect.center().x
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5
+                                                                            - row_one_rect
+                                                                                .center()
+                                                                                .y,
+                                                                        2.5,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.520,
+                                                                        0.520,
+                                                                        0.520,
+                                                                        anim_state.0[0]
+                                                                            * menu_t
+                                                                            * (1.0 - ws_t),
+                                                                    ),
+                                                                    menu_t > 0.0
+                                                                        && ws_t < 1.0
+                                                                        && anim_state.0[0] > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[10],
+                                                                    bevy::math::Vec2::splat(36.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        42.0 - vw * 0.5,
+                                                                        vh * 0.5 - 116.0,
+                                                                        3.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.176
+                                                                            + 0.030
+                                                                                * anim_state.0[0]
+                                                                            - 0.020
+                                                                                * anim_state.1[0]
+                                                                            - 0.015 * (1.0 - nav_t),
+                                                                        0.176
+                                                                            + 0.030
+                                                                                * anim_state.0[0]
+                                                                            - 0.020
+                                                                                * anim_state.1[0]
+                                                                            - 0.015 * (1.0 - nav_t),
+                                                                        0.176
+                                                                            + 0.030
+                                                                                * anim_state.0[0]
+                                                                            - 0.020
+                                                                                * anim_state.1[0]
+                                                                            - 0.015 * (1.0 - nav_t),
+                                                                        menu_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[11],
+                                                                    bevy::math::Vec2::splat(22.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        42.0 - vw * 0.5,
+                                                                        vh * 0.5 - 116.0,
+                                                                        4.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        (0.780
+                                                                            + 0.157
+                                                                                * anim_state.0[0])
+                                                                            * nav_t
+                                                                            + 0.937 * (1.0 - nav_t),
+                                                                        (0.780
+                                                                            + 0.157
+                                                                                * anim_state.0[0])
+                                                                            * nav_t
+                                                                            + 0.937 * (1.0 - nav_t),
+                                                                        (0.780
+                                                                            + 0.157
+                                                                                * anim_state.0[0])
+                                                                            * nav_t
+                                                                            + 0.937 * (1.0 - nav_t),
+                                                                        menu_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[13],
+                                                                    row_two_rect.size(),
+                                                                    bevy::math::Vec3::new(
+                                                                        row_two_rect.center().x
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5
+                                                                            - row_two_rect
+                                                                                .center()
+                                                                                .y,
+                                                                        2.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        (0.125
+                                                                            + 0.044
+                                                                                * anim_state.0[1]
+                                                                            - 0.025
+                                                                                * anim_state.1[1])
+                                                                            * (1.0 - nav_t)
+                                                                            + (0.865
+                                                                                + 0.035
+                                                                                    * anim_state.0
+                                                                                        [1]
+                                                                                - 0.045
+                                                                                    * anim_state.1
+                                                                                        [1])
+                                                                                * nav_t,
+                                                                        (0.125
+                                                                            + 0.044
+                                                                                * anim_state.0[1]
+                                                                            - 0.025
+                                                                                * anim_state.1[1])
+                                                                            * (1.0 - nav_t)
+                                                                            + (0.865
+                                                                                + 0.035
+                                                                                    * anim_state.0
+                                                                                        [1]
+                                                                                - 0.045
+                                                                                    * anim_state.1
+                                                                                        [1])
+                                                                                * nav_t,
+                                                                        (0.125
+                                                                            + 0.044
+                                                                                * anim_state.0[1]
+                                                                            - 0.025
+                                                                                * anim_state.1[1])
+                                                                            * (1.0 - nav_t)
+                                                                            + (0.865
+                                                                                + 0.035
+                                                                                    * anim_state.0
+                                                                                        [1]
+                                                                                - 0.045
+                                                                                    * anim_state.1
+                                                                                        [1])
+                                                                                * nav_t,
+                                                                        menu_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[14],
+                                                                    row_two_rect.size(),
+                                                                    bevy::math::Vec3::new(
+                                                                        row_two_rect.center().x
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5
+                                                                            - row_two_rect
+                                                                                .center()
+                                                                                .y,
+                                                                        2.5,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.520,
+                                                                        0.520,
+                                                                        0.520,
+                                                                        anim_state.0[1]
+                                                                            * menu_t
+                                                                            * (1.0 - ws_t),
+                                                                    ),
+                                                                    menu_t > 0.0
+                                                                        && ws_t < 1.0
+                                                                        && anim_state.0[1] > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[15],
+                                                                    bevy::math::Vec2::splat(36.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        42.0 - vw * 0.5,
+                                                                        vh * 0.5 - 172.0,
+                                                                        3.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.176
+                                                                            + 0.030
+                                                                                * anim_state.0[1]
+                                                                            - 0.020
+                                                                                * anim_state.1[1]
+                                                                            - 0.015 * nav_t,
+                                                                        0.176
+                                                                            + 0.030
+                                                                                * anim_state.0[1]
+                                                                            - 0.020
+                                                                                * anim_state.1[1]
+                                                                            - 0.015 * nav_t,
+                                                                        0.176
+                                                                            + 0.030
+                                                                                * anim_state.0[1]
+                                                                            - 0.020
+                                                                                * anim_state.1[1]
+                                                                            - 0.015 * nav_t,
+                                                                        menu_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[16],
+                                                                    bevy::math::Vec2::splat(22.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        42.0 - vw * 0.5,
+                                                                        vh * 0.5 - 172.0,
+                                                                        4.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        (0.780
+                                                                            + 0.157
+                                                                                * anim_state.0[1])
+                                                                            * (1.0 - nav_t)
+                                                                            + 0.937 * nav_t,
+                                                                        (0.780
+                                                                            + 0.157
+                                                                                * anim_state.0[1])
+                                                                            * (1.0 - nav_t)
+                                                                            + 0.937 * nav_t,
+                                                                        (0.780
+                                                                            + 0.157
+                                                                                * anim_state.0[1])
+                                                                            * (1.0 - nav_t)
+                                                                            + 0.937 * nav_t,
+                                                                        menu_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[18],
+                                                                    row_one_rect.size(),
+                                                                    bevy::math::Vec3::new(
+                                                                        row_one_rect.center().x
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5
+                                                                            - row_one_rect
+                                                                                .center()
+                                                                                .y,
+                                                                        2.1,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.145
+                                                                            + 0.050
+                                                                                * anim_state.0[3]
+                                                                            - 0.030
+                                                                                * anim_state.1[3],
+                                                                        0.145
+                                                                            + 0.050
+                                                                                * anim_state.0[3]
+                                                                            - 0.030
+                                                                                * anim_state.1[3],
+                                                                        0.145
+                                                                            + 0.050
+                                                                                * anim_state.0[3]
+                                                                            - 0.030
+                                                                                * anim_state.1[3],
+                                                                        menu_t * ws_t,
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[19],
+                                                                    row_one_rect.size(),
+                                                                    bevy::math::Vec3::new(
+                                                                        row_one_rect.center().x
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5
+                                                                            - row_one_rect
+                                                                                .center()
+                                                                                .y,
+                                                                        2.6,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.275
+                                                                            + 0.280
+                                                                                * anim_state.0[3],
+                                                                        0.275
+                                                                            + 0.280
+                                                                                * anim_state.0[3],
+                                                                        0.275
+                                                                            + 0.280
+                                                                                * anim_state.0[3],
+                                                                        menu_t * ws_t,
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[20],
+                                                                    bevy::math::Vec2::splat(36.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        42.0 - vw * 0.5,
+                                                                        vh * 0.5 - 116.0,
+                                                                        3.1,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.200
+                                                                            + 0.045
+                                                                                * anim_state.0[3]
+                                                                            - 0.025
+                                                                                * anim_state.1[3],
+                                                                        0.200
+                                                                            + 0.045
+                                                                                * anim_state.0[3]
+                                                                            - 0.025
+                                                                                * anim_state.1[3],
+                                                                        0.200
+                                                                            + 0.045
+                                                                                * anim_state.0[3]
+                                                                            - 0.025
+                                                                                * anim_state.1[3],
+                                                                        menu_t * ws_t,
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[21],
+                                                                    bevy::math::Vec2::splat(20.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        42.0 - vw * 0.5,
+                                                                        vh * 0.5 - 116.0,
+                                                                        4.1,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.880
+                                                                            + 0.090
+                                                                                * anim_state.0[3],
+                                                                        0.880
+                                                                            + 0.090
+                                                                                * anim_state.0[3],
+                                                                        0.880
+                                                                            + 0.090
+                                                                                * anim_state.0[3],
+                                                                        menu_t * ws_t,
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[23],
+                                                                    panel_rect.size(),
+                                                                    bevy::math::Vec3::new(
+                                                                        panel_rect.center().x
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5
+                                                                            - panel_rect.center().y,
+                                                                        1.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.180, 0.180, 0.180,
+                                                                        panel_t,
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[24],
+                                                                    bevy::math::Vec2::new(
+                                                                        (panel_rect.width() - 2.0)
+                                                                            .max(1.0),
+                                                                        (panel_rect.height() - 2.0)
+                                                                            .max(1.0),
+                                                                    ),
+                                                                    bevy::math::Vec3::new(
+                                                                        panel_rect.center().x
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5
+                                                                            - panel_rect.center().y,
+                                                                        1.1,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.063, 0.063, 0.063,
+                                                                        panel_t,
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[25],
+                                                                    bevy::math::Vec2::splat(44.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        panel_rect.min.x + 50.0
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5 - 60.0,
+                                                                        2.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.133, 0.133, 0.133,
+                                                                        panel_t,
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[26],
+                                                                    bevy::math::Vec2::splat(25.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        panel_rect.min.x + 50.0
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5 - 60.0,
+                                                                        3.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.937,
+                                                                        0.937,
+                                                                        0.937,
+                                                                        panel_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0
+                                                                        && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[27],
+                                                                    bevy::math::Vec2::splat(26.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        panel_rect.min.x + 50.0
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5 - 60.0,
+                                                                        3.1,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.937,
+                                                                        0.937,
+                                                                        0.937,
+                                                                        panel_t * ws_t,
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0
+                                                                        && ws_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[30],
+                                                                    bevy::math::Vec2::new(
+                                                                        (panel_rect.width() - 56.0)
+                                                                            .max(1.0),
+                                                                        1.0,
+                                                                    ),
+                                                                    bevy::math::Vec3::new(
+                                                                        panel_rect.center().x
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5 - 98.5,
+                                                                        2.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.176, 0.176, 0.176,
+                                                                        panel_t,
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[31],
+                                                                    card_rect.size(),
+                                                                    bevy::math::Vec3::new(
+                                                                        card_rect.center().x
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5
+                                                                            - card_rect.center().y,
+                                                                        2.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.188,
+                                                                        0.188,
+                                                                        0.188,
+                                                                        panel_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0
+                                                                        && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[32],
+                                                                    bevy::math::Vec2::new(
+                                                                        (card_rect.width() - 2.0)
+                                                                            .max(1.0),
+                                                                        (card_rect.height() - 2.0)
+                                                                            .max(1.0),
+                                                                    ),
+                                                                    bevy::math::Vec3::new(
+                                                                        card_rect.center().x
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5
+                                                                            - card_rect.center().y,
+                                                                        2.1,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.090,
+                                                                        0.090,
+                                                                        0.090,
+                                                                        panel_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0
+                                                                        && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[33],
+                                                                    bevy::math::Vec2::splat(42.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        card_rect.min.x + 39.0
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5 - 161.0,
+                                                                        3.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.157,
+                                                                        0.157,
+                                                                        0.157,
+                                                                        panel_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0
+                                                                        && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[34],
+                                                                    bevy::math::Vec2::splat(25.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        card_rect.min.x + 39.0
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5 - 161.0,
+                                                                        4.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.937,
+                                                                        0.937,
+                                                                        0.937,
+                                                                        panel_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0
+                                                                        && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[36],
+                                                                    bevy::math::Vec2::new(
+                                                                        (card_rect.width() - 36.0)
+                                                                            .max(1.0),
+                                                                        1.0,
+                                                                    ),
+                                                                    bevy::math::Vec3::new(
+                                                                        card_rect.center().x
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5 - 198.5,
+                                                                        3.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.176,
+                                                                        0.176,
+                                                                        0.176,
+                                                                        panel_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0
+                                                                        && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[37],
+                                                                    launch_rect.size(),
+                                                                    bevy::math::Vec3::new(
+                                                                        launch_rect.center().x
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5
+                                                                            - launch_rect
+                                                                                .center()
+                                                                                .y,
+                                                                        3.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.215
+                                                                            + 0.060
+                                                                                * anim_state.0[2]
+                                                                            - 0.035
+                                                                                * anim_state.1[2],
+                                                                        0.215
+                                                                            + 0.060
+                                                                                * anim_state.0[2]
+                                                                            - 0.035
+                                                                                * anim_state.1[2],
+                                                                        0.215
+                                                                            + 0.060
+                                                                                * anim_state.0[2]
+                                                                            - 0.035
+                                                                                * anim_state.1[2],
+                                                                        panel_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0
+                                                                        && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[38],
+                                                                    launch_rect.size(),
+                                                                    bevy::math::Vec3::new(
+                                                                        launch_rect.center().x
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5
+                                                                            - launch_rect
+                                                                                .center()
+                                                                                .y,
+                                                                        3.5,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.360
+                                                                            + 0.360
+                                                                                * anim_state.0[2],
+                                                                        0.360
+                                                                            + 0.360
+                                                                                * anim_state.0[2],
+                                                                        0.360
+                                                                            + 0.360
+                                                                                * anim_state.0[2],
+                                                                        panel_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0
+                                                                        && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[39],
+                                                                    bevy::math::Vec2::splat(32.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        launch_rect.min.x + 22.0
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5 - 235.0,
+                                                                        4.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.265
+                                                                            + 0.055
+                                                                                * anim_state.0[2]
+                                                                            - 0.030
+                                                                                * anim_state.1[2],
+                                                                        0.265
+                                                                            + 0.055
+                                                                                * anim_state.0[2]
+                                                                            - 0.030
+                                                                                * anim_state.1[2],
+                                                                        0.265
+                                                                            + 0.055
+                                                                                * anim_state.0[2]
+                                                                            - 0.030
+                                                                                * anim_state.1[2],
+                                                                        panel_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0
+                                                                        && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[40],
+                                                                    bevy::math::Vec2::splat(20.0),
+                                                                    bevy::math::Vec3::new(
+                                                                        launch_rect.min.x + 22.0
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5 - 235.0,
+                                                                        5.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.910
+                                                                            + 0.075
+                                                                                * anim_state.0[2],
+                                                                        0.910
+                                                                            + 0.075
+                                                                                * anim_state.0[2],
+                                                                        0.910
+                                                                            + 0.075
+                                                                                * anim_state.0[2],
+                                                                        panel_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0
+                                                                        && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[42],
+                                                                    bevy::math::Vec2::new(vw, vh),
+                                                                    bevy::math::Vec3::new(
+                                                                        0.0, 0.0, 12.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.0,
+                                                                        0.0,
+                                                                        0.0,
+                                                                        0.58 * modal_t,
+                                                                    ),
+                                                                    modal_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[43],
+                                                                    modal_rect.size() * m_scale,
+                                                                    bevy::math::Vec3::new(
+                                                                        0.0, 0.0, 13.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.245, 0.245, 0.245,
+                                                                        modal_t,
+                                                                    ),
+                                                                    modal_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[44],
+                                                                    (modal_rect.size()
+                                                                        - bevy::math::Vec2::splat(
+                                                                            2.0,
+                                                                        ))
+                                                                    .max(bevy::math::Vec2::ONE)
+                                                                        * m_scale,
+                                                                    bevy::math::Vec3::new(
+                                                                        0.0, 0.0, 13.1,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.094, 0.094, 0.094,
+                                                                        modal_t,
+                                                                    ),
+                                                                    modal_t > 0.0,
+                                                                ),
+                                                            ]
+                                                            .into_iter()
+                                                            .for_each(
+                                                                |(
+                                                                    entity,
+                                                                    size,
+                                                                    pos,
+                                                                    colour,
+                                                                    shown,
+                                                                ): (
+                                                                    bevy::ecs::entity::Entity,
+                                                                    bevy::math::Vec2,
+                                                                    bevy::math::Vec3,
+                                                                    bevy::color::Color,
+                                                                    bool,
+                                                                )| {
+                                                                    sprites
+                                                                        .get(entity)
+                                                                        .into_iter()
+                                                                        .for_each(
+                                                                            |(
+                                                                                sprite,
+                                                                                transform,
+                                                                                visibility,
+                                                                            ): (
+                                                                                &bevy::sprite::Sprite,
+                                                                                &bevy::transform::components::Transform,
+                                                                                &bevy::camera::visibility::Visibility,
+                                                                            )| {
+                                                                                if sprite.color
+                                                                                    != colour
+                                                                                    || sprite
+                                                                                        .custom_size
+                                                                                        != std::option::Option::Some(
+                                                                                            size,
+                                                                                        )
                                                                                 {
-                                                                                    commands.entity(dot_entity).insert(
-                                                                                        bevy::transform::components::Transform::from_xyz(
-                                                                                            cur_dot_pos.x - vw * 0.5,
-                                                                                            vh * 0.5 - cur_dot_pos.y,
-                                                                                            20.0,
-                                                                                        ),
-                                                                                    );
+                                                                                    commands
+                                                                                        .entity(
+                                                                                            entity,
+                                                                                        )
+                                                                                        .insert(
+                                                                                            bevy::sprite::Sprite {
+                                                                                                color: colour,
+                                                                                                custom_size: std::option::Option::Some(size),
+                                                                                                ..sprite.clone()
+                                                                                            },
+                                                                                        );
+                                                                                }
+                                                                                if transform
+                                                                                    .translation
+                                                                                    != pos
+                                                                                {
+                                                                                    commands
+                                                                                        .entity(
+                                                                                            entity,
+                                                                                        )
+                                                                                        .insert(
+                                                                                            bevy::transform::components::Transform::from_translation(pos),
+                                                                                        );
+                                                                                }
+                                                                                if (*visibility
+                                                                                    == bevy::camera::visibility::Visibility::Inherited)
+                                                                                    != shown
+                                                                                {
+                                                                                    commands
+                                                                                        .entity(
+                                                                                            entity,
+                                                                                        )
+                                                                                        .insert(
+                                                                                            if shown {
+                                                                                                bevy::camera::visibility::Visibility::Inherited
+                                                                                            } else {
+                                                                                                bevy::camera::visibility::Visibility::Hidden
+                                                                                            },
+                                                                                        );
                                                                                 }
                                                                             },
                                                                         );
-                                                                        if (*visibility
-                                                                            == bevy::camera::visibility::Visibility::Inherited)
-                                                                            != window.focused
-                                                                        {
-                                                                            commands.entity(dot_entity).insert(
-                                                                                if window.focused {
-                                                                                    bevy::camera::visibility::Visibility::Inherited
-                                                                                } else {
-                                                                                    bevy::camera::visibility::Visibility::Hidden
-                                                                                },
-                                                                            );
-                                                                        }
+                                                                },
+                                                            );
+
+                                                            [
+                                                                (
+                                                                    e[5],
+                                                                    bevy::math::Vec3::new(
+                                                                        76.0 - vw * 0.5,
+                                                                        vh * 0.5 - 44.0,
+                                                                        3.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.937,
+                                                                        0.937,
+                                                                        0.937,
+                                                                        menu_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[6],
+                                                                    bevy::math::Vec3::new(
+                                                                        76.0 - vw * 0.5,
+                                                                        vh * 0.5 - 44.0,
+                                                                        3.1,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.937,
+                                                                        0.937,
+                                                                        0.937,
+                                                                        menu_t * ws_t,
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[12],
+                                                                    bevy::math::Vec3::new(
+                                                                        72.0 - vw * 0.5,
+                                                                        vh * 0.5 - 116.0,
+                                                                        4.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        (0.780
+                                                                            + 0.157
+                                                                                * anim_state.0[0])
+                                                                            * nav_t
+                                                                            + 0.086 * (1.0 - nav_t),
+                                                                        (0.780
+                                                                            + 0.157
+                                                                                * anim_state.0[0])
+                                                                            * nav_t
+                                                                            + 0.086 * (1.0 - nav_t),
+                                                                        (0.780
+                                                                            + 0.157
+                                                                                * anim_state.0[0])
+                                                                            * nav_t
+                                                                            + 0.086 * (1.0 - nav_t),
+                                                                        menu_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[17],
+                                                                    bevy::math::Vec3::new(
+                                                                        72.0 - vw * 0.5,
+                                                                        vh * 0.5 - 172.0,
+                                                                        4.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        (0.780
+                                                                            + 0.157
+                                                                                * anim_state.0[1])
+                                                                            * (1.0 - nav_t)
+                                                                            + 0.086 * nav_t,
+                                                                        (0.780
+                                                                            + 0.157
+                                                                                * anim_state.0[1])
+                                                                            * (1.0 - nav_t)
+                                                                            + 0.086 * nav_t,
+                                                                        (0.780
+                                                                            + 0.157
+                                                                                * anim_state.0[1])
+                                                                            * (1.0 - nav_t)
+                                                                            + 0.086 * nav_t,
+                                                                        menu_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[22],
+                                                                    bevy::math::Vec3::new(
+                                                                        72.0 - vw * 0.5,
+                                                                        vh * 0.5 - 116.0,
+                                                                        4.1,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.880
+                                                                            + 0.090
+                                                                                * anim_state.0[3],
+                                                                        0.880
+                                                                            + 0.090
+                                                                                * anim_state.0[3],
+                                                                        0.880
+                                                                            + 0.090
+                                                                                * anim_state.0[3],
+                                                                        menu_t * ws_t,
+                                                                    ),
+                                                                    menu_t > 0.0 && ws_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[28],
+                                                                    bevy::math::Vec3::new(
+                                                                        panel_rect.min.x + 86.0
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5 - 60.0,
+                                                                        3.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.937,
+                                                                        0.937,
+                                                                        0.937,
+                                                                        panel_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0
+                                                                        && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[29],
+                                                                    bevy::math::Vec3::new(
+                                                                        panel_rect.min.x + 86.0
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5 - 60.0,
+                                                                        3.1,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.937,
+                                                                        0.937,
+                                                                        0.937,
+                                                                        panel_t * ws_t,
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0
+                                                                        && ws_t > 0.0,
+                                                                ),
+                                                                (
+                                                                    e[35],
+                                                                    bevy::math::Vec3::new(
+                                                                        card_rect.min.x + 74.0
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5 - 161.0,
+                                                                        4.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.937,
+                                                                        0.937,
+                                                                        0.937,
+                                                                        panel_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0
+                                                                        && ws_t < 1.0,
+                                                                ),
+                                                                (
+                                                                    e[41],
+                                                                    bevy::math::Vec3::new(
+                                                                        launch_rect.min.x + 48.0
+                                                                            - vw * 0.5,
+                                                                        vh * 0.5 - 235.0,
+                                                                        5.0,
+                                                                    ),
+                                                                    bevy::color::Color::srgba(
+                                                                        0.910
+                                                                            + 0.075
+                                                                                * anim_state.0[2],
+                                                                        0.910
+                                                                            + 0.075
+                                                                                * anim_state.0[2],
+                                                                        0.910
+                                                                            + 0.075
+                                                                                * anim_state.0[2],
+                                                                        panel_t * (1.0 - ws_t),
+                                                                    ),
+                                                                    metrics_state.0 > 0.0
+                                                                        && panel_t > 0.0
+                                                                        && ws_t < 1.0,
+                                                                ),
+                                                            ]
+                                                            .into_iter()
+                                                            .for_each(
+                                                                |(
+                                                                    entity,
+                                                                    pos,
+                                                                    colour,
+                                                                    shown,
+                                                                ): (
+                                                                    bevy::ecs::entity::Entity,
+                                                                    bevy::math::Vec3,
+                                                                    bevy::color::Color,
+                                                                    bool,
+                                                                )| {
+                                                                    texts
+                                                                        .get(entity)
+                                                                        .into_iter()
+                                                                        .for_each(
+                                                                            |(
+                                                                                text_colour,
+                                                                                transform,
+                                                                                visibility,
+                                                                            ): (
+                                                                                &bevy::text::TextColor,
+                                                                                &bevy::transform::components::Transform,
+                                                                                &bevy::camera::visibility::Visibility,
+                                                                            )| {
+                                                                                if text_colour.0
+                                                                                    != colour
+                                                                                {
+                                                                                    commands
+                                                                                        .entity(
+                                                                                            entity,
+                                                                                        )
+                                                                                        .insert(
+                                                                                            bevy::text::TextColor(colour),
+                                                                                        );
+                                                                                }
+                                                                                if transform
+                                                                                    .translation
+                                                                                    != pos
+                                                                                {
+                                                                                    commands
+                                                                                        .entity(
+                                                                                            entity,
+                                                                                        )
+                                                                                        .insert(
+                                                                                            bevy::transform::components::Transform::from_translation(pos),
+                                                                                        );
+                                                                                }
+                                                                                if (*visibility
+                                                                                    == bevy::camera::visibility::Visibility::Inherited)
+                                                                                    != shown
+                                                                                {
+                                                                                    commands
+                                                                                        .entity(
+                                                                                            entity,
+                                                                                        )
+                                                                                        .insert(
+                                                                                            if shown {
+                                                                                                bevy::camera::visibility::Visibility::Inherited
+                                                                                            } else {
+                                                                                                bevy::camera::visibility::Visibility::Hidden
+                                                                                            },
+                                                                                        );
+                                                                                }
+                                                                            },
+                                                                        );
+                                                                },
+                                                            );
+                                                        },
+                                                    );
+                                                },
+                                            );
+
+                                            (*dot_state).into_iter().for_each(
+                                                |(dot_entity, cur_dot_pos, cur_dot_vel): (
+                                                    bevy::ecs::entity::Entity,
+                                                    bevy::math::Vec2,
+                                                    bevy::math::Vec2,
+                                                )| {
+                                                    sprites.get(dot_entity).into_iter().for_each(
+                                                        |(
+                                                            _sprite,
+                                                            transform,
+                                                            visibility,
+                                                        ): (
+                                                            &bevy::sprite::Sprite,
+                                                            &bevy::transform::components::Transform,
+                                                            &bevy::camera::visibility::Visibility,
+                                                        )| {
+                                                            if transform.translation
+                                                                != bevy::math::Vec3::new(
+                                                                    cur_dot_pos.x - vw * 0.5,
+                                                                    vh * 0.5 - cur_dot_pos.y,
+                                                                    20.0,
+                                                                )
+                                                            {
+                                                                commands.entity(dot_entity).insert(
+                                                                    bevy::transform::components::Transform::from_xyz(
+                                                                        cur_dot_pos.x - vw * 0.5,
+                                                                        vh * 0.5 - cur_dot_pos.y,
+                                                                        20.0,
+                                                                    ),
+                                                                );
+                                                            }
+                                                            if (*visibility
+                                                                == bevy::camera::visibility::Visibility::Inherited)
+                                                                != window.focused
+                                                            {
+                                                                commands.entity(dot_entity).insert(
+                                                                    if window.focused {
+                                                                        bevy::camera::visibility::Visibility::Inherited
+                                                                    } else {
+                                                                        bevy::camera::visibility::Visibility::Hidden
                                                                     },
                                                                 );
+                                                            }
+                                                        },
+                                                    );
 
-                                                            match if focus_state.2 < 4u8
-                                                                || metrics_state.0 == 0.0
-                                                                || (window.focused
-                                                                    && cur_dot_vel
-                                                                        != bevy::math::Vec2::ZERO)
-                                                                || anim_state
-                                                                    .0
-                                                                    .iter()
-                                                                    .zip([0u8, 1u8, 2u8, 3u8])
-                                                                    .any(|(v, idx): (&f32, u8)| {
-                                                                        (*v - ((hovered
+                                                    std::iter::once(
+                                                        if focus_state.2 < 4u8
+                                                            || metrics_state.0 <= 0.0
+                                                            || (window.focused
+                                                                && cur_dot_vel
+                                                                    != bevy::math::Vec2::ZERO)
+                                                            || anim_state
+                                                                .0
+                                                                .iter()
+                                                                .zip([0u8, 1u8, 2u8, 3u8])
+                                                                .any(|(v, idx): (&f32, u8)| {
+                                                                    (*v - f32::from(u8::from(
+                                                                        hovered
                                                                             == std::option::Option::Some(
                                                                                 idx,
-                                                                            ))
-                                                                            as u8
-                                                                            as f32))
-                                                                            .abs()
-                                                                            > 0.0
-                                                                    })
-                                                                || anim_state
-                                                                    .1
-                                                                    .iter()
-                                                                    .zip([0u8, 1u8, 2u8, 3u8])
-                                                                    .any(|(v, idx): (&f32, u8)| {
-                                                                        (*v - (((hovered
+                                                                            ),
+                                                                    )))
+                                                                    .abs()
+                                                                        > 0.0
+                                                                })
+                                                            || anim_state
+                                                                .1
+                                                                .iter()
+                                                                .zip([0u8, 1u8, 2u8, 3u8])
+                                                                .any(|(v, idx): (&f32, u8)| {
+                                                                    (*v - f32::from(u8::from(
+                                                                        (hovered
                                                                             == std::option::Option::Some(
                                                                                 idx,
                                                                             ))
@@ -3006,98 +3675,97 @@ fn main() {
                                                                             )
                                                                             && (focus_state.1
                                                                                 & 64u16)
-                                                                                == 0)
-                                                                            as u8
-                                                                            as f32))
-                                                                            .abs()
-                                                                            > 0.0
-                                                                    })
-                                                                || (anim_state.2[0]
-                                                                    - if final_mode == 0u8 {
-                                                                        0.0
-                                                                    } else {
-                                                                        1.0
-                                                                    })
+                                                                                == 0,
+                                                                    )))
                                                                     .abs()
-                                                                    > 0.0
-                                                                || (anim_state.2[1]
-                                                                    - if final_mode == 0u8 {
-                                                                        0.0
-                                                                    } else {
-                                                                        1.0
-                                                                    })
-                                                                    .abs()
-                                                                    > 0.0
-                                                                || (anim_state.2[2]
-                                                                    - if final_mode == 2u8 {
-                                                                        1.0
-                                                                    } else {
-                                                                        0.0
-                                                                    })
-                                                                    .abs()
-                                                                    > 0.0
-                                                                || (anim_state.2[3]
-                                                                    - if final_mode == 2u8
-                                                                        && final_modal
-                                                                    {
-                                                                        1.0
-                                                                    } else {
-                                                                        0.0
-                                                                    })
-                                                                    .abs()
-                                                                    > 0.0
-                                                                || (anim_state.2[4]
-                                                                    - if final_menu {
-                                                                        1.0
-                                                                    } else {
-                                                                        0.0
-                                                                    })
-                                                                    .abs()
-                                                                    > 0.0
+                                                                        > 0.0
+                                                                })
+                                                            || (anim_state.2[0]
+                                                                - if final_mode == 0u8 {
+                                                                    0.0
+                                                                } else {
+                                                                    1.0
+                                                                })
+                                                                .abs()
+                                                                > 0.0
+                                                            || (anim_state.2[1]
+                                                                - if final_mode == 0u8 {
+                                                                    0.0
+                                                                } else {
+                                                                    1.0
+                                                                })
+                                                                .abs()
+                                                                > 0.0
+                                                            || (anim_state.2[2]
+                                                                - if final_mode == 2u8 {
+                                                                    1.0
+                                                                } else {
+                                                                    0.0
+                                                                })
+                                                                .abs()
+                                                                > 0.0
+                                                            || (anim_state.2[3]
+                                                                - if final_mode == 2u8
+                                                                    && final_modal
+                                                                {
+                                                                    1.0
+                                                                } else {
+                                                                    0.0
+                                                                })
+                                                                .abs()
+                                                                > 0.0
+                                                            || (anim_state.2[4]
+                                                                - if final_menu {
+                                                                    1.0
+                                                                } else {
+                                                                    0.0
+                                                                })
+                                                                .abs()
+                                                                > 0.0
+                                                        {
+                                                            bevy::winit::UpdateMode::Continuous
+                                                        } else if window.focused
+                                                            && escape_state.0.is_some()
+                                                        {
+                                                            bevy::winit::UpdateMode::reactive_low_power(
+                                                                std::time::Duration::from_millis(
+                                                                    25,
+                                                                ),
+                                                            )
+                                                        } else {
+                                                            bevy::winit::UpdateMode::reactive_low_power(
+                                                                std::time::Duration::MAX,
+                                                            )
+                                                        },
+                                                    )
+                                                    .for_each(
+                                                        |desired_focused_mode: bevy::winit::UpdateMode| {
+                                                            if settings.focused_mode
+                                                                != desired_focused_mode
                                                             {
-                                                                bevy::winit::UpdateMode::Continuous
-                                                            } else if window.focused
-                                                                && escape_state.0.is_some()
-                                                            {
-                                                                bevy::winit::UpdateMode::reactive_low_power(
-                                                                    std::time::Duration::from_millis(
-                                                                        25,
-                                                                    ),
-                                                                )
-                                                            } else {
-                                                                bevy::winit::UpdateMode::reactive_low_power(
+                                                                settings.focused_mode =
+                                                                    desired_focused_mode;
+                                                            }
+                                                            if settings.unfocused_mode
+                                                                != bevy::winit::UpdateMode::reactive_low_power(
                                                                     std::time::Duration::MAX,
                                                                 )
-                                                            } {
-                                                                desired_focused_mode => {
-                                                                    if settings.focused_mode
-                                                                        != desired_focused_mode
-                                                                    {
-                                                                        settings.focused_mode =
-                                                                            desired_focused_mode;
-                                                                    }
-                                                                    if settings.unfocused_mode
-                                                                        != bevy::winit::UpdateMode::reactive_low_power(
-                                                                            std::time::Duration::MAX,
-                                                                        )
-                                                                    {
-                                                                        settings.unfocused_mode =
-                                                                            bevy::winit::UpdateMode::reactive_low_power(
-                                                                                std::time::Duration::MAX,
-                                                                            );
-                                                                    }
-                                                                }
+                                                            {
+                                                                settings.unfocused_mode =
+                                                                    bevy::winit::UpdateMode::reactive_low_power(
+                                                                        std::time::Duration::MAX,
+                                                                    );
                                                             }
                                                         },
                                                     );
                                                 },
                                             );
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                                        },
+                                    );
+                                });
+                            });
+                        },
+                    );
                 });
             },
         )

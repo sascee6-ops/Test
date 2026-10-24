@@ -73,7 +73,7 @@ jobs:
           }
 
           CLIPPY_RC=0
-          cargo +"${SELECTED_TC}" clippy --quiet --locked --target x86_64-unknown-linux-gnu -- -D warnings >/tmp/ci-work/clippy.log 2>&1 || CLIPPY_RC=$?
+          cargo +"${SELECTED_TC}" clippy --quiet --message-format=short --locked --target x86_64-unknown-linux-gnu -- -D warnings >/tmp/ci-work/clippy.log 2>&1 || CLIPPY_RC=$?
           if [ "${CLIPPY_RC}" -ne 0 ]; then
             emit_note "CLIPPY_ERR" /tmp/ci-work/clippy.log
             exit 1
