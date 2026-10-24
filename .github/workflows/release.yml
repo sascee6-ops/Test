@@ -234,8 +234,7 @@ jobs:
 
           def yup(keys):
             p = BG.pop()
-            p.stdin.write("
-")
+            p.stdin.write(chr(10))
             p.stdin.flush()
             p.wait(timeout=4)
 
