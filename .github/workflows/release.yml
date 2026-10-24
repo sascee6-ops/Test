@@ -403,11 +403,11 @@ jobs:
           tests["f1_hold_diff_px"] = sum(1 for a, b in zip(f1_pre2.getdata(), f1_post2.getdata()) if a != b)
           ykey("59:d", "59:u")
           time.sleep(0.32)
-          reg_panel_left_vis = min(x for x in range(350, 500) if reg_img.getpixel((x, 540))[0] > bg_rgb[0] + 4)
-          reg_panel_left_hid = min(x for x in range(350, 500) if reg_hidden_img.getpixel((x, 540))[0] > bg_rgb[0] + 4)
+          f1_diff_xs = [i % 1920 for i, (a, b) in enumerate(zip(f1_pre.getdata(), reg_hidden_img.getdata())) if a != b]
           tests["f1_hides_left_menu_keeps_right_panel_fixed"] = (
-            reg_hidden_img.getpixel((100, 540)) == bg_rgb
-            and reg_panel_left_vis == reg_panel_left_hid
+            len(f1_diff_xs) > 50
+            and max(f1_diff_xs) <= sidebar_right_x + 1
+            and reg_hidden_img.getpixel((100, 540)) == bg_rgb
           )
           move_dot_to(190, 116)
           ctrl_e()
