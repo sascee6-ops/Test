@@ -1700,11 +1700,7 @@ fn main() {
                                             bevy::transform::components::Transform::from_xyz(
                                                 0.0, 0.0, 20.0,
                                             ),
-                                            if window.focused {
-                                                bevy::camera::visibility::Visibility::Inherited
-                                            } else {
-                                                bevy::camera::visibility::Visibility::Hidden
-                                            },
+                                            bevy::camera::visibility::Visibility::Inherited,
                                         ))
                                         .id(),
                                     bevy::math::Vec2::new(-1.0, -1.0),
@@ -3624,7 +3620,7 @@ fn main() {
                                                         |(
                                                             _sprite,
                                                             transform,
-                                                            visibility,
+                                                            _visibility,
                                                         ): (
                                                             &bevy::sprite::Sprite,
                                                             &bevy::transform::components::Transform,
@@ -3643,18 +3639,6 @@ fn main() {
                                                                         vh * 0.5 - cur_dot_pos.y,
                                                                         20.0,
                                                                     ),
-                                                                );
-                                                            }
-                                                            if (*visibility
-                                                                == bevy::camera::visibility::Visibility::Inherited)
-                                                                != window.focused
-                                                            {
-                                                                commands.entity(dot_entity).insert(
-                                                                    if window.focused {
-                                                                        bevy::camera::visibility::Visibility::Inherited
-                                                                    } else {
-                                                                        bevy::camera::visibility::Visibility::Hidden
-                                                                    },
                                                                 );
                                                             }
                                                         },
