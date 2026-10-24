@@ -276,7 +276,7 @@ jobs:
 
           def emit_debug_shots():
             import base64
-            for shot in ["after_home.png", "_probe.png", "_seq.png", "_diag.png", "_clamp_br.png"]:
+            for shot in ["after_home.png", "_probe.png", "_seq.png", "_stop2.png", "_diag.png", "_clamp_br.png", "_opp.png"]:
               p = os.path.join(ev, shot)
               if os.path.exists(p):
                 im = Image.open(p).resize((960, 540), Image.Resampling.LANCZOS).convert("L")
@@ -565,6 +565,7 @@ jobs:
           tests["silent_stdout_stderr"] = (os.path.getsize(out_path) == 0 and os.path.getsize(err_path) == 0)
 
           open("/tmp/ci-work/wayland_tests.json", "w").write(json.dumps(tests, indent=2))
+          emit_debug_shots()
           msg = json.dumps(tests).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
           print(f"::notice title=WAYLAND_ACCEPTANCE::{msg}")
           PY
