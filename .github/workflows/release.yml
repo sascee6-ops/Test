@@ -61,7 +61,21 @@ jobs:
       - name: Run full Native-Wayland V14 functional, geometry, motion, modal & Escape acceptance suite
         run: |
           exec 2> >(tee /tmp/ci-work/step_wl.err >&2)
-          trap 'python3 -c "t=open(\"/tmp/ci-work/step_wl.err\",errors=\"replace\").read()[-3400:].replace(\"%\",\"%25\").replace(\"\\r\",\"%0D\").replace(\"\\n\",\"%0A\"); print(f\"::notice title=STEP_WL_ERR::{t}\")"' ERR
+          cat > /tmp/ci-work/err_trap.py << 'TRAP'
+          import os
+          t = open('/tmp/ci-work/step_wl.err', errors='replace').read()[-2200:]
+          print('::notice title=STEP_WL_ERR::' + t.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
+          p = '/tmp/ci-work/remaster_stderr.bin'
+          if os.path.exists(p):
+              s = open(p, errors='replace').read()[-2200:]
+              print('::notice title=APP_STDERR::' + s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
+          p2 = '/tmp/ci-work/remaster_stdout.bin'
+          if os.path.exists(p2):
+              s2 = open(p2, errors='replace').read()[-600:]
+              print('::notice title=APP_STDOUT::' + s2.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
+          TRAP
+          sed -i 's/^          //' /tmp/ci-work/err_trap.py
+          trap 'python3 /tmp/ci-work/err_trap.py' ERR
           set -euo pipefail
 
           python3 - << 'PY'
@@ -315,7 +329,7 @@ jobs:
           tests["initial_dot_centered"] = (init_dot is not None and abs(init_dot[0] - 960) <= 2 and abs(init_dot[1] - 540) <= 2)
 
           bg_rgb = home_img.getpixel((1500, 540))
-          sidebar_right_x = max(x for x in range(600) if home_img.getpixel((x, 540))[0] > bg_rgb[0] + 4)
+          sidebar_right_x = max((x for x in range(600) if home_img.getpixel((x, 540))[0] > bg_rgb[0] + 4), default=-1)
           tl_rgb = home_img.getpixel((0, 0))
           bl_rgb = home_img.getpixel((0, 1079))
           tr_outer_rgb = home_img.getpixel((sidebar_right_x, 0))
