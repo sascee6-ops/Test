@@ -80,6 +80,19 @@ jobs:
 
           python3 - << 'PY'
           import base64, json, os, subprocess, sys, time
+          import threading, faulthandler, io as _io
+          def _wd():
+            time.sleep(480)
+            buf = _io.StringIO()
+            faulthandler.dump_traceback(file=buf)
+            msg = buf.getvalue().replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+            print("::notice title=HANG_TRACE::" + msg[:3500], flush=True)
+            time.sleep(120)
+            buf2 = _io.StringIO()
+            faulthandler.dump_traceback(file=buf2)
+            msg2 = buf2.getvalue().replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+            print("::notice title=HANG_TRACE2::" + msg2[:3500], flush=True)
+          threading.Thread(target=_wd, daemon=True).start()
           from PIL import Image
 
           ev = "/tmp/ci-work/evidence"
