@@ -276,7 +276,7 @@ jobs:
 
           def emit_debug_shots():
             import base64
-            for shot in ["after_home.png", "_probe.png", "_seq.png", "_stop2.png", "_diag.png", "_clamp_br.png", "_opp.png"]:
+            for shot in ["after_home.png", "_probe.png", "_seq.png", "_stop2.png", "_redraw.png", "_diag.png", "_clamp_br.png", "_opp.png"]:
               p = os.path.join(ev, shot)
               if os.path.exists(p):
                 im = Image.open(p).resize((960, 540), Image.Resampling.LANCZOS).convert("L")
@@ -368,6 +368,13 @@ jobs:
           s2_img = grab("_stop2.png")
           stop_2 = find_dot_center(s2_img)
           tests["dbg_bbox_stop2"] = dot_debug(s2_img)
+          ykey("106:d", "106:u")
+          time.sleep(0.35)
+          rd_img = grab("_redraw.png")
+          tests["dbg_bbox_redraw"] = dot_debug(rd_img)
+          time.sleep(0.5)
+          rd2_img = grab("_redraw2.png")
+          tests["dbg_bbox_redraw2"] = dot_debug(rd2_img)
           tests["smooth_cardinal_positions"] = seq_x
           tests["smooth_monotonic_motion"] = (len(seq_x) >= 3 and all(seq_x[i] < seq_x[i+1] for i in range(len(seq_x)-1)))
           tests["immediate_stop_zero_drift"] = (stop_1 is not None and stop_1 == stop_2)
@@ -567,7 +574,8 @@ jobs:
           open("/tmp/ci-work/wayland_tests.json", "w").write(json.dumps(tests, indent=2))
           emit_debug_shots()
           msg = json.dumps(tests).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-          print(f"::notice title=WAYLAND_ACCEPTANCE::{msg}")
+          for ci in range(0, len(msg), 3300):
+            print(f"::notice title=WAYLAND_ACCEPTANCE_{ci//3300}::{msg[ci:ci+3300]}")
           PY
 
       - name: Emit AFTER screenshots batch 1 (Home, Registry, Registry F1 hidden)
