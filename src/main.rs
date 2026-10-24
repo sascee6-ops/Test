@@ -1844,15 +1844,14 @@ fn main() {
                         .for_each(|entities: &[bevy::ecs::entity::Entity; 45]| {
                             layout_info
                                 .get(entities[5])
-                                .ok()
-                                .filter(|info: &bevy::text::TextLayoutInfo| {
-                                    info.scale_factor > 0.0
-                                        && info.size.x.is_finite()
-                                        && info.size.x > 0.0
-                                })
                                 .into_iter()
                                 .for_each(|info: &bevy::text::TextLayoutInfo| {
-                                    metrics_state.0 = info.size.x / info.scale_factor;
+                                    if info.scale_factor > 0.0
+                                        && info.size.x.is_finite()
+                                        && info.size.x > 0.0
+                                    {
+                                        metrics_state.0 = info.size.x / info.scale_factor;
+                                    }
                                 });
                         });
 
