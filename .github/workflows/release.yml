@@ -173,11 +173,9 @@ jobs:
             subprocess.run(["grim", p], env=env, check=True)
             return Image.open(p).convert("RGB")
 
-          def find_dot_center(img):
-            w, h = img.size
-            px = img.load()
-            for y in range(0, h):
-              for x in range(0, w):
+          def _scan(px, w, h, ys, xs):
+            for y in ys:
+              for x in xs:
                 c = px[x, y]
                 if c[0] < 250 or c[1] < 250 or c[2] < 250:
                   continue
@@ -212,6 +210,21 @@ jobs:
                   continue
                 return (cx, cy)
             return None
+
+          LAST = [None]
+
+          def find_dot_center(img):
+            w, h = img.size
+            px = img.load()
+            if LAST[0]:
+              hx, hy = LAST[0]
+              r = _scan(px, w, h, range(max(0, hy - 260), min(h, hy + 260)), range(max(0, hx - 260), min(w, hx + 260)))
+              if r:
+                LAST[0] = r
+                return r
+            r = _scan(px, w, h, range(0, h), range(0, w))
+            LAST[0] = r
+            return r
 
           def dot_debug(img):
             w, h = img.size
