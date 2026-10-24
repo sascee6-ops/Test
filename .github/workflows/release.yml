@@ -319,11 +319,7 @@ jobs:
             p.wait(timeout=4)
 
           def ctrl_e():
-            ykey("29:d")
-            time.sleep(0.035)
-            ykey("18:d", "18:u")
-            time.sleep(0.035)
-            ykey("29:u")
+            subprocess.run(["python3", "/tmp/ci-work/vkinj.py", "d29", "s35", "d18", "u18", "s35", "u29"], env=env, check=True)
             time.sleep(0.32)
 
           tests = {"elf_dt_needed": needed_libs, "zero_x11_dt_needed": all("X11" not in l and "xcb" not in l for l in needed_libs)}
@@ -461,12 +457,7 @@ jobs:
           tests["dot_fully_inside_viewport"] = (clamp_br is not None and 1912 <= clamp_br[0] <= 1916 and 1072 <= clamp_br[1] <= 1076)
 
           move_dot_to(190, 172)
-          ykey("18:d")
-          time.sleep(0.09)
-          ykey("29:d")
-          time.sleep(0.09)
-          ykey("18:u")
-          ykey("29:u")
+          subprocess.run(["python3", "/tmp/ci-work/vkinj.py", "d18", "s90", "d29", "s90", "u29", "s30", "u18"], env=env, check=True)
           time.sleep(0.3)
           preheld_img = grab("_preheld_e.png")
           tests["preheld_e_then_ctrl_rejected"] = (preheld_img.getpixel((900, 60)) == bg_rgb)
