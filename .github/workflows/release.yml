@@ -37,6 +37,7 @@ jobs:
             --target x86_64-unknown-linux-gnu \
             --release \
             --locked \
+            --target-dir /tmp/ci-work/ctarget \
             --config 'build.incremental=false' \
             --config 'build.jobs=4' \
             --config 'profile.release.opt-level="s"' \
@@ -54,7 +55,7 @@ jobs:
             exit "${BUILD_CODE}"
           fi
 
-          cp target/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra /tmp/ci-work/isolated-run/Subsystem-for-Arxumbra
+          cp /tmp/ci-work/ctarget/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra /tmp/ci-work/isolated-run/Subsystem-for-Arxumbra
           chmod 755 /tmp/ci-work/isolated-run/Subsystem-for-Arxumbra
 
       - name: Run full Native-Wayland V14 functional, geometry, motion, modal & Escape acceptance suite
@@ -196,6 +197,21 @@ jobs:
                 return (cx, cy)
             return None
 
+          def dot_debug(img):
+            w, h = img.size
+            px = img.load()
+            xs = []
+            ys = []
+            for y in range(0, h, 2):
+              for x in range(500, w, 2):
+                c = px[x, y]
+                if c[0] >= 250 and c[1] >= 250 and c[2] >= 250:
+                  xs.append(x)
+                  ys.append(y)
+            if not xs:
+              return [0, -1, -1, -1, -1]
+            return [len(xs), min(xs), max(xs), min(ys), max(ys)]
+
           def move_dot_to(tx, ty):
             for _ in range(14):
               im = grab("_probe.png")
@@ -325,12 +341,16 @@ jobs:
           subprocess.run(["swaymsg", "seat", "seat0", "cursor", "release", "button1"], env=env, check=True)
           time.sleep(0.15)
           after_forbidden = grab("_after_forbidden.png")
+          tests["dbg_bbox_forbidden"] = dot_debug(after_forbidden)
           tests["forbidden_inputs_ignored"] = (find_dot_center(after_forbidden) == init_dot and after_forbidden.getpixel((900, 60)) == bg_rgb)
 
+          pos_before_opp = find_dot_center(grab("_preopp.png"))
           yhold(["ctrl", "a", "d"], 220)
           time.sleep(0.08)
-          pos_opp = find_dot_center(grab("_opp.png"))
-          tests["opposing_keys_cancel"] = (pos_opp == init_dot)
+          opp_img = grab("_opp.png")
+          pos_opp = find_dot_center(opp_img)
+          tests["dbg_bbox_opp"] = dot_debug(opp_img)
+          tests["opposing_keys_cancel"] = (pos_opp == pos_before_opp)
 
           yhold_bg_down(["ctrl", "d"])
           seq_x = []
@@ -341,9 +361,13 @@ jobs:
               seq_x.append(c[0])
           yup(["ctrl", "d"])
           time.sleep(0.04)
-          stop_1 = find_dot_center(grab("_stop1.png"))
+          s1_img = grab("_stop1.png")
+          stop_1 = find_dot_center(s1_img)
+          tests["dbg_bbox_stop1"] = dot_debug(s1_img)
           time.sleep(0.18)
-          stop_2 = find_dot_center(grab("_stop2.png"))
+          s2_img = grab("_stop2.png")
+          stop_2 = find_dot_center(s2_img)
+          tests["dbg_bbox_stop2"] = dot_debug(s2_img)
           tests["smooth_cardinal_positions"] = seq_x
           tests["smooth_monotonic_motion"] = (len(seq_x) >= 3 and all(seq_x[i] < seq_x[i+1] for i in range(len(seq_x)-1)))
           tests["immediate_stop_zero_drift"] = (stop_1 is not None and stop_1 == stop_2)
@@ -351,7 +375,9 @@ jobs:
           diag_start = stop_2
           yhold(["ctrl", "w", "d"], 260)
           time.sleep(0.06)
-          diag_end = find_dot_center(grab("_diag.png"))
+          dg_img = grab("_diag.png")
+          diag_end = find_dot_center(dg_img)
+          tests["dbg_bbox_diag"] = dot_debug(dg_img)
           ddx = diag_end[0] - diag_start[0] if diag_end and diag_start else -999
           ddy = diag_start[1] - diag_end[1] if diag_end and diag_start else -999
           tests["diagonal_displacement"] = [ddx, ddy]
@@ -368,7 +394,9 @@ jobs:
 
           yhold(["ctrl", "d", "s"], 1900)
           time.sleep(0.08)
-          clamp_br = find_dot_center(grab("_clamp_br.png"))
+          cb_img = grab("_clamp_br.png")
+          clamp_br = find_dot_center(cb_img)
+          tests["dbg_bbox_clamp"] = dot_debug(cb_img)
           tests["clamped_bottom_right_center"] = clamp_br
           tests["dot_fully_inside_viewport"] = (clamp_br is not None and 1912 <= clamp_br[0] <= 1916 and 1072 <= clamp_br[1] <= 1076)
 
@@ -605,7 +633,7 @@ jobs:
           python3 - << 'PY'
           import subprocess
           fmt = subprocess.run(["cargo", "+nightly-2026-10-24", "fmt", "--all", "--", "--check"], capture_output=True, text=True)
-          clip = subprocess.run(["cargo", "+nightly-2026-10-24", "clippy", "--quiet", "--message-format=short", "--locked", "--target", "x86_64-unknown-linux-gnu", "--", "-D", "warnings"], capture_output=True, text=True)
+          clip = subprocess.run(["cargo", "+nightly-2026-10-24", "clippy", "--quiet", "--message-format=short", "--locked", "--target", "x86_64-unknown-linux-gnu", "--target-dir", "/tmp/ci-work/ctarget-gate", "--", "-D", "warnings"], capture_output=True, text=True)
           diff_txt = ("RUSTFMT_DIFF:\n" + fmt.stdout + fmt.stderr + "\nCLIPPY_DIFF:\n" + clip.stdout + clip.stderr)[:3800]
           if fmt.stdout.strip() or fmt.stderr.strip() or clip.stdout.strip() or clip.stderr.strip() or fmt.returncode or clip.returncode:
             print("::notice title=STATIC_GATE_DIFF::" + diff_txt.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
