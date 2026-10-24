@@ -30,8 +30,17 @@ jobs:
 
       - name: Select latest verified dated nightly & run inexpensive static checks
         run: |
-          set -euo pipefail
+          set -uo pipefail
           mkdir -p /tmp/ci-work/evidence
+          emit_note() {
+            python3 - "$1" "$2" << 'PY'
+          import sys
+          title, path = sys.argv[1], sys.argv[2]
+          txt = open(path, errors="replace").read()[-45000:]
+          esc = txt.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+          print(f"::notice title={title}::{esc}")
+          PY
+          }
           SELECTED_TC=""
           for d in 2026-10-24 2026-10-23 2026-10-22 2026-10-21 2026-10-20 2026-10-19; do
             TC="nightly-${d}"
@@ -44,12 +53,33 @@ jobs:
               break
             fi
           done
-          test -n "${SELECTED_TC}"
+          if [ -z "${SELECTED_TC}" ]; then
+            emit_note "TC_INSTALL_FAIL" /tmp/ci-work/tc_2026-10-19.log
+            exit 1
+          fi
           echo "${SELECTED_TC}" > /tmp/ci-work/selected_tc.txt
 
-          cargo +"${SELECTED_TC}" fmt --all -- --check
-          cargo +"${SELECTED_TC}" metadata --format-version 1 --no-deps --locked > /tmp/ci-work/metadata.json
-          cargo +"${SELECTED_TC}" clippy --locked --target x86_64-unknown-linux-gnu -- -D warnings
+          FMT_RC=0
+          cargo +"${SELECTED_TC}" fmt --all -- --check >/tmp/ci-work/fmt.diff 2>&1 || FMT_RC=$?
+          if [ "${FMT_RC}" -ne 0 ]; then
+            emit_note "FMT_DIFF" /tmp/ci-work/fmt.diff
+          fi
+
+          cargo +"${SELECTED_TC}" metadata --format-version 1 --no-deps --locked > /tmp/ci-work/metadata.json 2>/tmp/ci-work/meta.err || {
+            emit_note "META_ERR" /tmp/ci-work/meta.err
+            exit 1
+          }
+
+          CLIPPY_RC=0
+          cargo +"${SELECTED_TC}" clippy --locked --target x86_64-unknown-linux-gnu -- -D warnings >/tmp/ci-work/clippy.log 2>&1 || CLIPPY_RC=$?
+          if [ "${CLIPPY_RC}" -ne 0 ]; then
+            emit_note "CLIPPY_ERR" /tmp/ci-work/clippy.log
+            exit 1
+          fi
+          if [ "${FMT_RC}" -ne 0 ]; then
+            exit 1
+          fi
+          set -e
 
           python3 - << 'PY'
           import json, subprocess
@@ -111,6 +141,8 @@ jobs:
 
       - name: Build untouched df47cac baseline & capture native-Wayland BEFORE evidence
         run: |
+          exec 2> >(tee /tmp/ci-work/step_base.err >&2)
+          trap 'python3 -c "import sys; t=open(\"/tmp/ci-work/step_base.err\",errors=\"replace\").read()[-30000:].replace(\"%\",\"%25\").replace(\"\\r\",\"%0D\").replace(\"\\n\",\"%0A\"); print(f\"::notice title=STEP_BASE_ERR::{t}\")"' ERR
           set -euo pipefail
           TC="$(cat /tmp/ci-work/selected_tc.txt)"
           mkdir -p /tmp/ci-work/baseline-src /tmp/ci-work/baseline-stage
@@ -266,6 +298,8 @@ jobs:
 
       - name: Run controlled compiler & linker flag experiments (V14 §6)
         run: |
+          exec 2> >(tee /tmp/ci-work/step_exp.err >&2)
+          trap 'python3 -c "t=open(\"/tmp/ci-work/step_exp.err\",errors=\"replace\").read()[-30000:].replace(\"%\",\"%25\").replace(\"\\r\",\"%0D\").replace(\"\\n\",\"%0A\"); print(f\"::notice title=STEP_EXP_ERR::{t}\")"' ERR
           set -euo pipefail
           TC="$(cat /tmp/ci-work/selected_tc.txt)"
           CFG_E_FLAGS="$(cat /tmp/ci-work/verified_rustflags.json)"
@@ -456,6 +490,8 @@ jobs:
 
       - name: Run full Native-Wayland V14 functional, geometry, motion, modal & Escape acceptance suite
         run: |
+          exec 2> >(tee /tmp/ci-work/step_wl.err >&2)
+          trap 'python3 -c "t=open(\"/tmp/ci-work/step_wl.err\",errors=\"replace\").read()[-30000:].replace(\"%\",\"%25\").replace(\"\\r\",\"%0D\").replace(\"\\n\",\"%0A\"); print(f\"::notice title=STEP_WL_ERR::{t}\")"' ERR
           set -euo pipefail
           mkdir -p /tmp/ci-work/isolated-run
           cp /tmp/ci-work/bins/cfg_e_fat_o3_mir_gc /tmp/ci-work/isolated-run/Subsystem-for-Arxumbra
