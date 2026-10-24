@@ -321,7 +321,6 @@ jobs:
             return p
 
           INJ1 = inj_start()
-          INJ2 = inj_start()
 
           def ykey(*codes):
             toks = []
@@ -339,15 +338,15 @@ jobs:
             INJ1.stdout.readline()
 
           def yhold_bg_down(keys):
-            INJ2.stdin.write(" ".join(["d" + str(YD[k]) for k in keys] + ["WAIT"] + ["u" + str(YD[k]) for k in reversed(keys)]) + chr(10))
-            INJ2.stdin.flush()
-            INJ2.stdout.readline()
-            return INJ2
+            INJ1.stdin.write(" ".join(["d" + str(YD[k]) for k in keys] + ["WAIT"] + ["u" + str(YD[k]) for k in reversed(keys)]) + chr(10))
+            INJ1.stdin.flush()
+            INJ1.stdout.readline()
+            return INJ1
 
           def yup(keys):
-            INJ2.stdin.write(chr(10))
-            INJ2.stdin.flush()
-            INJ2.stdout.readline()
+            INJ1.stdin.write(chr(10))
+            INJ1.stdin.flush()
+            INJ1.stdout.readline()
 
           def ctrl_e():
             subprocess.run(["python3", "/tmp/ci-work/vkinj.py", "d29", "s35", "d18", "u18", "s35", "u29"], env=env, check=True)
@@ -477,6 +476,8 @@ jobs:
           cd_lines = [l.strip() for l in open("/tmp/arxumbra-debug/state.log") if l.startswith("F C")]
           tests["hold3s_ctrl_d_updates"] = len(cd_lines)
           tests["hold3s_first_last"] = [cd_lines[0][:60] if cd_lines else None, cd_lines[-1][:60] if cd_lines else None]
+          _mid = open("/tmp/arxumbra-debug/state.log", errors="replace").read()
+          print("::notice title=DBG_MID::" + _mid[:3000].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"), flush=True)
           open("/tmp/arxumbra-debug/state.log", "w").close()
 
           yhold(["ctrl", "d", "s"], 1900)
@@ -669,7 +670,6 @@ jobs:
           err_f.close()
           sway.terminate()
           INJ1.terminate()
-          INJ2.terminate()
 
           dbg_log = "/tmp/arxumbra-debug/state.log"
           if os.path.exists(dbg_log):
