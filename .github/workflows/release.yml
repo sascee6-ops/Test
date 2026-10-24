@@ -466,7 +466,7 @@ jobs:
           ctrl_e()
           tests["focus_mid"] = app_focused()
           tests["dot_at_registry_attempt"] = find_dot_center(grab("_probe.png"))
-          _ce = [l.strip() for l in open("/tmp/arxumbra-debug/state.log") if l.startswith("F C-E")]
+          _ce = [l.strip() for l in open("/tmp/arxumbra-debug/state.log") if l.startswith("F C") and "t1" in l[:16]]
           tests["dbg_ce"] = [_ce[0][:64] if _ce else None, _ce[-1][:64] if _ce else None, len(_ce)]
           reg_img = grab("after_registry.png")
           tests["registry_panel_visible"] = (reg_img.getpixel((600, 60))[0] > bg_rgb[0] + 3)
@@ -545,10 +545,13 @@ jobs:
           tests["modal_5_cycles_rss_delta_kb"] = rss_after_cycles - rss_before_cycles
 
           ctrl_e()
+          reopen_img = grab("_reopen.png")
+          tests["dbg_px_reopen"] = [reopen_img.getpixel((820, 540)), modal_interior_rgb]
 
           yhold(["Escape"], 2200)
           time.sleep(0.2)
           short_esc_img = grab("_short_esc.png")
+          tests["dbg_px_short"] = short_esc_img.getpixel((820, 540))
           tests["short_escape_cancelled_no_action"] = (short_esc_img.getpixel((820, 540)) == modal_interior_rgb)
 
           esc_bg = yhold_bg_down(["Escape"])
@@ -563,6 +566,7 @@ jobs:
           yup(["Escape"])
           time.sleep(0.25)
           unfocus_esc_img = grab("_unfocus_esc.png")
+          tests["dbg_px_unfocus"] = unfocus_esc_img.getpixel((820, 540))
           tests["focus_loss_cancels_escape_hold_and_suppresses_stale"] = (unfocus_esc_img.getpixel((820, 540)) == modal_interior_rgb)
 
           esc_long = yhold_bg_down(["Escape"])
