@@ -175,7 +175,7 @@ fn main() {
                 std::option::Option<[bevy::ecs::entity::Entity; 45]>,
             >,
              mut tap_state: bevy::ecs::system::Local<'_, (bool, bool, bool)>,
-             mut key_events: bevy::ecs::event::EventReader<
+             mut key_events: bevy::ecs::message::MessageReader<
                 '_,
                 '_,
                 bevy::input::keyboard::KeyboardInput,
