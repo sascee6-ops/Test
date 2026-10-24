@@ -150,32 +150,32 @@ jobs:
             for y in range(12, h - 12):
               for x in range(12, w - 12):
                 c = px[x, y]
-                if c[0] < 250 or c[1] < 250 or c[2] < 250:
+                if c[0] < 235 or c[1] < 235 or c[2] < 235:
                   continue
                 x0 = x
-                while x0 - 1 >= 0 and px[x0 - 1, y][0] >= 250:
+                while x0 - 1 >= 0 and px[x0 - 1, y][0] >= 235:
                   x0 -= 1
                 x1 = x
-                while x1 + 1 < w and px[x1 + 1, y][0] >= 250:
+                while x1 + 1 < w and px[x1 + 1, y][0] >= 235:
                   x1 += 1
                 if not (9 <= x1 - x0 + 1 <= 11):
                   continue
                 y0 = y
-                while y0 - 1 >= 0 and px[x, y0 - 1][0] >= 250:
+                while y0 - 1 >= 0 and px[x, y0 - 1][0] >= 235:
                   y0 -= 1
                 y1 = y
-                while y1 + 1 < h and px[x, y1 + 1][0] >= 250:
+                while y1 + 1 < h and px[x, y1 + 1][0] >= 235:
                   y1 += 1
                 if not (9 <= y1 - y0 + 1 <= 11):
                   continue
                 cx = (x0 + x1) // 2
                 cy = (y0 + y1) // 2
-                chord = sum(1 for dx in range(-8, 9) if px[cx + dx, cy - 4][0] >= 250)
+                chord = sum(1 for dx in range(-8, 9) if px[cx + dx, cy - 4][0] >= 235)
                 if not (5 <= chord <= 9):
                   continue
-                if px[cx - 8, cy][0] >= 250 or px[cx + 8, cy][0] >= 250:
+                if px[cx - 8, cy][0] >= 235 or px[cx + 8, cy][0] >= 235:
                   continue
-                if px[cx, cy - 8][0] >= 250 or px[cx, cy + 8][0] >= 250:
+                if px[cx, cy - 8][0] >= 235 or px[cx, cy + 8][0] >= 235:
                   continue
                 return (cx, cy)
             return None
@@ -207,6 +207,19 @@ jobs:
             time.sleep(0.32)
 
           tests = {"elf_dt_needed": needed_libs, "zero_x11_dt_needed": all("X11" not in l and "xcb" not in l for l in needed_libs)}
+
+          def emit_debug_shots():
+            import base64
+            for shot in ["after_home.png", "_probe.png", "_seq.png", "_diag.png", "_clamp_br.png"]:
+              p = os.path.join(ev, shot)
+              if os.path.exists(p):
+                im = Image.open(p).resize((960, 540), Image.Resampling.LANCZOS).convert("L")
+                op = os.path.join(ev, "dbg_" + shot)
+                im.save(op, format="PNG", optimize=True, compress_level=9)
+                b64 = base64.b64encode(open(op, "rb").read()).decode("ascii")
+                stem = shot[:-4].strip("_")
+                for ci in range(0, min(len(b64), 7200), 3600):
+                  print(f"::notice title=IMG_dbg_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
 
           tree = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True))
           app_node = find_app_node(tree)
@@ -290,8 +303,8 @@ jobs:
           subprocess.run(["wtype", "-M", "ctrl", "-P", "w", "-P", "d", "-s", "260", "-p", "w", "-p", "d", "-m", "ctrl"], env=env, check=True)
           time.sleep(0.06)
           diag_end = find_dot_center(grab("_diag.png"))
-          ddx = diag_end[0] - diag_start[0]
-          ddy = diag_start[1] - diag_end[1]
+          ddx = diag_end[0] - diag_start[0] if diag_end and diag_start else -999
+          ddy = diag_start[1] - diag_end[1] if diag_end and diag_start else -999
           tests["diagonal_displacement"] = [ddx, ddy]
           tests["diagonal_normalized"] = (ddx > 40 and ddy > 40 and abs(ddx - ddy) <= 14)
 
