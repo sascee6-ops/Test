@@ -471,9 +471,12 @@ jobs:
           preheld_img = grab("_preheld_e.png")
           tests["preheld_e_then_ctrl_rejected"] = (preheld_img.getpixel((900, 60)) == bg_rgb)
 
+          open("/tmp/arxumbra-debug/state.log", "w").close()
           ctrl_e()
           tests["focus_mid"] = app_focused()
           tests["dot_at_registry_attempt"] = find_dot_center(grab("_probe.png"))
+          _ce = [l.strip() for l in open("/tmp/arxumbra-debug/state.log") if l.startswith("F C-E")]
+          tests["dbg_ce"] = [_ce[0][:64] if _ce else None, _ce[-1][:64] if _ce else None, len(_ce)]
           reg_img = grab("after_registry.png")
           tests["registry_panel_visible"] = (reg_img.getpixel((600, 60))[0] > bg_rgb[0] + 3)
 
