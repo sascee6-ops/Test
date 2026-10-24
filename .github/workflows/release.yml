@@ -45,10 +45,11 @@ jobs:
           for d in 2026-10-24 2026-10-23 2026-10-22 2026-10-21 2026-10-20 2026-10-19; do
             TC="nightly-${d}"
             if rustup toolchain install "${TC}" --profile minimal \
-              --component rustfmt --component clippy \
-              --target aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu \
-                       aarch64-apple-darwin x86_64-apple-darwin \
-                       aarch64-pc-windows-msvc x86_64-pc-windows-msvc >/tmp/ci-work/tc_${d}.log 2>&1; then
+              --component rustfmt --component clippy >/tmp/ci-work/tc_${d}.log 2>&1 \
+              && rustup target add --toolchain "${TC}" \
+                aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu \
+                aarch64-apple-darwin x86_64-apple-darwin \
+                aarch64-pc-windows-msvc x86_64-pc-windows-msvc >>/tmp/ci-work/tc_${d}.log 2>&1; then
               SELECTED_TC="${TC}"
               break
             fi
