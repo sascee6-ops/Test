@@ -248,6 +248,8 @@ jobs:
           tests["settled_idle_zero_spin"] = (t_cpu1 - t_cpu0) <= 2
 
           tests["focus_at_start"] = app_focused()
+          tests["focus_samples_idle"] = [app_focused() for _ in range(12)]
+          tests["dot_blink_idle"] = [find_dot_center(grab("_blink.png")) for _ in range(6)]
           home_img = grab("after_home.png")
           init_dot = find_dot_center(home_img)
           tests["initial_dot_center"] = init_dot
@@ -409,7 +411,11 @@ jobs:
           tests["short_escape_cancelled_no_action"] = (short_esc_img.getpixel((820, 540)) == modal_interior_rgb)
 
           esc_bg = subprocess.Popen(["wtype", "-P", "Escape", "-s", "5600", "-p", "Escape"], env=env)
-          time.sleep(1.5)
+          time.sleep(1.0)
+          ec0 = cpu_ticks(app.pid)
+          time.sleep(1.0)
+          tests["escape_hold_cpu_ticks_1s"] = cpu_ticks(app.pid) - ec0
+          time.sleep(0.5)
           subprocess.run(["swaymsg", "workspace", "2"], env=env, check=True)
           time.sleep(1.0)
           subprocess.run(["swaymsg", "workspace", "1"], env=env, check=True)
