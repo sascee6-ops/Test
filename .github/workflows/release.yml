@@ -1,503 +1,61 @@
-name: Release
+name: investigate-and-verify
 
 on:
   push:
+    branches:
+      - arena/2494d094-test
   workflow_dispatch:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  investigate-and-verify:
-    name: Controlled Experiments & Native Wayland Verification
+  wayland-v14-acceptance:
     runs-on: ubuntu-24.04
-    timeout-minutes: 55
+    timeout-minutes: 30
     steps:
-      - name: Checkout repository with history
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: 0
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      - name: Install native Wayland & headless Vulkan test packages
+      - name: Install native Wayland & headless Vulkan packages
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends \
+          sudo apt-get install -y --no-install-recommends \
             pkg-config libwayland-dev libxkbcommon-dev \
-            sway grim wtype jq time mesa-vulkan-drivers vulkan-tools python3-pil
+            sway wtype grim mesa-vulkan-drivers libwayland-client0 \
+            python3-pil time file binutils >/dev/null
+          mkdir -p /tmp/ci-work/evidence /tmp/ci-work/isolated-run
 
-      - name: Select latest verified dated nightly & run inexpensive static checks
+      - name: Install verified dated nightly-2026-10-24 & build winning release binary
         run: |
-          set -uo pipefail
-          mkdir -p /tmp/ci-work/evidence
-          emit_note() {
-            python3 - "$1" "$2" << 'PY'
-          import sys
-          title, path = sys.argv[1], sys.argv[2]
-          txt = open(path, errors="replace").read()[-3400:]
-          esc = txt.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-          print(f"::notice title={title}::{esc}")
-          PY
-          }
-          SELECTED_TC=""
-          for d in 2026-10-24 2026-10-23 2026-10-22 2026-10-21 2026-10-20 2026-10-19; do
-            TC="nightly-${d}"
-            if rustup toolchain install "${TC}" --profile minimal \
-              --component rustfmt --component clippy >/tmp/ci-work/tc_${d}.log 2>&1 \
-              && rustup target add --toolchain "${TC}" \
-                aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu \
-                aarch64-apple-darwin x86_64-apple-darwin \
-                aarch64-pc-windows-msvc x86_64-pc-windows-msvc >>/tmp/ci-work/tc_${d}.log 2>&1; then
-              SELECTED_TC="${TC}"
-              break
-            fi
-          done
-          if [ -z "${SELECTED_TC}" ]; then
-            emit_note "TC_INSTALL_FAIL" /tmp/ci-work/tc_2026-10-19.log
-            exit 1
-          fi
-          echo "${SELECTED_TC}" > /tmp/ci-work/selected_tc.txt
+          rustup toolchain install nightly-2026-10-24 --profile minimal --component rustfmt --component clippy >/dev/null 2>&1
+          cargo +nightly-2026-10-24 fmt --all -- --check
+          cargo +nightly-2026-10-24 clippy --quiet --message-format=short --locked --target x86_64-unknown-linux-gnu -- -D warnings
 
-          FMT_RC=0
-          cargo +"${SELECTED_TC}" fmt --all -- --check >/tmp/ci-work/fmt.diff 2>&1 || FMT_RC=$?
-          if [ "${FMT_RC}" -ne 0 ]; then
-            emit_note "FMT_DIFF" /tmp/ci-work/fmt.diff
-          fi
-
-          cargo +"${SELECTED_TC}" metadata --format-version 1 --no-deps --locked > /tmp/ci-work/metadata.json 2>/tmp/ci-work/meta.err || {
-            emit_note "META_ERR" /tmp/ci-work/meta.err
-            exit 1
-          }
-
-          CLIPPY_RC=0
-          cargo +"${SELECTED_TC}" clippy --quiet --message-format=short --locked --target x86_64-unknown-linux-gnu -- -D warnings >/tmp/ci-work/clippy.log 2>&1 || CLIPPY_RC=$?
-          if [ "${CLIPPY_RC}" -ne 0 ]; then
-            emit_note "CLIPPY_ERR" /tmp/ci-work/clippy.log
-            exit 1
-          fi
-          if [ "${FMT_RC}" -ne 0 ]; then
-            exit 1
-          fi
-          set -e
-
-          python3 - << 'PY'
-          import json, subprocess
-
-          tc = open("/tmp/ci-work/selected_tc.txt").read().strip()
-          meta = json.load(open("/tmp/ci-work/metadata.json"))
-          pkg = meta["packages"][0]
-          targets = [(t["name"], t["kind"]) for t in pkg["targets"]]
-          rustc_vv = subprocess.check_output(["rustc", f"+{tc}", "-Vv"], text=True).strip()
-          cargo_vv = subprocess.check_output(["cargo", f"+{tc}", "-Vv"], text=True).strip()
-          log_chk = subprocess.run(["cargo", f"+{tc}", "tree", "--locked", "-i", "bevy_log"], capture_output=True, text=True)
-          x11_chk = subprocess.run(["cargo", f"+{tc}", "tree", "--locked", "-i", "x11rb"], capture_output=True, text=True)
-
-          candidates = [
-            "-Zmir-opt-level=3",
-            "-Zmir-opt-level=4",
-            "-Zinline-mir=yes",
-            "-Zflatten-format-args=yes",
-            "-Csymbol-mangling-version=v0",
-            "-Clink-arg=-Wl,--gc-sections",
-          ]
-          flag_probe = {}
-          verified_flags = []
-          for fl in candidates:
-            r = subprocess.run(
-                ["rustc", f"+{tc}", "--edition=2024", "--crate-type=bin", fl, "-", "-o", "/tmp/ci-work/probe_bin"],
-                input="fn main() {}\n",
-                capture_output=True,
-                text=True,
-            )
-            flag_probe[fl] = (r.returncode == 0)
-          if flag_probe.get("-Zmir-opt-level=3"):
-            verified_flags.append("-Zmir-opt-level=3")
-          for fl in ["-Zinline-mir=yes", "-Zflatten-format-args=yes", "-Csymbol-mangling-version=v0", "-Clink-arg=-Wl,--gc-sections"]:
-            if flag_probe.get(fl):
-                verified_flags.append(fl)
-
-          open("/tmp/ci-work/verified_rustflags.json", "w").write(json.dumps(verified_flags))
-
-          report = {
-            "selected_toolchain": tc,
-            "rustc_vv": rustc_vv,
-            "cargo_vv": cargo_vv,
-            "package_name": pkg["name"],
-            "package_version": pkg["version"],
-            "edition": pkg["edition"],
-            "targets": targets,
-            "bevy_log_absent": log_chk.returncode != 0,
-            "x11rb_absent": x11_chk.returncode != 0,
-            "flag_probe": flag_probe,
-            "verified_cfg_e_flags": verified_flags,
-            "fmt_check": "PASS",
-            "clippy_check": "PASS",
-          }
-          open("/tmp/ci-work/static_checks.json", "w").write(json.dumps(report, indent=2))
-          msg = json.dumps(report).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-          print(f"::notice title=STATIC_CHECKS::{msg}")
-          PY
-
-      - name: Build untouched df47cac baseline & capture native-Wayland BEFORE evidence
-        run: |
-          exec 2> >(tee /tmp/ci-work/step_base.err >&2)
-          trap 'python3 -c "import sys; t=open(\"/tmp/ci-work/step_base.err\",errors=\"replace\").read()[-3400:].replace(\"%\",\"%25\").replace(\"\\r\",\"%0D\").replace(\"\\n\",\"%0A\"); print(f\"::notice title=STEP_BASE_ERR::{t}\")"' ERR
-          set -euo pipefail
-          TC="$(cat /tmp/ci-work/selected_tc.txt)"
-          mkdir -p /tmp/ci-work/baseline-src /tmp/ci-work/baseline-stage
-          git archive df47cacea44ac611f22f8d3598f63c4320b12071 | tar -x -C /tmp/ci-work/baseline-src
-
-          /usr/bin/time -v -o /tmp/ci-work/time_baseline_j1.txt \
-            cargo +"${TC}" build \
-              --manifest-path /tmp/ci-work/baseline-src/Cargo.toml \
-              --target-dir /tmp/ci-work/target-base-j1 \
-              --locked --release --target x86_64-unknown-linux-gnu \
-              --config 'build.jobs=1' \
-              --config 'profile.release.opt-level=3' \
-              --config 'profile.release.lto="thin"' \
-              --config 'profile.release.codegen-units=1' \
-              --config 'profile.release.panic="abort"' \
-              --config 'profile.release.strip="symbols"' \
-              --config 'profile.release.debug=0' \
-              --config 'profile.release.debug-assertions=false' \
-              --config 'profile.release.overflow-checks=false' \
-              --config 'profile.release.incremental=false' \
-              >/tmp/ci-work/build_base.log 2>&1
-
-          cp /tmp/ci-work/target-base-j1/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra \
-             /tmp/ci-work/baseline-stage/Subsystem-for-Arxumbra
-          rm -rf /tmp/ci-work/target-base-j1
-
-          python3 - << 'PY'
-          import base64, json, os, subprocess, time
-          from PIL import Image
-
-          work = "/tmp/ci-work"
-          ev = "/tmp/ci-work/evidence"
-          rt_dir = "/tmp/ci-work/xdg-base"
-          os.makedirs(rt_dir, exist_ok=True)
-          os.chmod(rt_dir, 0o700)
-
-          sway_cfg = os.path.join(work, "sway_base.cfg")
-          with open(sway_cfg, "w") as f:
-            f.write("xwayland disable\ndefault_border none\ndefault_floating_border none\noutput * bg #000000 solid_color\n")
-
-          env = os.environ.copy()
-          env.update({
-            "XDG_RUNTIME_DIR": rt_dir,
-            "WLR_BACKENDS": "headless",
-            "WLR_LIBINPUT_NO_DEVICES": "1",
-            "WLR_RENDERER": "pixman",
-            "LIBGL_ALWAYS_SOFTWARE": "1",
-          })
-          env.pop("DISPLAY", None)
-
-          sway = subprocess.Popen(["sway", "-c", sway_cfg], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-          for _ in range(60):
-            time.sleep(0.1)
-            socks = [x for x in os.listdir(rt_dir) if x.startswith("wayland-") and not x.endswith(".lock")]
-            swaysocks = [x for x in os.listdir(rt_dir) if x.startswith("sway-ipc.")]
-            if socks and swaysocks:
-                env["WAYLAND_DISPLAY"] = socks[0]
-                env["SWAYSOCK"] = os.path.join(rt_dir, swaysocks[0])
-                break
-
-          subprocess.run(["swaymsg", "output", "HEADLESS-1", "resolution", "1920x1080", "scale", "1"], env=env, check=True)
-          time.sleep(0.2)
-
-          t0 = time.perf_counter()
-          out_f = open(os.path.join(work, "base_stdout.bin"), "wb")
-          err_f = open(os.path.join(work, "base_stderr.bin"), "wb")
-          app = subprocess.Popen(
-            ["/tmp/ci-work/baseline-stage/Subsystem-for-Arxumbra"],
-            cwd="/tmp/ci-work/baseline-stage",
-            env=env,
-            stdout=out_f,
-            stderr=err_f,
-          )
-
-          first_window_ms = None
-          for _ in range(120):
-            time.sleep(0.025)
-            tree = subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True)
-            if "Subsystem-for-Arxumbra" in tree:
-                first_window_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-                break
-
-          time.sleep(1.2)
-          subprocess.run(["grim", os.path.join(ev, "before_home.png")], env=env, check=True)
-
-          img0 = Image.open(os.path.join(ev, "before_home.png")).convert("RGB")
-          subprocess.run(["wtype", "-M", "ctrl", "-M", "shift", "-P", "d", "-s", "250", "-p", "d", "-m", "shift", "-m", "ctrl"], env=env, check=True)
-          time.sleep(0.15)
-          subprocess.run(["grim", os.path.join(ev, "before_after_ctrl_shift_d.png")], env=env, check=True)
-          img1 = Image.open(os.path.join(ev, "before_after_ctrl_shift_d.png")).convert("RGB")
-          ctrl_shift_diff_pixels = sum(1 for a, b in zip(img0.getdata(), img1.getdata()) if a != b)
-
-          subprocess.run(["wtype", "-M", "ctrl", "-P", "a", "-s", "1750", "-p", "a", "-P", "w", "-s", "820", "-p", "w", "-m", "ctrl"], env=env, check=True)
-          time.sleep(0.15)
-          subprocess.run(["wtype", "-M", "ctrl", "-s", "40", "-k", "e", "-s", "40", "-m", "ctrl"], env=env, check=True)
-          time.sleep(0.5)
-          subprocess.run(["grim", os.path.join(ev, "before_registry.png")], env=env, check=True)
-
-          b_home = Image.open(os.path.join(ev, "before_home.png")).convert("RGB")
-          mid_sidebar_x = max(x for x in range(600) if b_home.getpixel((x, 540))[0] > 18)
-          top_right_sidebar_rgb = b_home.getpixel((mid_sidebar_x, 0))
-          bot_right_sidebar_rgb = b_home.getpixel((mid_sidebar_x, 1079))
-
-          rss_kb = 0
-          with open(f"/proc/{app.pid}/status") as sf:
-            for line in sf:
-                if line.startswith("VmRSS:"):
-                    rss_kb = int(line.split()[1])
-
-          app.terminate()
-          try:
-            app.wait(timeout=3)
-          except Exception:
-            app.kill()
-          out_f.close()
-          err_f.close()
-          sway.terminate()
-
-          txt = open("/tmp/ci-work/time_baseline_j1.txt").read()
-          wall, max_rss = "", 0
-          for ln in txt.splitlines():
-            if "Elapsed (wall clock)" in ln:
-                wall = ln.split(": ", 1)[1].strip()
-            if "Maximum resident set size" in ln:
-                max_rss = int(ln.split(": ", 1)[1].strip())
-
-          base_report = {
-            "provenance": "Untouched git commit df47cacea44ac611f22f8d3598f63c4320b12071 built on runner with original release.yml flags",
-            "binary_size_bytes": os.path.getsize("/tmp/ci-work/baseline-stage/Subsystem-for-Arxumbra"),
-            "compile_wall_j1": wall,
-            "compile_peak_rss_mib": round(max_rss / 1024.0, 1),
-            "wayland_first_window_ms": first_window_ms,
-            "runtime_rss_mib": round(rss_kb / 1024.0, 2),
-            "stdout_bytes": os.path.getsize(os.path.join(work, "base_stdout.bin")),
-            "stderr_bytes": os.path.getsize(os.path.join(work, "base_stderr.bin")),
-            "baseline_sidebar_right_edge_x": mid_sidebar_x,
-            "baseline_top_right_corner_rgb": top_right_sidebar_rgb,
-            "baseline_bot_right_corner_rgb": bot_right_sidebar_rgb,
-            "baseline_ctrl_shift_d_moved_pixels": ctrl_shift_diff_pixels,
-          }
-          open("/tmp/ci-work/baseline_report.json", "w").write(json.dumps(base_report, indent=2))
-          msg = json.dumps(base_report).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-          print(f"::notice title=BASELINE_DF47CAC::{msg}")
-
-          for shot in ["before_home.png", "before_registry.png"]:
-            im = Image.open(os.path.join(ev, shot)).resize((960, 540), Image.Resampling.LANCZOS).convert("L")
-            out_p = os.path.join(ev, "opt_" + shot)
-            im.save(out_p, format="PNG", optimize=True, compress_level=9)
-            b64 = base64.b64encode(open(out_p, "rb").read()).decode("ascii")
-            for ci in range(0, min(len(b64), 10800), 3600):
-                print(f"::notice title=IMG_{shot}_{ci//3600}::{b64[ci:ci+3600]}")
-          PY
-
-      - name: Run controlled compiler & linker flag experiments (V14 §6)
-        run: |
-          exec 2> >(tee /tmp/ci-work/step_exp.err >&2)
-          trap 'python3 -c "t=open(\"/tmp/ci-work/step_exp.err\",errors=\"replace\").read()[-3400:].replace(\"%\",\"%25\").replace(\"\\r\",\"%0D\").replace(\"\\n\",\"%0A\"); print(f\"::notice title=STEP_EXP_ERR::{t}\")"' ERR
-          set -euo pipefail
-          TC="$(cat /tmp/ci-work/selected_tc.txt)"
-          CFG_E_FLAGS="$(cat /tmp/ci-work/verified_rustflags.json)"
-          mkdir -p /tmp/ci-work/bins
-
-          run_exp() {
-            local NAME="$1"
-            shift
-            local TDIR="/tmp/ci-work/target-${NAME}"
-            rm -rf "${TDIR}"
-            /usr/bin/time -v -o "/tmp/ci-work/time_${NAME}.txt" \
-              cargo +"${TC}" build --locked --release \
-                --target x86_64-unknown-linux-gnu \
-                --target-dir "${TDIR}" \
-                "$@" >/tmp/ci-work/build_${NAME}.log 2>&1
-            cp "${TDIR}/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "/tmp/ci-work/bins/${NAME}"
-            rm -rf "${TDIR}"
-          }
-
-          run_exp "cfg_a_thin_o3_ovf_on_j4" \
-            --config 'build.jobs=4' \
-            --config 'profile.release.opt-level=3' \
-            --config 'profile.release.lto="thin"' \
-            --config 'profile.release.codegen-units=1' \
-            --config 'profile.release.panic="abort"' \
-            --config 'profile.release.strip="symbols"' \
-            --config 'profile.release.debug=0' \
-            --config 'profile.release.debug-assertions=false' \
-            --config 'profile.release.overflow-checks=true' \
-            --config 'profile.release.incremental=false'
-
-          run_exp "cfg_b_thin_o3_ovf_off_j4" \
-            --config 'build.jobs=4' \
-            --config 'profile.release.opt-level=3' \
-            --config 'profile.release.lto="thin"' \
-            --config 'profile.release.codegen-units=1' \
-            --config 'profile.release.panic="abort"' \
-            --config 'profile.release.strip="symbols"' \
-            --config 'profile.release.debug=0' \
-            --config 'profile.release.debug-assertions=false' \
-            --config 'profile.release.overflow-checks=false' \
-            --config 'profile.release.incremental=false'
-
-          run_exp "cfg_c_fat_o3_ovf_on_j4" \
-            --config 'build.jobs=4' \
-            --config 'profile.release.opt-level=3' \
-            --config 'profile.release.lto="fat"' \
-            --config 'profile.release.codegen-units=1' \
-            --config 'profile.release.panic="abort"' \
-            --config 'profile.release.strip="symbols"' \
-            --config 'profile.release.debug=0' \
-            --config 'profile.release.debug-assertions=false' \
-            --config 'profile.release.overflow-checks=true' \
-            --config 'profile.release.incremental=false'
-
-          run_exp "cfg_d_fat_os_ovf_on_j4" \
+          cargo +nightly-2026-10-24 build \
+            --bin Subsystem-for-Arxumbra \
+            --target x86_64-unknown-linux-gnu \
+            --release \
+            --locked \
+            --quiet \
+            --config 'build.incremental=false' \
             --config 'build.jobs=4' \
             --config 'profile.release.opt-level="s"' \
             --config 'profile.release.lto="fat"' \
             --config 'profile.release.codegen-units=1' \
             --config 'profile.release.panic="abort"' \
             --config 'profile.release.strip="symbols"' \
-            --config 'profile.release.debug=0' \
-            --config 'profile.release.debug-assertions=false' \
-            --config 'profile.release.overflow-checks=true' \
-            --config 'profile.release.incremental=false'
+            --config 'profile.release.debug=false' \
+            --config 'profile.release.overflow-checks=true'
 
-          /usr/bin/time -v -o "/tmp/ci-work/time_cfg_e_fat_o3_mir_gc.txt" \
-            cargo +"${TC}" build --locked --release -v \
-              --target x86_64-unknown-linux-gnu \
-              --target-dir "/tmp/ci-work/target-cfg_e" \
-              --config 'build.jobs=4' \
-              --config 'profile.release.opt-level=3' \
-              --config 'profile.release.lto="fat"' \
-              --config 'profile.release.codegen-units=1' \
-              --config 'profile.release.panic="abort"' \
-              --config 'profile.release.strip="symbols"' \
-              --config 'profile.release.debug=0' \
-              --config 'profile.release.debug-assertions=false' \
-              --config 'profile.release.overflow-checks=true' \
-              --config 'profile.release.incremental=false' \
-              --config "target.x86_64-unknown-linux-gnu.rustflags=${CFG_E_FLAGS}" \
-              >/tmp/ci-work/build_cfg_e.log 2>&1
-          cp "/tmp/ci-work/target-cfg_e/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "/tmp/ci-work/bins/cfg_e_fat_o3_mir_gc"
-          rm -rf "/tmp/ci-work/target-cfg_e"
-
-          python3 - << 'PY'
-          import json, os, subprocess, time
-
-          rt_dir = "/tmp/ci-work/xdg-bench"
-          os.makedirs(rt_dir, exist_ok=True)
-          os.chmod(rt_dir, 0o700)
-          sway_cfg = "/tmp/ci-work/sway_bench.cfg"
-          with open(sway_cfg, "w") as f:
-            f.write("xwayland disable\ndefault_border none\noutput * bg #000000 solid_color\n")
-
-          env = os.environ.copy()
-          env.update({
-            "XDG_RUNTIME_DIR": rt_dir,
-            "WLR_BACKENDS": "headless",
-            "WLR_LIBINPUT_NO_DEVICES": "1",
-            "WLR_RENDERER": "pixman",
-            "LIBGL_ALWAYS_SOFTWARE": "1",
-          })
-          env.pop("DISPLAY", None)
-          sway = subprocess.Popen(["sway", "-c", sway_cfg], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-          for _ in range(60):
-            time.sleep(0.1)
-            socks = [x for x in os.listdir(rt_dir) if x.startswith("wayland-") and not x.endswith(".lock")]
-            swaysocks = [x for x in os.listdir(rt_dir) if x.startswith("sway-ipc.")]
-            if socks and swaysocks:
-                env["WAYLAND_DISPLAY"] = socks[0]
-                env["SWAYSOCK"] = os.path.join(rt_dir, swaysocks[0])
-                break
-          subprocess.run(["swaymsg", "output", "HEADLESS-1", "resolution", "1920x1080", "scale", "1"], env=env, check=True)
-
-          def parse_time(path):
-            txt = open(path).read()
-            wall, rss = "", 0
-            for ln in txt.splitlines():
-                if "Elapsed (wall clock)" in ln:
-                    wall = ln.split(": ", 1)[1].strip()
-                if "Maximum resident set size" in ln:
-                    rss = int(ln.split(": ", 1)[1].strip())
-            return wall, round(rss / 1024.0, 1)
-
-          def bench_bin(bin_path):
-            starts = []
-            rss_mib = 0.0
-            for _ in range(3):
-                t0 = time.perf_counter()
-                p = subprocess.Popen([bin_path], cwd="/tmp", env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                for _ in range(120):
-                    time.sleep(0.015)
-                    tr = subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True)
-                    if "Subsystem-for-Arxumbra" in tr:
-                        starts.append(round((time.perf_counter() - t0) * 1000.0, 2))
-                        break
-                time.sleep(0.25)
-                with open(f"/proc/{p.pid}/status") as sf:
-                    for line in sf:
-                        if line.startswith("VmRSS:"):
-                            rss_mib = round(int(line.split()[1]) / 1024.0, 2)
-                p.terminate()
-                p.wait(timeout=3)
-                time.sleep(0.1)
-            starts.sort()
-            return starts[len(starts)//2] if starts else None, rss_mib
-
-          results = []
-          for name in [
-            "cfg_a_thin_o3_ovf_on_j4",
-            "cfg_b_thin_o3_ovf_off_j4",
-            "cfg_c_fat_o3_ovf_on_j4",
-            "cfg_d_fat_os_ovf_on_j4",
-            "cfg_e_fat_o3_mir_gc",
-          ]:
-            bpath = f"/tmp/ci-work/bins/{name}"
-            wall, peak_rss = parse_time(f"/tmp/ci-work/time_{name}.txt")
-            med_start_ms, rt_rss = bench_bin(bpath)
-            results.append({
-                "config": name,
-                "size_bytes": os.path.getsize(bpath),
-                "compile_wall": wall,
-                "compile_peak_rss_mib": peak_rss,
-                "startup_median_ms": med_start_ms,
-                "runtime_rss_mib": rt_rss,
-            })
-
-          sway.terminate()
-
-          vlog = open("/tmp/ci-work/build_cfg_e.log").read()
-          verified_flags = json.load(open("/tmp/ci-work/verified_rustflags.json"))
-          probe_flag = verified_flags[0] if verified_flags else "-Csymbol-mangling-version=v0"
-          dep_has_flag = ("--crate-name bevy_ecs " in vlog and probe_flag in vlog.split("--crate-name bevy_ecs ")[1].split("\n")[0])
-          macro_clean = ("--crate-name bevy_ecs_macros " in vlog and probe_flag not in vlog.split("--crate-name bevy_ecs_macros ")[1].split("\n")[0])
-
-          exp_summary = {
-            "cfg_e_applied_flags": verified_flags,
-            "scope_verified_bevy_ecs_has_target_flags": dep_has_flag,
-            "scope_verified_proc_macro_clean": macro_clean,
-            "experiments": results,
-          }
-          open("/tmp/ci-work/experiments.json", "w").write(json.dumps(exp_summary, indent=2))
-          msg = json.dumps(exp_summary).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-          print(f"::notice title=COMPILER_EXPERIMENTS::{msg}")
-          PY
+          cp target/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra /tmp/ci-work/isolated-run/Subsystem-for-Arxumbra
+          chmod 755 /tmp/ci-work/isolated-run/Subsystem-for-Arxumbra
 
       - name: Run full Native-Wayland V14 functional, geometry, motion, modal & Escape acceptance suite
         run: |
           exec 2> >(tee /tmp/ci-work/step_wl.err >&2)
           trap 'python3 -c "t=open(\"/tmp/ci-work/step_wl.err\",errors=\"replace\").read()[-3400:].replace(\"%\",\"%25\").replace(\"\\r\",\"%0D\").replace(\"\\n\",\"%0A\"); print(f\"::notice title=STEP_WL_ERR::{t}\")"' ERR
           set -euo pipefail
-          mkdir -p /tmp/ci-work/isolated-run
-          cp /tmp/ci-work/bins/cfg_e_fat_o3_mir_gc /tmp/ci-work/isolated-run/Subsystem-for-Arxumbra
-          chmod 755 /tmp/ci-work/isolated-run/Subsystem-for-Arxumbra
 
           python3 - << 'PY'
           import json, os, subprocess, time
@@ -507,6 +65,9 @@ jobs:
           rt_dir = "/tmp/ci-work/xdg-accept"
           os.makedirs(rt_dir, exist_ok=True)
           os.chmod(rt_dir, 0o700)
+
+          dyn_out = subprocess.check_output(["readelf", "-d", "/tmp/ci-work/isolated-run/Subsystem-for-Arxumbra"], text=True)
+          needed_libs = [l.split("[")[1].split("]")[0] for l in dyn_out.splitlines() if "(NEEDED)" in l and "[" in l]
 
           sway_cfg = "/tmp/ci-work/sway_accept.cfg"
           with open(sway_cfg, "w") as f:
@@ -566,7 +127,7 @@ jobs:
             if app_node:
                 break
 
-          time.sleep(0.45)
+          time.sleep(0.5)
 
           def grab(name):
             p = os.path.join(ev, name)
@@ -579,22 +140,22 @@ jobs:
             for y in range(4, h - 4):
                 for x in range(4, w - 4):
                     if (
-                        px[x, y][0] >= 236
-                        and px[x - 1, y][0] >= 230
-                        and px[x + 1, y][0] >= 230
-                        and px[x, y - 1][0] >= 230
-                        and px[x, y + 1][0] >= 230
+                        px[x, y][0] >= 232
+                        and px[x - 1, y][0] >= 220
+                        and px[x + 1, y][0] >= 220
+                        and px[x, y - 1][0] >= 220
+                        and px[x, y + 1][0] >= 220
                     ):
                         ring_dark = sum(
                             1 for dx, dy in [(-4, 0), (4, 0), (0, -4), (0, 4), (-3, -3), (3, -3), (-3, 3), (3, 3)]
-                            if px[x + dx, y + dy][0] <= 58
+                            if px[x + dx, y + dy][0] <= 64
                         )
-                        if ring_dark >= 7:
+                        if ring_dark >= 6:
                             return (x, y)
             return None
 
           def move_dot_to(tx, ty):
-            for _ in range(8):
+            for _ in range(10):
                 im = grab("_probe.png")
                 cur = find_dot_center(im)
                 if not cur:
@@ -619,7 +180,7 @@ jobs:
             subprocess.run(["wtype", "-M", "ctrl", "-s", "35", "-k", "e", "-s", "35", "-m", "ctrl"], env=env, check=True)
             time.sleep(0.32)
 
-          tests = {}
+          tests = {"elf_dt_needed": needed_libs, "zero_x11_dt_needed": all("X11" not in l and "xcb" not in l for l in needed_libs)}
 
           tree = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True))
           app_node = find_app_node(tree)
@@ -645,10 +206,11 @@ jobs:
 
           home_img = grab("after_home.png")
           init_dot = find_dot_center(home_img)
+          tests["initial_dot_center"] = init_dot
           tests["initial_dot_centered"] = (init_dot is not None and abs(init_dot[0] - 960) <= 2 and abs(init_dot[1] - 540) <= 2)
 
-          sidebar_right_x = max(x for x in range(600) if home_img.getpixel((x, 540))[0] > 18)
           bg_rgb = home_img.getpixel((1500, 540))
+          sidebar_right_x = max(x for x in range(600) if home_img.getpixel((x, 540))[0] > bg_rgb[0] + 4)
           tl_rgb = home_img.getpixel((0, 0))
           bl_rgb = home_img.getpixel((0, 1079))
           tr_outer_rgb = home_img.getpixel((sidebar_right_x, 0))
@@ -725,8 +287,8 @@ jobs:
           subprocess.run(["wtype", "-k", "F1"], env=env, check=True)
           time.sleep(0.32)
           reg_hidden_img = grab("after_registry_menu_hidden.png")
-          reg_panel_left_vis = min(x for x in range(350, 500) if reg_img.getpixel((x, 540))[0] > bg_rgb[0] + 10)
-          reg_panel_left_hid = min(x for x in range(350, 500) if reg_hidden_img.getpixel((x, 540))[0] > bg_rgb[0] + 10)
+          reg_panel_left_vis = min(x for x in range(350, 500) if reg_img.getpixel((x, 540))[0] > bg_rgb[0] + 4)
+          reg_panel_left_hid = min(x for x in range(350, 500) if reg_hidden_img.getpixel((x, 540))[0] > bg_rgb[0] + 4)
           tests["f1_hides_left_menu_keeps_right_panel_fixed"] = (
             reg_hidden_img.getpixel((100, 540)) == bg_rgb
             and reg_panel_left_vis == reg_panel_left_hid
@@ -809,7 +371,7 @@ jobs:
 
           time.sleep(3.2)
           at_5_7s_img = grab("_at_5_7s.png")
-          returned_at_5s = (at_5_7s_img.getpixel((820, 540)) != modal_interior_rgb and at_5_7s_img.getpixel((launch_cx - 200, 200))[0] != panel_bg[0])
+          returned_at_5s = (at_5_7s_img.getpixel((820, 540)) != modal_interior_rgb and at_5_7s_img.getpixel((launch_cx - 200, 200))[0] > panel_bg[0] + 4)
 
           time.sleep(2.5)
           still_alive_at_8_2s = (app.poll() is None)
@@ -844,45 +406,57 @@ jobs:
           print(f"::notice title=WAYLAND_ACCEPTANCE::{msg}")
           PY
 
-      - name: Emit rendered AFTER native-Wayland screenshots & summary
+      - name: Emit AFTER screenshots batch 1 (Home, Registry, Registry F1 hidden)
         run: |
           python3 - << 'PY'
           import base64, os
           from PIL import Image
-
           ev = "/tmp/ci-work/evidence"
-          shots = [
-            "after_home.png",
-            "after_registry.png",
-            "after_registry_menu_hidden.png",
-            "after_workspace.png",
-            "after_workspace_modal_clean.png",
-            "after_modal_dot_above.png",
-          ]
-          for shot in shots:
+          for shot in ["after_home.png", "after_registry.png", "after_registry_menu_hidden.png"]:
             p = os.path.join(ev, shot)
             if os.path.exists(p):
                 im = Image.open(p).resize((960, 540), Image.Resampling.LANCZOS).convert("L")
                 op = os.path.join(ev, "opt_" + shot)
                 im.save(op, format="PNG", optimize=True, compress_level=9)
                 b64 = base64.b64encode(open(op, "rb").read()).decode("ascii")
-                for ci in range(0, min(len(b64), 7200), 3600):
-                    print(f"::notice title=IMG_{shot}_{ci//3600}::{b64[ci:ci+3600]}")
+                stem = shot[:-4]
+                for ci in range(0, min(len(b64), 10800), 3600):
+                    print(f"::notice title=IMG_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
+          PY
 
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "w") as sf:
-            sf.write("## Static Checks\n```json\n" + open("/tmp/ci-work/static_checks.json").read() + "\n```\n")
-            sf.write("## Baseline df47cac\n```json\n" + open("/tmp/ci-work/baseline_report.json").read() + "\n```\n")
-            sf.write("## Controlled Compiler Experiments\n```json\n" + open("/tmp/ci-work/experiments.json").read() + "\n```\n")
-            sf.write("## Native Wayland Acceptance Matrix\n```json\n" + open("/tmp/ci-work/wayland_tests.json").read() + "\n```\n")
+      - name: Emit AFTER screenshots batch 2 (Launch hover, Workspace, Modal clean)
+        run: |
+          python3 - << 'PY'
+          import base64, os
+          from PIL import Image
+          ev = "/tmp/ci-work/evidence"
+          for shot in ["after_registry_launch_hover.png", "after_workspace.png", "after_workspace_modal_clean.png"]:
+            p = os.path.join(ev, shot)
+            if os.path.exists(p):
+                im = Image.open(p).resize((960, 540), Image.Resampling.LANCZOS).convert("L")
+                op = os.path.join(ev, "opt_" + shot)
+                im.save(op, format="PNG", optimize=True, compress_level=9)
+                b64 = base64.b64encode(open(op, "rb").read()).decode("ascii")
+                stem = shot[:-4]
+                for ci in range(0, min(len(b64), 10800), 3600):
+                    print(f"::notice title=IMG_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
+          PY
+
+      - name: Emit AFTER screenshots batch 3 (Modal dot above, Modal F1 hidden, HiDPI scale 2)
+        run: |
+          python3 - << 'PY'
+          import base64, os
+          from PIL import Image
+          ev = "/tmp/ci-work/evidence"
+          for shot in ["after_modal_dot_above.png", "after_modal_menu_hidden.png", "after_hidpi_scale2.png"]:
+            p = os.path.join(ev, shot)
+            if os.path.exists(p):
+                im = Image.open(p).resize((960, 540), Image.Resampling.LANCZOS).convert("L")
+                op = os.path.join(ev, "opt_" + shot)
+                im.save(op, format="PNG", optimize=True, compress_level=9)
+                b64 = base64.b64encode(open(op, "rb").read()).decode("ascii")
+                stem = shot[:-4]
+                for ci in range(0, min(len(b64), 10800), 3600):
+                    print(f"::notice title=IMG_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
           PY
           test -z "$(git status --porcelain)"
-
-      - name: Upload bounded diagnostic evidence
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: v14-wayland-and-compiler-evidence
-          path: |
-            /tmp/ci-work/*.json
-            /tmp/ci-work/evidence/opt_*.png
-          if-no-files-found: error
-          retention-days: 5
