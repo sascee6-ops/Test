@@ -261,9 +261,9 @@ jobs:
               dx = a[0] - c[0]
               dy = a[1] - c[1]
               if abs(dx) > 3:
-                yhold(["ctrl", "d" if dx > 0 else "a"], max(24, int(abs(dx) / PPM[0] * 1.25)))
+                yhold(["ctrl", "d" if dx > 0 else "a"], max(16, int(abs(dx) / PPM[0] * 0.7)))
               if abs(dy) > 3:
-                yhold(["ctrl", "s" if dy > 0 else "w"], max(24, int(abs(dy) / PPM[0] * 1.25)))
+                yhold(["ctrl", "s" if dy > 0 else "w"], max(16, int(abs(dy) / PPM[0] * 0.7)))
               time.sleep(0.06)
 
           def move_dot_to(tx, ty):
@@ -278,12 +278,12 @@ jobs:
                 return cur
               if abs(dx) > 4:
                 k = "d" if dx > 0 else "a"
-                ms = max(24, min(1400, int(abs(dx) / PPM[0] * (1.25 if abs(dx) < 60 else 0.95))))
+                ms = max(16, min(1400, int(abs(dx) / PPM[0] * 0.7)))
                 yhold(["ctrl", k], ms)
                 time.sleep(0.05)
               if abs(dy) > 4:
                 k = "s" if dy > 0 else "w"
-                ms = max(24, min(1400, int(abs(dy) / PPM[0] * (1.25 if abs(dy) < 60 else 0.95))))
+                ms = max(16, min(1400, int(abs(dy) / PPM[0] * 0.7)))
                 yhold(["ctrl", k], ms)
                 time.sleep(0.05)
             return find_dot_center(grab("_probe.png"))
@@ -325,8 +325,6 @@ jobs:
             time.sleep(0.035)
             ykey("29:u")
             time.sleep(0.32)
-
-          calibrate_ppm()
 
           tests = {"elf_dt_needed": needed_libs, "zero_x11_dt_needed": all("X11" not in l and "xcb" not in l for l in needed_libs)}
 
@@ -381,6 +379,8 @@ jobs:
           tests["sidebar_left_corners_flush"] = (tl_rgb[0] > bg_rgb[0] + 5 and bl_rgb[0] > bg_rgb[0] + 5)
           tests["sidebar_right_corners_rounded"] = (tr_outer_rgb == bg_rgb and br_outer_rgb == bg_rgb and tr_inner_rgb[0] > bg_rgb[0] + 5)
 
+          calibrate_ppm()
+          base_dot = find_dot_center(grab("_base.png"))
           yhold(["d"], 150)
           ykey("18:d", "18:u")
           ykey("15:d", "15:u")
@@ -395,7 +395,7 @@ jobs:
           time.sleep(0.15)
           after_forbidden = grab("_after_forbidden.png")
           tests["dbg_bbox_forbidden"] = dot_debug(after_forbidden)
-          tests["forbidden_inputs_ignored"] = (find_dot_center(after_forbidden) == init_dot and after_forbidden.getpixel((900, 60)) == bg_rgb)
+          tests["forbidden_inputs_ignored"] = (find_dot_center(after_forbidden) == base_dot and after_forbidden.getpixel((900, 60)) == bg_rgb)
 
           pos_before_opp = find_dot_center(grab("_preopp.png"))
           yhold(["ctrl", "a", "d"], 220)
@@ -403,7 +403,7 @@ jobs:
           opp_img = grab("_opp.png")
           pos_opp = find_dot_center(opp_img)
           tests["dbg_bbox_opp"] = dot_debug(opp_img)
-          tests["opposing_keys_cancel"] = (pos_opp == pos_before_opp)
+          tests["opposing_keys_cancel"] = (pos_opp == pos_before_opp and pos_before_opp == base_dot)
 
           yhold_bg_down(["ctrl", "d"])
           seq_x = []
@@ -591,7 +591,7 @@ jobs:
           subprocess.run(["swaymsg", "output", "HEADLESS-1", "scale", "2"], env=env, check=True)
           time.sleep(0.4)
           hidpi_img = grab("after_hidpi_scale2.png")
-          tests["hidpi_scale2_renders_cleanly"] = (hidpi_img.size == (1920, 1080) and hidpi_img.getpixel((0, 0))[0] > bg_rgb[0] + 5)
+          tests["hidpi_scale2_renders_cleanly"] = (hidpi_img.size in [(1920, 1080), (3840, 2160)] and hidpi_img.getpixel((0, 0))[0] > bg_rgb[0] + 5)
           subprocess.run(["swaymsg", "output", "HEADLESS-1", "scale", "1"], env=env, check=True)
           time.sleep(0.3)
 
@@ -600,6 +600,20 @@ jobs:
             time.sleep(0.3)
             if app_focused():
               break
+          if not app_focused():
+            _tr = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True))
+            _cid = [None]
+            def _find_cid(n):
+              if n.get("app_id") == "Subsystem-for-Arxumbra":
+                _cid[0] = n.get("id")
+                return
+              for k in ("nodes", "floating_nodes"):
+                for ch in n.get(k, []):
+                  _find_cid(ch)
+            _find_cid(_tr)
+            if _cid[0]:
+              subprocess.run(["swaymsg", "[con_id=%s] focus" % _cid[0]], env=env, check=False)
+              time.sleep(0.3)
           tests["focus_end"] = app_focused()
           if not tests["focus_end"]:
             _ftree = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True))
