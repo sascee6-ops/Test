@@ -174,8 +174,8 @@ jobs:
           def find_dot_center(img):
             w, h = img.size
             px = img.load()
-            for y in range(12, h - 12):
-              for x in range(12, w - 12):
+            for y in range(0, h):
+              for x in range(0, w):
                 c = px[x, y]
                 if c[0] < 250 or c[1] < 250 or c[2] < 250:
                   continue
@@ -553,8 +553,11 @@ jobs:
           subprocess.run(["swaymsg", "output", "HEADLESS-1", "scale", "1"], env=env, check=True)
           time.sleep(0.3)
 
-          subprocess.run(["swaymsg", '[app_id="Subsystem-for-Arxumbra"]', "focus"], env=env, check=False)
-          time.sleep(0.3)
+          for _focus_try in range(3):
+            subprocess.run(["swaymsg", '[app_id="Subsystem-for-Arxumbra"]', "focus"], env=env, check=False)
+            time.sleep(0.3)
+            if app_focused():
+              break
           tests["focus_end"] = app_focused()
           ykey("59:d", "59:u")
           time.sleep(0.2)
