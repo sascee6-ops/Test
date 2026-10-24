@@ -174,12 +174,14 @@ fn main() {
                 '_,
                 std::option::Option<[bevy::ecs::entity::Entity; 45]>,
             >,
-             mut tap_state: bevy::ecs::system::Local<'_, (bool, bool, bool)>,
-             mut key_events: bevy::ecs::message::MessageReader<
-                '_,
-                '_,
-                bevy::input::keyboard::KeyboardInput,
-            >| {
+             (mut tap_state, mut key_events): (
+                bevy::ecs::system::Local<'_, (bool, bool, bool)>,
+                bevy::ecs::message::MessageReader<
+                    '_,
+                    '_,
+                    bevy::input::keyboard::KeyboardInput,
+                >,
+            ),
                 *tap_state = (false, false, false);
                 key_events.read().for_each(
                     |key_event: &bevy::input::keyboard::KeyboardInput| {
