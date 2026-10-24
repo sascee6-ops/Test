@@ -9,46 +9,20 @@ static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 fn main() {
     bevy::app::App::new()
         .add_plugins((
-            bevy::app::TaskPoolPlugin {
-                task_pool_options: bevy::app::TaskPoolOptions {
-                    min_total_threads: 1,
-                    max_total_threads: usize::MAX,
-                    io: bevy::app::TaskPoolThreadAssignmentPolicy {
-                        min_threads: 1,
-                        max_threads: 4,
-                        percent: 0.25,
-                        on_thread_spawn: None,
-                        on_thread_destroy: None,
-                    },
-                    async_compute: bevy::app::TaskPoolThreadAssignmentPolicy {
-                        min_threads: 1,
-                        max_threads: 4,
-                        percent: 0.25,
-                        on_thread_spawn: None,
-                        on_thread_destroy: None,
-                    },
-                    compute: bevy::app::TaskPoolThreadAssignmentPolicy {
-                        min_threads: 1,
-                        max_threads: usize::MAX,
-                        percent: 1.0,
-                        on_thread_spawn: None,
-                        on_thread_destroy: None,
-                    },
-                },
-            },
+            bevy::app::TaskPoolPlugin::default(),
             bevy::diagnostic::FrameCountPlugin,
             bevy::time::TimePlugin,
             bevy::transform::TransformPlugin,
             bevy::input::InputPlugin,
             bevy::a11y::AccessibilityPlugin,
             bevy::window::WindowPlugin {
-                primary_window: Some(bevy::window::Window {
+                primary_window: std::option::Option::Some(bevy::window::Window {
                     present_mode: bevy::window::PresentMode::AutoVsync,
                     mode: bevy::window::WindowMode::BorderlessFullscreen(
                         bevy::window::MonitorSelection::Current,
                     ),
                     position: bevy::window::WindowPosition::Automatic,
-                    resolution: bevy::window::WindowResolution::new(1366, 768),
+                    resolution: bevy::window::WindowResolution::new(1920, 1080),
                     title: std::string::String::from(if cfg!(target_os = "linux") {
                         "Linux-Subsystem-for-Arxumbra"
                     } else if cfg!(target_os = "macos") {
@@ -56,26 +30,28 @@ fn main() {
                     } else {
                         "Windows-Subsystem-for-Arxumbra"
                     }),
+                    name: std::option::Option::Some(std::string::String::from(
+                        "Subsystem-for-Arxumbra",
+                    )),
                     resize_constraints: bevy::window::WindowResizeConstraints {
-                        min_width: 800.0,
-                        min_height: 500.0,
+                        min_width: 640.0,
+                        min_height: 400.0,
                         ..bevy::window::WindowResizeConstraints::default()
                     },
-                    resizable: true,
+                    resizable: false,
                     decorations: false,
                     transparent: false,
                     focused: true,
-                    internal: bevy::window::InternalWindowState::default(),
-                    skip_taskbar: true,
-                    desired_maximum_frame_latency: None,
-                    ..Default::default()
+                    skip_taskbar: false,
+                    desired_maximum_frame_latency: std::option::Option::None,
+                    ..bevy::window::Window::default()
                 }),
-                primary_cursor_options: Some(bevy::window::CursorOptions {
+                primary_cursor_options: std::option::Option::Some(bevy::window::CursorOptions {
                     visible: false,
                     grab_mode: bevy::window::CursorGrabMode::None,
                     hit_test: true,
                 }),
-                ..Default::default()
+                ..bevy::window::WindowPlugin::default()
             },
             bevy::asset::AssetPlugin::default(),
             bevy::winit::WinitPlugin {
@@ -86,14 +62,15 @@ fn main() {
             bevy::render::RenderPlugin {
                 render_creation: bevy::render::settings::RenderCreation::Automatic(
                     std::boxed::Box::new(bevy::render::settings::WgpuSettings {
-                        backends: Some(
+                        backends: std::option::Option::Some(
                             bevy::render::settings::Backends::VULKAN
                                 | bevy::render::settings::Backends::METAL
                                 | bevy::render::settings::Backends::DX12,
                         ),
                         power_preference: bevy::render::settings::PowerPreference::HighPerformance,
                         priority: bevy::render::settings::WgpuSettingsPriority::Functionality,
-                        ..Default::default()
+                        instance_flags: bevy::render::settings::InstanceFlags::empty(),
+                        ..bevy::render::settings::WgpuSettings::default()
                     }),
                 ),
                 synchronous_pipeline_compilation: false,
@@ -111,2356 +88,3018 @@ fn main() {
             bevy::text::TextPlugin,
         ))
         .insert_resource(bevy::camera::ClearColor(bevy::color::Color::srgb(
-            0.047, 0.047, 0.047,
+            0.043, 0.043, 0.043,
         )))
         .insert_resource(bevy::winit::WinitSettings {
-            focused_mode: bevy::winit::UpdateMode::reactive_low_power(
-                std::time::Duration::MAX,
-            ),
+            focused_mode: bevy::winit::UpdateMode::Continuous,
             unfocused_mode: bevy::winit::UpdateMode::reactive_low_power(
                 std::time::Duration::MAX,
             ),
         })
         .add_systems(
             bevy::app::Startup,
-            |mut commands: bevy::ecs::system::Commands| {
+            |mut commands: bevy::ecs::system::Commands<'_, '_>| {
                 commands.spawn((bevy::camera::Camera2d, bevy::render::view::Msaa::Off));
             },
         )
         .add_systems(
-            bevy::app::PostUpdate,
-            |(keys, windows): (
+            bevy::app::Update,
+            |(keys, windows, time): (
                 bevy::ecs::system::Res<
+                    '_,
                     bevy::input::ButtonInput<bevy::input::keyboard::KeyCode>,
                 >,
                 bevy::ecs::system::Query<
+                    '_,
+                    '_,
                     &bevy::window::Window,
                     bevy::ecs::query::With<bevy::window::PrimaryWindow>,
                 >,
+                bevy::ecs::system::Res<'_, bevy::time::Time<bevy::time::Real>>,
             ),
-             (time, mut exits): (
-                bevy::ecs::system::Res<bevy::time::Time<bevy::time::Real>>,
-                bevy::ecs::message::MessageWriter<bevy::app::AppExit>,
-            ),
-             (mut images, mut commands): (
-                bevy::ecs::system::ResMut<bevy::asset::Assets<bevy::image::Image>>,
+             (mut exits, mut images, mut commands, mut settings): (
+                bevy::ecs::message::MessageWriter<'_, bevy::app::AppExit>,
+                bevy::ecs::system::ResMut<'_, bevy::asset::Assets<bevy::image::Image>>,
                 bevy::ecs::system::Commands<'_, '_>,
+                bevy::ecs::system::ResMut<'_, bevy::winit::WinitSettings>,
             ),
-             mut settings: bevy::ecs::system::ResMut<bevy::winit::WinitSettings>,
-             sprites: bevy::ecs::system::Query<
-                (
-                    Option<&bevy::sprite::Sprite>,
-                    Option<&bevy::transform::components::Transform>,
-                    &bevy::camera::visibility::Visibility,
-                ),
-                bevy::ecs::query::Without<bevy::text::TextColor>,
-            >,
-             texts: bevy::ecs::system::Query<
-                (
-                    Option<&bevy::text::TextColor>,
-                    &bevy::camera::visibility::Visibility,
-                ),
-                bevy::ecs::query::Without<bevy::sprite::Sprite>,
-            >,
-             (layout_info, mut hud): (
-                bevy::ecs::system::Query<&bevy::text::TextLayoutInfo>,
-                bevy::ecs::system::Local<Option<bool>>,
-            ),
-             mut navigation_state: bevy::ecs::system::Local<
-                (
-                    bool,
-                    bool,
-                    Option<std::time::Instant>,
-                    bool,
-                    bool,
-                ),
-            >,
-             mut interaction_state: bevy::ecs::system::Local<[Option<u8>; 3]>,
-             mut anim: bevy::ecs::system::Local<([[f32; 3]; 3], [f32; 2])>,
-             mut viewport: bevy::ecs::system::Local<bevy::math::Vec2>,
-             mut title_metrics: bevy::ecs::system::Local<(f32, f32, f32)>,
-             mut layout: bevy::ecs::system::Local<
-                Option<[bevy::math::Rect; 15]>,
-            >,
-             (mut slots, mut workspace_slots): (
-                bevy::ecs::system::Local<Option<[bevy::ecs::entity::Entity; 32]>>,
-                bevy::ecs::system::Local<Option<[bevy::ecs::entity::Entity; 5]>>,
-            ),
-             (mut handles, mut dot): (
-                bevy::ecs::system::Local<
-                    Option<[bevy::asset::Handle<bevy::image::Image>; 8]>,
+             (sprites, texts, layout_info): (
+                bevy::ecs::system::Query<
+                    '_,
+                    '_,
+                    (
+                        std::option::Option<&bevy::sprite::Sprite>,
+                        std::option::Option<&bevy::transform::components::Transform>,
+                        &bevy::camera::visibility::Visibility,
+                    ),
+                    bevy::ecs::query::Without<bevy::text::TextColor>,
                 >,
-                bevy::ecs::system::Local<
-                    Option<
-                        (
-                            bevy::ecs::entity::Entity,
-                            bevy::math::Vec2,
-                        ),
-                    >,
+                bevy::ecs::system::Query<
+                    '_,
+                    '_,
+                    (
+                        std::option::Option<&bevy::text::TextColor>,
+                        std::option::Option<&bevy::transform::components::Transform>,
+                        &bevy::camera::visibility::Visibility,
+                    ),
+                    bevy::ecs::query::Without<bevy::sprite::Sprite>,
                 >,
-            )| {
-                windows.single().into_iter().for_each(|window| {
-                    if hud.is_none() {
-                        *hud = Some(true);
+                bevy::ecs::system::Query<'_, '_, &bevy::text::TextLayoutInfo>,
+            ),
+             mut focus_state: bevy::ecs::system::Local<'_, (bool, u16, u8, bool)>,
+             mut escape_state: bevy::ecs::system::Local<
+                '_,
+                (std::option::Option<std::time::Instant>, bool, bool, bool),
+            >,
+             mut app_state: bevy::ecs::system::Local<
+                '_,
+                std::option::Option<(u8, bool, bool, std::option::Option<u8>)>,
+            >,
+             mut dot_state: bevy::ecs::system::Local<
+                '_,
+                std::option::Option<(
+                    bevy::ecs::entity::Entity,
+                    bevy::math::Vec2,
+                    bevy::math::Vec2,
+                )>,
+            >,
+             mut metrics_state: bevy::ecs::system::Local<
+                '_,
+                (f32, f32, bevy::math::Vec2, f32),
+            >,
+             mut anim_state: bevy::ecs::system::Local<'_, ([f32; 4], [f32; 4], [f32; 5])>,
+             mut asset_handles: bevy::ecs::system::Local<
+                '_,
+                std::option::Option<[bevy::asset::Handle<bevy::image::Image>; 12]>,
+            >,
+             mut ui_entities: bevy::ecs::system::Local<
+                '_,
+                std::option::Option<[bevy::ecs::entity::Entity; 45]>,
+            >| {
+                windows.single().into_iter().for_each(|window: &bevy::window::Window| {
+                    if app_state.is_none() {
+                        *app_state = std::option::Option::Some((
+                            0u8,
+                            true,
+                            false,
+                            std::option::Option::None,
+                        ));
+                        anim_state.2 = [0.0, 0.0, 0.0, 0.0, 1.0];
                     }
 
-                    title_metrics.1 = if title_metrics.0 > 0.0
-                        || slots
-                            .as_ref()
-                            .and_then(|entities: &[bevy::ecs::entity::Entity; 32]| {
-                                layout_info
-                                    .get(entities[10])
-                                    .ok()
-                                    .map(|info| info.size.x / info.scale_factor)
-                            })
-                            .filter(|width| width.is_finite() && *width > 0.0)
-                            .is_some_and(|width: f32| {
-                                title_metrics.0 = width;
-                                true
-                            })
-                    {
-                        ((title_metrics.0 + 100.0) / 8.0).ceil() * 8.0
-                    } else {
-                        512.0f32.min(window.width() * 0.70)
-                    };
-
-                    title_metrics.2 = if title_metrics.0 > 0.0 {
-                        (title_metrics.2 + time.delta_secs()).min(1.0)
-                    } else {
-                        0.0
-                    };
-
-                    if viewport.x != window.width()
-                        || viewport.y != window.height()
-                        || layout.is_none()
-                        || (*layout).is_some_and(
-                            |[sidebar, ..]: [bevy::math::Rect; 15]| {
-                                sidebar.width() != title_metrics.1
-                            },
-                        )
-                    {
-                        *viewport = bevy::math::Vec2::new(window.width(), window.height());
-                        *layout = Some([
-                            bevy::math::Rect::new(
-                                0.0,
-                                0.0,
-                                title_metrics.1,
-                                viewport.y,
+                    if asset_handles.is_none() {
+                        *asset_handles = std::option::Option::Some([
+                            images.add(
+                                bevy::image::Image::from_buffer(
+                                    &[
+                                        137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68,
+                                        82, 0, 0, 0, 32, 0, 0, 0, 32, 8, 6, 0, 0, 0, 115, 122, 122,
+                                        244, 0, 0, 0, 211, 73, 68, 65, 84, 120, 218, 99, 96, 24, 5,
+                                        163, 96, 168, 130, 255, 255, 255, 203, 0, 241, 97, 40, 150,
+                                        161, 183, 229, 58, 64, 252, 252, 63, 2, 128, 216, 58, 244,
+                                        178, 220, 6, 136, 63, 255, 199, 4, 32, 49, 27, 90, 91, 30,
+                                        2, 196, 191, 255, 227, 6, 32, 185, 16, 90, 89, 94, 240, 159,
+                                        120, 80, 64, 109, 203, 187, 255, 147, 14, 186, 169, 97, 49,
+                                        11, 16, 47, 255, 79, 62, 0, 233, 101, 33, 215, 114, 30, 32,
+                                        222, 253, 159, 114, 0, 50, 131, 135, 84, 203, 37, 128, 248,
+                                        252, 127, 234, 1, 144, 89, 18, 196, 90, 174, 1, 196, 183,
+                                        255, 83, 31, 128, 204, 212, 32, 198, 1, 199, 145, 52, 189,
+                                        167, 130, 197, 200, 102, 28, 39, 198, 1, 243, 161, 138, 247,
+                                        3, 177, 15, 21, 28, 224, 3, 53, 11, 4, 230, 19, 155, 242,
+                                        53, 160, 180, 3, 14, 67, 65, 6, 54, 160, 225, 253, 56, 212,
+                                        58, 32, 155, 73, 106, 98, 196, 229, 0, 23, 44, 106, 93, 112,
+                                        57, 128, 146, 114, 192, 129, 88, 67, 73, 81, 59, 234, 128,
+                                        81, 7, 12, 29, 7, 140, 130, 81, 48, 10, 232, 1, 0, 148, 140,
+                                        151, 121, 14, 221, 47, 11, 0, 0, 0, 0, 73, 69, 78, 68, 174,
+                                        66, 96, 130,
+                                    ],
+                                    bevy::image::ImageType::Extension("png"),
+                                    bevy::image::CompressedImageFormats::NONE,
+                                    true,
+                                    bevy::image::ImageSampler::Default,
+                                    bevy::asset::RenderAssetUsages::RENDER_WORLD,
+                                )
+                                .expect("embedded UI texture must decode"),
                             ),
-                            bevy::math::Rect::new(
-                                title_metrics.1 + 16.0,
-                                16.0,
-                                viewport.x - 16.0,
-                                viewport.y - 16.0,
+                            images.add(
+                                bevy::image::Image::from_buffer(
+                                    &[
+                                        137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68,
+                                        82, 0, 0, 0, 32, 0, 0, 0, 32, 8, 6, 0, 0, 0, 115, 122, 122,
+                                        244, 0, 0, 0, 132, 73, 68, 65, 84, 120, 218, 237, 150, 205,
+                                        9, 192, 32, 12, 70, 29, 199, 33, 28, 200, 237, 28, 32, 7,
+                                        199, 201, 0, 14, 144, 70, 232, 33, 7, 107, 32, 23, 91, 250,
+                                        61, 200, 69, 62, 227, 3, 127, 48, 37, 0, 192, 3, 34, 146,
+                                        181, 154, 86, 95, 20, 105, 21, 147, 45, 247, 216, 42, 59,
+                                        123, 228, 136, 192, 156, 184, 131, 77, 150, 157, 108, 139,
+                                        8, 116, 167, 169, 152, 172, 71, 135, 0, 4, 34, 2, 228, 52,
+                                        29, 38, 59, 156, 44, 69, 4, 202, 230, 122, 205, 5, 171, 201,
+                                        214, 141, 4, 219, 55, 3, 124, 103, 11, 222, 112, 8, 241, 14,
+                                        64, 224, 184, 192, 241, 15, 201, 217, 47, 25, 0, 191, 225,
+                                        2, 132, 108, 239, 157, 44, 191, 82, 240, 0, 0, 0, 0, 73, 69,
+                                        78, 68, 174, 66, 96, 130,
+                                    ],
+                                    bevy::image::ImageType::Extension("png"),
+                                    bevy::image::CompressedImageFormats::NONE,
+                                    true,
+                                    bevy::image::ImageSampler::Default,
+                                    bevy::asset::RenderAssetUsages::RENDER_WORLD,
+                                )
+                                .expect("embedded UI texture must decode"),
                             ),
-                            bevy::math::Rect::new(
-                                16.0,
-                                84.0,
-                                title_metrics.1 - 16.0,
-                                132.0,
+                            images.add(
+                                bevy::image::Image::from_buffer(
+                                    &[
+                                        137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68,
+                                        82, 0, 0, 0, 32, 0, 0, 0, 32, 8, 6, 0, 0, 0, 115, 122, 122,
+                                        244, 0, 0, 1, 69, 73, 68, 65, 84, 120, 218, 237, 86, 161,
+                                        14, 131, 48, 16, 69, 76, 32, 43, 249, 0, 62, 128, 79, 64,
+                                        32, 248, 8, 228, 62, 3, 65, 50, 49, 177, 15, 153, 168, 220,
+                                        7, 76, 34, 16, 19, 147, 147, 19, 124, 192, 4, 146, 93, 151,
+                                        107, 114, 233, 74, 41, 165, 44, 100, 225, 37, 79, 208, 222,
+                                        113, 175, 189, 75, 239, 130, 96, 195, 6, 71, 244, 125, 159,
+                                        1, 27, 100, 246, 203, 192, 49, 240, 210, 127, 67, 172, 197,
+                                        75, 6, 102, 192, 35, 176, 35, 65, 229, 13, 72, 116, 104,
+                                        195, 124, 6, 222, 1, 247, 192, 150, 4, 106, 113, 109, 55,
+                                        182, 63, 55, 120, 10, 188, 217, 156, 112, 224, 134, 132,
+                                        111, 234, 18, 56, 2, 158, 149, 28, 115, 155, 28, 99, 141,
+                                        112, 197, 87, 252, 43, 154, 34, 160, 36, 206, 47, 96, 238,
+                                        112, 136, 28, 125, 37, 202, 41, 206, 149, 114, 130, 73, 87,
+                                        169, 73, 157, 64, 229, 34, 224, 1, 172, 135, 210, 128, 121,
+                                        103, 134, 235, 175, 241, 31, 206, 2, 174, 248, 93, 0, 159,
+                                        164, 16, 79, 74, 32, 142, 107, 178, 0, 133, 109, 129, 190,
+                                        215, 217, 2, 112, 45, 4, 30, 148, 42, 87, 209, 161, 77, 72,
+                                        252, 252, 8, 32, 123, 137, 65, 64, 162, 177, 247, 46, 128,
+                                        25, 4, 176, 197, 5, 224, 62, 215, 4, 231, 3, 182, 139, 8,
+                                        136, 52, 69, 24, 253, 76, 0, 177, 251, 96, 196, 102, 150,
+                                        128, 198, 212, 80, 198, 4, 96, 163, 106, 92, 4, 208, 167,
+                                        248, 62, 52, 112, 152, 4, 224, 192, 114, 119, 125, 138, 173,
+                                        154, 145, 78, 128, 151, 102, 100, 219, 142, 169, 0, 175,
+                                        237, 120, 194, 64, 34, 177, 204, 64, 98, 49, 112, 232, 158,
+                                        98, 191, 35, 217, 106, 134, 210, 213, 140, 229, 27, 254, 14,
+                                        111, 113, 49, 85, 189, 230, 39, 132, 216, 0, 0, 0, 0, 73,
+                                        69, 78, 68, 174, 66, 96, 130,
+                                    ],
+                                    bevy::image::ImageType::Extension("png"),
+                                    bevy::image::CompressedImageFormats::NONE,
+                                    true,
+                                    bevy::image::ImageSampler::Default,
+                                    bevy::asset::RenderAssetUsages::RENDER_WORLD,
+                                )
+                                .expect("embedded UI texture must decode"),
                             ),
-                            bevy::math::Rect::new(
-                                16.0,
-                                140.0,
-                                title_metrics.1 - 16.0,
-                                188.0,
+                            images.add(
+                                bevy::image::Image::from_buffer(
+                                    &[
+                                        137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68,
+                                        82, 0, 0, 0, 32, 0, 0, 0, 32, 8, 6, 0, 0, 0, 115, 122, 122,
+                                        244, 0, 0, 0, 255, 73, 68, 65, 84, 120, 218, 99, 96, 24, 5,
+                                        163, 128, 4, 240, 255, 255, 255, 8, 32, 158, 79, 0, 71, 208,
+                                        210, 1, 251, 255, 19, 6, 251, 105, 233, 0, 3, 168, 47, 113,
+                                        1, 144, 156, 1, 173, 163, 193, 1, 102, 25, 146, 24, 204, 81,
+                                        14, 244, 72, 7, 163, 14, 24, 112, 7, 120, 224, 113, 128, 7,
+                                        61, 28, 176, 25, 106, 89, 8, 146, 88, 8, 84, 108, 51, 189,
+                                        130, 255, 48, 22, 185, 195, 52, 143, 6, 160, 225, 231, 161,
+                                        150, 88, 96, 145, 179, 128, 202, 157, 167, 149, 229, 9, 80,
+                                        11, 86, 227, 81, 179, 26, 170, 38, 129, 218, 150, 115, 0,
+                                        241, 99, 32, 254, 13, 196, 42, 120, 212, 169, 64, 213, 128,
+                                        212, 114, 80, 211, 1, 53, 80, 159, 205, 134, 166, 3, 124,
+                                        120, 54, 84, 109, 13, 181, 44, 151, 0, 226, 247, 80, 60,
+                                        157, 136, 202, 104, 58, 146, 122, 9, 106, 56, 0, 102, 233,
+                                        100, 32, 254, 78, 132, 3, 190, 67, 213, 130, 29, 67, 169,
+                                        229, 26, 208, 56, 189, 15, 196, 203, 255, 19, 15, 150, 67,
+                                        245, 128, 244, 106, 80, 163, 208, 233, 254, 79, 58, 232,
+                                        166, 168, 112, 2, 106, 20, 64, 10, 242, 231, 68, 180, 132,
+                                        208, 241, 115, 164, 40, 17, 32, 215, 17, 37, 255, 41, 7, 37,
+                                        148, 68, 1, 11, 17, 217, 142, 16, 102, 25, 109, 77, 143,
+                                        130, 81, 48, 168, 1, 0, 84, 110, 80, 140, 82, 253, 103, 181,
+                                        0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+                                    ],
+                                    bevy::image::ImageType::Extension("png"),
+                                    bevy::image::CompressedImageFormats::NONE,
+                                    true,
+                                    bevy::image::ImageSampler::Default,
+                                    bevy::asset::RenderAssetUsages::RENDER_WORLD,
+                                )
+                                .expect("embedded UI texture must decode"),
                             ),
-                            bevy::math::Rect::new(
-                                title_metrics.1 + 44.0,
-                                144.0,
-                                (title_metrics.1 + 44.0 + 560.0)
-                                    .min(viewport.x - 16.0 - 28.0),
-                                336.0,
+                            images.add(
+                                bevy::image::Image::from_buffer(
+                                    &[
+                                        137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68,
+                                        82, 0, 0, 0, 32, 0, 0, 0, 32, 8, 6, 0, 0, 0, 115, 122, 122,
+                                        244, 0, 0, 1, 4, 73, 68, 65, 84, 120, 218, 99, 96, 24, 5,
+                                        163, 96, 20, 140, 2, 42, 130, 255, 255, 255, 115, 0, 177,
+                                        15, 16, 183, 3, 177, 10, 16, 179, 208, 203, 98, 144, 101,
+                                        211, 129, 248, 243, 127, 84, 160, 66, 15, 31, 119, 3, 241,
+                                        239, 255, 216, 65, 59, 45, 45, 231, 1, 226, 195, 255, 241,
+                                        3, 31, 90, 89, 206, 130, 100, 57, 40, 216, 251, 129, 120,
+                                        53, 154, 229, 32, 113, 14, 90, 57, 160, 29, 201, 162, 24,
+                                        36, 113, 100, 71, 76, 167, 149, 229, 10, 64, 252, 29, 201,
+                                        34, 15, 36, 185, 126, 168, 216, 111, 138, 19, 32, 52, 152,
+                                        35, 128, 56, 7, 136, 155, 129, 120, 62, 16, 111, 7, 226,
+                                        219, 104, 65, 125, 26, 228, 8, 80, 72, 32, 229, 130, 110,
+                                        106, 249, 20, 29, 188, 199, 147, 226, 97, 224, 48, 213, 226,
+                                        30, 234, 179, 213, 72, 150, 78, 38, 194, 114, 30, 90, 196,
+                                        187, 4, 16, 39, 160, 37, 62, 100, 240, 29, 42, 199, 66, 235,
+                                        130, 231, 56, 154, 197, 191, 161, 105, 66, 129, 214, 22,
+                                        219, 0, 241, 107, 104, 16, 31, 135, 250, 118, 50, 52, 77,
+                                        108, 167, 71, 89, 15, 203, 223, 175, 161, 252, 4, 164, 80,
+                                        152, 79, 15, 7, 72, 64, 29, 97, 131, 196, 135, 37, 204, 230,
+                                        129, 170, 122, 97, 161, 146, 51, 80, 14, 240, 128, 58, 32,
+                                        98, 32, 27, 32, 10, 116, 107, 116, 140, 130, 81, 48, 108, 1,
+                                        0, 32, 227, 53, 125, 1, 188, 2, 63, 0, 0, 0, 0, 73, 69, 78,
+                                        68, 174, 66, 96, 130,
+                                    ],
+                                    bevy::image::ImageType::Extension("png"),
+                                    bevy::image::CompressedImageFormats::NONE,
+                                    true,
+                                    bevy::image::ImageSampler::Default,
+                                    bevy::asset::RenderAssetUsages::RENDER_WORLD,
+                                )
+                                .expect("embedded UI texture must decode"),
                             ),
-                            bevy::math::Rect::new(
-                                title_metrics.1 + 44.0 + 20.0,
-                                224.0,
-                                (title_metrics.1 + 44.0 + 560.0)
-                                    .min(viewport.x - 16.0 - 28.0)
-                                    - 20.0,
-                                225.0,
+                            images.add(
+                                bevy::image::Image::from_buffer(
+                                    &[
+                                        137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68,
+                                        82, 0, 0, 0, 32, 0, 0, 0, 32, 8, 6, 0, 0, 0, 115, 122, 122,
+                                        244, 0, 0, 0, 172, 73, 68, 65, 84, 120, 218, 237, 150, 193,
+                                        9, 192, 32, 12, 69, 61, 122, 232, 40, 14, 225, 16, 25, 192,
+                                        81, 220, 196, 49, 28, 192, 33, 122, 236, 40, 54, 66, 122,
+                                        172, 160, 166, 81, 138, 31, 62, 130, 96, 124, 240, 35, 70,
+                                        169, 173, 173, 85, 149, 115, 214, 104, 135, 246, 131, 46,
+                                        53, 116, 207, 229, 41, 243, 41, 53, 65, 16, 117, 209, 137,
+                                        6, 180, 237, 52, 80, 141, 34, 215, 2, 224, 233, 16, 48, 68,
+                                        9, 84, 203, 247, 0, 88, 6, 0, 59, 2, 16, 209, 97, 208, 113,
+                                        4, 128, 83, 60, 17, 208, 126, 144, 138, 96, 109, 0, 92, 143,
+                                        202, 19, 52, 18, 0, 182, 146, 249, 37, 1, 96, 202, 69, 47,
+                                        142, 255, 239, 129, 21, 154, 112, 110, 4, 43, 52, 225, 220,
+                                        103, 40, 209, 3, 192, 0, 208, 245, 29, 215, 6, 146, 231,
+                                        151, 252, 116, 32, 153, 59, 146, 77, 31, 74, 183, 182, 36,
+                                        117, 3, 179, 101, 165, 43, 18, 99, 136, 153, 0, 0, 0, 0, 73,
+                                        69, 78, 68, 174, 66, 96, 130,
+                                    ],
+                                    bevy::image::ImageType::Extension("png"),
+                                    bevy::image::CompressedImageFormats::NONE,
+                                    true,
+                                    bevy::image::ImageSampler::Default,
+                                    bevy::asset::RenderAssetUsages::RENDER_WORLD,
+                                )
+                                .expect("embedded UI texture must decode"),
                             ),
-                            bevy::math::Rect::new(
-                                (title_metrics.1 + 44.0 + 560.0)
-                                    .min(viewport.x - 16.0 - 28.0)
-                                    - 20.0
-                                    - 150.0,
-                                270.0,
-                                (title_metrics.1 + 44.0 + 560.0)
-                                    .min(viewport.x - 16.0 - 28.0)
-                                    - 20.0,
-                                314.0,
+                            images.add(
+                                bevy::image::Image::from_buffer(
+                                    &[
+                                        137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68,
+                                        82, 0, 0, 0, 32, 0, 0, 0, 32, 8, 6, 0, 0, 0, 115, 122, 122,
+                                        244, 0, 0, 0, 93, 73, 68, 65, 84, 120, 218, 237, 149, 177,
+                                        9, 0, 32, 12, 4, 45, 28, 50, 165, 187, 56, 134, 195, 70,
+                                        139, 128, 41, 172, 68, 136, 132, 59, 248, 202, 34, 7, 241,
+                                        73, 41, 0, 0, 151, 168, 106, 93, 233, 150, 26, 33, 32, 186,
+                                        145, 8, 129, 230, 4, 26, 2, 121, 5, 236, 183, 139, 13, 244,
+                                        25, 78, 96, 28, 222, 229, 73, 59, 172, 102, 183, 244, 20, 2,
+                                        177, 43, 160, 5, 8, 252, 124, 140, 98, 207, 49, 0, 164, 97,
+                                        2, 136, 103, 151, 240, 156, 95, 175, 42, 0, 0, 0, 0, 73, 69,
+                                        78, 68, 174, 66, 96, 130,
+                                    ],
+                                    bevy::image::ImageType::Extension("png"),
+                                    bevy::image::CompressedImageFormats::NONE,
+                                    true,
+                                    bevy::image::ImageSampler::Default,
+                                    bevy::asset::RenderAssetUsages::RENDER_WORLD,
+                                )
+                                .expect("embedded UI texture must decode"),
                             ),
-                            bevy::math::Rect::new(
-                                title_metrics.1 + 16.0 + 28.0,
-                                112.0,
-                                viewport.x - 16.0 - 28.0,
-                                113.0,
+                            images.add(
+                                bevy::image::Image::from_buffer(
+                                    &[
+                                        137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68,
+                                        82, 0, 0, 0, 32, 0, 0, 0, 32, 8, 6, 0, 0, 0, 115, 122, 122,
+                                        244, 0, 0, 0, 137, 73, 68, 65, 84, 120, 218, 237, 151, 193,
+                                        9, 192, 32, 12, 69, 51, 144, 35, 116, 4, 183, 116, 24, 135,
+                                        112, 140, 14, 240, 27, 193, 131, 7, 75, 161, 173, 126, 15,
+                                        255, 65, 110, 146, 60, 33, 129, 196, 108, 0, 128, 232, 145,
+                                        60, 10, 190, 83, 90, 174, 104, 79, 248, 163, 224, 145, 49,
+                                        143, 154, 59, 220, 21, 63, 60, 78, 204, 167, 214, 56, 70,
+                                        63, 95, 81, 188, 151, 8, 189, 64, 198, 122, 114, 223, 112,
+                                        44, 162, 181, 14, 101, 145, 236, 167, 81, 123, 61, 162, 6,
+                                        50, 18, 144, 128, 4, 36, 32, 1, 9, 72, 96, 11, 1, 250, 66,
+                                        66, 95, 201, 184, 75, 41, 125, 45, 223, 226, 48, 161, 159,
+                                        102, 91, 28, 167, 172, 243, 252, 2, 41, 214, 28, 70, 85, 68,
+                                        209, 65, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+                                    ],
+                                    bevy::image::ImageType::Extension("png"),
+                                    bevy::image::CompressedImageFormats::NONE,
+                                    true,
+                                    bevy::image::ImageSampler::Default,
+                                    bevy::asset::RenderAssetUsages::RENDER_WORLD,
+                                )
+                                .expect("embedded UI texture must decode"),
                             ),
-                            bevy::math::Rect::new(20.0, 16.0, 66.0, 62.0),
-                            bevy::math::Rect::new(
-                                24.0,
-                                90.0,
-                                60.0,
-                                126.0,
+                            images.add(
+                                bevy::image::Image::from_buffer(
+                                    &[
+                                        137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68,
+                                        82, 0, 0, 0, 32, 0, 0, 0, 32, 8, 6, 0, 0, 0, 115, 122, 122,
+                                        244, 0, 0, 0, 198, 73, 68, 65, 84, 120, 218, 237, 87, 201,
+                                        13, 131, 64, 12, 156, 7, 69, 164, 8, 74, 160, 4, 138, 160,
+                                        20, 122, 225, 185, 133, 80, 66, 30, 91, 194, 62, 41, 192,
+                                        216, 209, 60, 66, 68, 148, 72, 28, 222, 135, 71, 154, 23,
+                                        139, 103, 214, 107, 75, 54, 176, 3, 17, 233, 149, 147, 50,
+                                        203, 113, 100, 198, 234, 241, 11, 122, 168, 85, 206, 252,
+                                        177, 40, 147, 114, 60, 200, 196, 88, 194, 216, 237, 55, 241,
+                                        78, 185, 240, 240, 160, 108, 112, 18, 44, 22, 99, 22, 106,
+                                        116, 123, 55, 183, 15, 79, 229, 3, 23, 193, 98, 83, 99, 217,
+                                        100, 130, 169, 41, 87, 138, 127, 152, 48, 173, 249, 189,
+                                        224, 12, 3, 110, 2, 159, 67, 94, 133, 201, 10, 45, 103, 190,
+                                        249, 159, 53, 97, 154, 19, 216, 38, 9, 55, 131, 221, 145,
+                                        193, 84, 140, 14, 6, 172, 69, 37, 12, 132, 129, 48, 16, 6,
+                                        194, 64, 24, 8, 3, 85, 24, 112, 31, 72, 220, 71, 50, 223,
+                                        161, 212, 125, 44, 175, 98, 49, 113, 95, 205, 170, 88, 78,
+                                        189, 214, 243, 21, 237, 121, 110, 202, 111, 5, 188, 21, 0,
+                                        0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+                                    ],
+                                    bevy::image::ImageType::Extension("png"),
+                                    bevy::image::CompressedImageFormats::NONE,
+                                    true,
+                                    bevy::image::ImageSampler::Default,
+                                    bevy::asset::RenderAssetUsages::RENDER_WORLD,
+                                )
+                                .expect("embedded UI texture must decode"),
                             ),
-                            bevy::math::Rect::new(
-                                24.0,
-                                146.0,
-                                60.0,
-                                182.0,
+                            images.add(
+                                bevy::image::Image::from_buffer(
+                                    &[
+                                        137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68,
+                                        82, 0, 0, 0, 40, 0, 0, 0, 40, 8, 6, 0, 0, 0, 140, 254, 184,
+                                        109, 0, 0, 0, 205, 73, 68, 65, 84, 120, 218, 237, 153, 187,
+                                        9, 196, 48, 16, 68, 55, 112, 57, 46, 67, 5, 184, 4, 247,
+                                        227, 194, 28, 170, 0, 149, 160, 80, 161, 131, 185, 21, 108,
+                                        96, 115, 28, 167, 59, 99, 123, 4, 251, 96, 82, 237, 3, 161,
+                                        223, 74, 164, 1, 0, 65, 179, 104, 86, 77, 198, 255, 100, 27,
+                                        163, 142, 21, 228, 12, 58, 192, 160, 153, 53, 9, 215, 145,
+                                        172, 198, 240, 171, 220, 168, 137, 184, 143, 90, 107, 108,
+                                        149, 155, 52, 5, 247, 83, 107, 78, 45, 114, 27, 158, 99,
+                                        251, 40, 105, 211, 90, 240, 60, 229, 109, 186, 109, 65, 68,
+                                        240, 16, 15, 11, 199, 86, 18, 27, 243, 94, 48, 17, 10, 166,
+                                        253, 38, 204, 74, 16, 219, 213, 89, 89, 196, 142, 30, 86,
+                                        86, 57, 121, 182, 94, 77, 22, 144, 227, 130, 46, 232, 130,
+                                        46, 232, 130, 46, 232, 130, 46, 248, 85, 144, 254, 186, 69,
+                                        127, 97, 165, 191, 242, 115, 63, 154, 232, 159, 157, 189,
+                                        60, 220, 185, 91, 31, 244, 205, 163, 46, 218, 111, 93, 52,
+                                        48, 187, 104, 1, 119, 209, 68, 103, 250, 134, 120, 1, 111,
+                                        93, 194, 131, 217, 50, 190, 59, 0, 0, 0, 0, 73, 69, 78, 68,
+                                        174, 66, 96, 130,
+                                    ],
+                                    bevy::image::ImageType::Extension("png"),
+                                    bevy::image::CompressedImageFormats::NONE,
+                                    true,
+                                    bevy::image::ImageSampler::Default,
+                                    bevy::asset::RenderAssetUsages::RENDER_WORLD,
+                                )
+                                .expect("embedded UI texture must decode"),
                             ),
-                            bevy::math::Rect::new(
-                                title_metrics.1 + 16.0 + 28.0,
-                                40.0,
-                                title_metrics.1 + 16.0 + 28.0 + 44.0,
-                                84.0,
+                            images.add(
+                                bevy::image::Image::from_buffer(
+                                    &[
+                                        137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68,
+                                        82, 0, 0, 0, 40, 0, 0, 0, 40, 8, 6, 0, 0, 0, 140, 254, 184,
+                                        109, 0, 0, 0, 153, 73, 68, 65, 84, 120, 218, 237, 217, 177,
+                                        9, 128, 48, 20, 132, 225, 20, 142, 227, 24, 14, 224, 8, 217,
+                                        199, 193, 44, 29, 32, 35, 164, 76, 105, 241, 124, 17, 20,
+                                        196, 70, 27, 253, 149, 59, 184, 254, 3, 81, 146, 51, 216,
+                                        179, 201, 222, 209, 59, 120, 187, 112, 37, 246, 110, 146,
+                                        55, 122, 27, 42, 112, 203, 228, 109, 201, 192, 154, 226,
+                                        237, 201, 192, 154, 249, 132, 52, 94, 202, 225, 113, 27, 51,
+                                        211, 254, 226, 24, 55, 145, 14, 76, 116, 160, 173, 31, 115,
+                                        56, 112, 160, 3, 71, 58, 48, 211, 129, 38, 160, 128, 2, 10,
+                                        40, 160, 128, 2, 10, 248, 105, 96, 214, 129, 245, 239, 71,
+                                        254, 78, 215, 206, 191, 94, 220, 209, 211, 7, 122, 60, 66,
+                                        207, 111, 232, 1, 19, 59, 1, 227, 70, 244, 219, 191, 33, 22,
+                                        102, 83, 213, 118, 44, 177, 29, 179, 0, 0, 0, 0, 73, 69, 78,
+                                        68, 174, 66, 96, 130,
+                                    ],
+                                    bevy::image::ImageType::Extension("png"),
+                                    bevy::image::CompressedImageFormats::NONE,
+                                    true,
+                                    bevy::image::ImageSampler::Default,
+                                    bevy::asset::RenderAssetUsages::RENDER_WORLD,
+                                )
+                                .expect("embedded UI texture must decode"),
                             ),
-                            bevy::math::Rect::new(
-                                title_metrics.1 + 44.0 + 20.0,
-                                164.0,
-                                title_metrics.1 + 44.0 + 20.0 + 42.0,
-                                206.0,
-                            ),
-                            bevy::math::Rect::new(
-                                (title_metrics.1 + 44.0 + 560.0)
-                                    .min(viewport.x - 16.0 - 28.0)
-                                    - 20.0
-                                    - 150.0
-                                    + 8.0,
-                                277.0,
-                                (title_metrics.1 + 44.0 + 560.0)
-                                    .min(viewport.x - 16.0 - 28.0)
-                                    - 20.0
-                                    - 150.0
-                                    + 38.0,
-                                307.0,
-                            ),
-                            bevy::math::Rect::new(
-                                16.0,
-                                72.0,
-                                title_metrics.1 - 16.0,
-                                73.0,
-                            ),
+                            images.add(
+                                bevy::image::Image::from_buffer(
+                                    &[
+                                        137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68,
+                                        82, 0, 0, 0, 32, 0, 0, 0, 32, 8, 6, 0, 0, 0, 115, 122, 122,
+                                        244, 0, 0, 1, 60, 73, 68, 65, 84, 120, 218, 213, 87, 65, 10,
+                                        131, 48, 16, 20, 159, 32, 30, 4, 193, 7, 248, 40, 17, 124,
+                                        131, 127, 240, 5, 94, 189, 251, 11, 127, 161, 191, 176, 30,
+                                        188, 120, 72, 51, 37, 5, 221, 110, 173, 213, 148, 108, 133,
+                                        129, 96, 54, 59, 99, 50, 89, 19, 207, 251, 199, 39, 8, 2,
+                                        95, 35, 209, 72, 13, 208, 246, 127, 77, 26, 107, 148, 26,
+                                        157, 198, 172, 161, 8, 102, 211, 135, 152, 216, 54, 113,
+                                        163, 177, 48, 164, 239, 176, 152, 49, 241, 85, 242, 76, 227,
+                                        246, 5, 49, 5, 198, 102, 103, 201, 171, 11, 196, 20, 149,
+                                        21, 242, 40, 138, 84, 81, 20, 170, 109, 91, 213, 247, 189,
+                                        26, 199, 241, 1, 180, 241, 14, 125, 136, 185, 36, 194, 76,
+                                        251, 75, 130, 60, 207, 213, 48, 12, 106, 154, 166, 93, 32,
+                                        6, 177, 111, 68, 100, 71, 12, 183, 89, 243, 48, 12, 85, 93,
+                                        215, 31, 137, 41, 48, 6, 99, 25, 79, 196, 123, 2, 26, 170,
+                                        250, 12, 249, 90, 4, 51, 11, 205, 222, 215, 47, 116, 218,
+                                        207, 146, 63, 193, 44, 199, 194, 206, 130, 41, 32, 27, 195,
+                                        29, 89, 243, 35, 158, 96, 140, 89, 114, 2, 186, 117, 16, 28,
+                                        125, 149, 252, 9, 228, 34, 2, 58, 174, 182, 111, 202, 43,
+                                        182, 149, 45, 1, 200, 197, 148, 109, 127, 45, 32, 161, 102,
+                                        193, 222, 182, 37, 0, 185, 24, 51, 38, 107, 1, 41, 13, 64,
+                                        129, 177, 37, 0, 185, 24, 1, 169, 40, 1, 206, 151, 192, 173,
+                                        9, 157, 111, 67, 41, 133, 200, 109, 41, 118, 254, 51, 18,
+                                        241, 59, 118, 126, 32, 17, 113, 36, 19, 113, 40, 21, 113,
+                                        44, 23, 113, 49, 17, 113, 53, 19, 115, 57, 253, 213, 115, 7,
+                                        254, 180, 64, 211, 42, 251, 82, 186, 0, 0, 0, 0, 73, 69, 78,
+                                        68, 174, 66, 96, 130,
+                                    ],
+                                    bevy::image::ImageType::Extension("png"),
+                                    bevy::image::CompressedImageFormats::NONE,
+                                    true,
+                                    bevy::image::ImageSampler::Default,
+                                    bevy::asset::RenderAssetUsages::RENDER_WORLD,
+                                )
+                                .expect("embedded UI texture must decode"),
+                            )
                         ]);
-                        slots
-                            .as_ref()
-                            .into_iter()
-                            .flatten()
-                            .copied()
-                            .for_each(|entity| {
-                                commands.entity(entity).despawn();
-                            });
-                        *slots = None;
-                        workspace_slots
-                            .as_ref()
-                            .into_iter()
-                            .flatten()
-                            .copied()
-                            .for_each(|entity| {
-                                commands.entity(entity).despawn();
-                            });
-                        *workspace_slots = None;
                     }
 
-                    (*layout).into_iter().for_each(
-                        |[
-                            sidebar,
-                            panel,
-                            home_tab,
-                            registry_tab,
-                            card,
-                            card_divider,
-                            launch_button,
-                            section_divider,
-                            app_tile,
-                            home_tile,
-                            registry_tile,
-                            registry_header_tile,
-                            flask_tile,
-                            rocket_tile,
-                            identity_divider,
-                        ]| {
-                            *hud = Some(
-                                if keys.just_pressed(bevy::input::keyboard::KeyCode::F1) {
-                                    !hud.unwrap_or(false)
-                                } else {
-                                    hud.unwrap_or(false)
-                                },
-                            );
+                    if ui_entities.is_none() {
+                        asset_handles.as_ref().cloned().into_iter().for_each(
+                            |[
+                                home_icon,
+                                registry_icon,
+                                app_icon,
+                                flask_icon,
+                                rocket_icon,
+                                workspace_icon,
+                                plus_icon,
+                                round_solid,
+                                round_outline,
+                                panel_round_solid,
+                                right_round_solid,
+                                dot_image,
+                            ]: [bevy::asset::Handle<bevy::image::Image>; 12]| {
+                                *ui_entities = std::option::Option::Some([
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.180, 0.180, 0.180, 1.0,
+                                                ),
+                                                image: right_round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(384.0, 768.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(16.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 1.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Inherited,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.086, 0.086, 0.086, 1.0,
+                                                ),
+                                                image: right_round_solid,
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(383.0, 766.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(16.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 1.1,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Inherited,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.149, 0.149, 0.149, 1.0,
+                                                ),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(44.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 2.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Inherited,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.937, 0.937, 0.937, 1.0,
+                                                ),
+                                                image: app_icon,
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(26.0),
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 3.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Inherited,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.937, 0.937, 0.937, 0.0,
+                                                ),
+                                                image: flask_icon.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(26.0),
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 3.1,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from(
+                                                if cfg!(target_os = "linux") {
+                                                    "Linux-Subsystem-for-Arxumbra"
+                                                } else if cfg!(target_os = "macos") {
+                                                    "macOS-Subsystem-for-Arxumbra"
+                                                } else {
+                                                    "Windows-Subsystem-for-Arxumbra"
+                                                },
+                                            )),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(17.0),
+                                                weight: bevy::text::FontWeight::SEMIBOLD,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(
+                                                0.937, 0.937, 0.937, 1.0,
+                                            )),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 3.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Inherited,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from(
+                                                "Laboratory",
+                                            )),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(17.0),
+                                                weight: bevy::text::FontWeight::SEMIBOLD,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(
+                                                0.937, 0.937, 0.937, 0.0,
+                                            )),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 3.1,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.176, 0.176, 0.176, 1.0,
+                                                ),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(348.0, 1.0),
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 2.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Inherited,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.865, 0.865, 0.865, 1.0,
+                                                ),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(348.0, 48.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 2.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Inherited,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.520, 0.520, 0.520, 0.0,
+                                                ),
+                                                image: round_outline.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(348.0, 48.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 2.5,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.161, 0.161, 0.161, 1.0,
+                                                ),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(36.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 3.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Inherited,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.937, 0.937, 0.937, 1.0,
+                                                ),
+                                                image: home_icon,
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(22.0),
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 4.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Inherited,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from(
+                                                "Home",
+                                            )),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(16.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(
+                                                0.086, 0.086, 0.086, 1.0,
+                                            )),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 4.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Inherited,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.125, 0.125, 0.125, 1.0,
+                                                ),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(348.0, 48.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 2.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Inherited,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.520, 0.520, 0.520, 0.0,
+                                                ),
+                                                image: round_outline.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(348.0, 48.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 2.5,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.176, 0.176, 0.176, 1.0,
+                                                ),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(36.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 3.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Inherited,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.780, 0.780, 0.780, 1.0,
+                                                ),
+                                                image: registry_icon.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(22.0),
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 4.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Inherited,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from(
+                                                "Extension Registry",
+                                            )),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(16.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(
+                                                0.780, 0.780, 0.780, 1.0,
+                                            )),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 4.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Inherited,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.145, 0.145, 0.145, 0.0,
+                                                ),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(348.0, 48.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 2.1,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.275, 0.275, 0.275, 0.0,
+                                                ),
+                                                image: round_outline.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(348.0, 48.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 2.6,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.200, 0.200, 0.200, 0.0,
+                                                ),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(36.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 3.1,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.880, 0.880, 0.880, 0.0,
+                                                ),
+                                                image: plus_icon,
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(20.0),
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 4.1,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from(
+                                                "Create Project",
+                                            )),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(16.0),
+                                                weight: bevy::text::FontWeight::SEMIBOLD,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(
+                                                0.880, 0.880, 0.880, 0.0,
+                                            )),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 4.1,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.180, 0.180, 0.180, 0.0,
+                                                ),
+                                                image: panel_round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(800.0, 736.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(16.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 1.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.063, 0.063, 0.063, 0.0,
+                                                ),
+                                                image: panel_round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(798.0, 734.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(16.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 1.1,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.133, 0.133, 0.133, 0.0,
+                                                ),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(44.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 2.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.937, 0.937, 0.937, 0.0,
+                                                ),
+                                                image: registry_icon,
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(25.0),
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 3.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.937, 0.937, 0.937, 0.0,
+                                                ),
+                                                image: workspace_icon,
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(26.0),
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 3.1,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from(
+                                                "Extension Registry",
+                                            )),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(20.0),
+                                                weight: bevy::text::FontWeight::SEMIBOLD,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(
+                                                0.937, 0.937, 0.937, 0.0,
+                                            )),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 3.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from(
+                                                "Workspace",
+                                            )),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(20.0),
+                                                weight: bevy::text::FontWeight::SEMIBOLD,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(
+                                                0.937, 0.937, 0.937, 0.0,
+                                            )),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 3.1,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.176, 0.176, 0.176, 0.0,
+                                                ),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(700.0, 1.0),
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 2.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.188, 0.188, 0.188, 0.0,
+                                                ),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(480.0, 151.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 2.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.090, 0.090, 0.090, 0.0,
+                                                ),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(478.0, 149.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 2.1,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.157, 0.157, 0.157, 0.0,
+                                                ),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(42.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 3.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.937, 0.937, 0.937, 0.0,
+                                                ),
+                                                image: flask_icon,
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(25.0),
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 4.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from(
+                                                "Laboratory",
+                                            )),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(18.0),
+                                                weight: bevy::text::FontWeight::SEMIBOLD,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(
+                                                0.937, 0.937, 0.937, 0.0,
+                                            )),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 4.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.176, 0.176, 0.176, 0.0,
+                                                ),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(444.0, 1.0),
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 3.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.215, 0.215, 0.215, 0.0,
+                                                ),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(148.0, 44.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 3.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.360, 0.360, 0.360, 0.0,
+                                                ),
+                                                image: round_outline,
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(148.0, 44.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 3.5,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.265, 0.265, 0.265, 0.0,
+                                                ),
+                                                image: round_solid,
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(32.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 4.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.910, 0.910, 0.910, 0.0,
+                                                ),
+                                                image: rocket_icon,
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(20.0),
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 5.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from(
+                                                "Launch",
+                                            )),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(15.5),
+                                                weight: bevy::text::FontWeight::SEMIBOLD,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(
+                                                0.910, 0.910, 0.910, 0.0,
+                                            )),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 5.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.0, 0.0, 0.0, 0.0,
+                                                ),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(1920.0, 1080.0),
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 12.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.245, 0.245, 0.245, 0.0,
+                                                ),
+                                                image: panel_round_solid.clone(),
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(460.0, 300.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(16.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 13.0,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(
+                                                    0.094, 0.094, 0.094, 0.0,
+                                                ),
+                                                image: panel_round_solid,
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::new(458.0, 298.0),
+                                                ),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(16.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 13.1,
+                                            ),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                ]);
 
-                            (*dot).into_iter().for_each(
-                                |(dot_entity, dot_position): (
+                                *dot_state = std::option::Option::Some((
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                image: dot_image,
+                                                custom_size: std::option::Option::Some(
+                                                    bevy::math::Vec2::splat(11.0),
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(
+                                                0.0, 0.0, 20.0,
+                                            ),
+                                            if window.focused {
+                                                bevy::camera::visibility::Visibility::Inherited
+                                            } else {
+                                                bevy::camera::visibility::Visibility::Hidden
+                                            },
+                                        ))
+                                        .id(),
+                                    bevy::math::Vec2::new(
+                                        window.width() * 0.5,
+                                        window.height() * 0.5,
+                                    ),
+                                    bevy::math::Vec2::ZERO,
+                                ));
+                            },
+                        );
+                    }
+
+                    focus_state.2 = focus_state.2.saturating_add(1).min(4);
+                    metrics_state.2 =
+                        bevy::math::Vec2::new(window.width().max(1.0), window.height().max(1.0));
+                    metrics_state.3 = time.delta_secs().clamp(0.0, 0.05);
+
+                    match (
+                        window.focused,
+                        (keys.pressed(bevy::input::keyboard::KeyCode::ControlLeft) as u16)
+                            | ((keys.pressed(bevy::input::keyboard::KeyCode::ControlRight) as u16)
+                                << 1)
+                            | ((keys.pressed(bevy::input::keyboard::KeyCode::KeyW) as u16) << 2)
+                            | ((keys.pressed(bevy::input::keyboard::KeyCode::KeyA) as u16) << 3)
+                            | ((keys.pressed(bevy::input::keyboard::KeyCode::KeyS) as u16) << 4)
+                            | ((keys.pressed(bevy::input::keyboard::KeyCode::KeyD) as u16) << 5)
+                            | ((keys.pressed(bevy::input::keyboard::KeyCode::KeyE) as u16) << 6)
+                            | ((keys.pressed(bevy::input::keyboard::KeyCode::F1) as u16) << 7)
+                            | ((keys.pressed(bevy::input::keyboard::KeyCode::Escape) as u16) << 8),
+                    ) {
+                        (false, _) => {
+                            focus_state.0 = false;
+                            focus_state.1 = 0u16;
+                            focus_state.3 = false;
+                            *escape_state = (std::option::Option::None, false, false, false);
+                            (*dot_state).into_iter().for_each(
+                                |(dot_entity, dot_pos, _dot_vel): (
                                     bevy::ecs::entity::Entity,
                                     bevy::math::Vec2,
+                                    bevy::math::Vec2,
                                 )| {
-                                    *dot = Some((
+                                    *dot_state = std::option::Option::Some((
                                         dot_entity,
-                                        bevy::math::Vec2::new(
-                                            dot_position.x
-                                                + ((keys.pressed(bevy::input::keyboard::KeyCode::KeyD) as u8 as f32) - (keys.pressed(bevy::input::keyboard::KeyCode::KeyA) as u8 as f32))
-                                                * (1.0
-                                                    - 0.29289322f32
-                                                        * (((((keys.pressed(bevy::input::keyboard::KeyCode::KeyD) as u8 as f32) - (keys.pressed(bevy::input::keyboard::KeyCode::KeyA) as u8 as f32)) != 0.0) && (((keys.pressed(bevy::input::keyboard::KeyCode::KeyS) as u8 as f32) - (keys.pressed(bevy::input::keyboard::KeyCode::KeyW) as u8 as f32)) != 0.0)) as u8 as f32))
-                                                * 480.0
-                                                * time.delta_secs().min(0.05)
-                                                * (window.focused as u8 as f32)
-                                                * ((keys.pressed(bevy::input::keyboard::KeyCode::ControlLeft) || keys.pressed(bevy::input::keyboard::KeyCode::ControlRight)) as u8 as f32),
-                                            dot_position.y
-                                                + ((keys.pressed(bevy::input::keyboard::KeyCode::KeyS) as u8 as f32) - (keys.pressed(bevy::input::keyboard::KeyCode::KeyW) as u8 as f32))
-                                                * (1.0
-                                                    - 0.29289322f32
-                                                        * (((((keys.pressed(bevy::input::keyboard::KeyCode::KeyD) as u8 as f32) - (keys.pressed(bevy::input::keyboard::KeyCode::KeyA) as u8 as f32)) != 0.0) && (((keys.pressed(bevy::input::keyboard::KeyCode::KeyS) as u8 as f32) - (keys.pressed(bevy::input::keyboard::KeyCode::KeyW) as u8 as f32)) != 0.0)) as u8 as f32))
-                                                * 480.0
-                                                * time.delta_secs().min(0.05)
-                                                * (window.focused as u8 as f32)
-                                                * ((keys.pressed(bevy::input::keyboard::KeyCode::ControlLeft) || keys.pressed(bevy::input::keyboard::KeyCode::ControlRight)) as u8 as f32),
-                                        )
-                                        .clamp(
-                                            bevy::math::Vec2::ZERO,
-                                            bevy::math::Vec2::new(viewport.x, viewport.y),
-                                        ),
+                                        dot_pos,
+                                        bevy::math::Vec2::ZERO,
                                     ));
                                 },
                             );
-
-                            interaction_state[0] = if window.focused
-                                && hud.unwrap_or(false)
-                                && !navigation_state.1
-                            {
-                                (*dot).into_iter().find_map(
-                                    |(_dot_entity, dot_position): (
-                                        bevy::ecs::entity::Entity,
-                                        bevy::math::Vec2,
-                                    )| {
-                                        if home_tab.contains(dot_position) {
-                                            Some(0u8)
-                                        } else if registry_tab.contains(dot_position) {
-                                            Some(1u8)
-                                        } else if navigation_state.0
-                                            && title_metrics.0 > 0.0
-                                            && launch_button.contains(dot_position)
-                                        {
-                                            Some(2u8)
-                                        } else {
-                                            None
-                                        }
-                                    },
-                                )
+                        }
+                        (true, pressed_mask) => {
+                            if !focus_state.0 {
+                                focus_state.0 = true;
+                                focus_state.1 = pressed_mask;
                             } else {
-                                None
-                            };
-
-                            interaction_state[1] = if window.focused {
-                                interaction_state[0]
-                            } else {
-                                None
-                            };
-
-                            interaction_state[2] = if window.focused
-                                && !navigation_state.1
-                                && keys.just_pressed(bevy::input::keyboard::KeyCode::KeyE)
-                                && (keys.pressed(bevy::input::keyboard::KeyCode::ControlLeft)
-                                    || keys.pressed(bevy::input::keyboard::KeyCode::ControlRight))
-                                && !keys.pressed(bevy::input::keyboard::KeyCode::ShiftLeft)
-                                && !keys.pressed(bevy::input::keyboard::KeyCode::ShiftRight)
-                                && !keys.pressed(bevy::input::keyboard::KeyCode::AltLeft)
-                                && !keys.pressed(bevy::input::keyboard::KeyCode::AltRight)
-                                && !keys.pressed(bevy::input::keyboard::KeyCode::SuperLeft)
-                                && !keys.pressed(bevy::input::keyboard::KeyCode::SuperRight)
-                            {
-                                interaction_state[0]
-                            } else {
-                                None
-                            };
-
-                            if !window.focused {
-                                navigation_state.2 = None;
-                                navigation_state.3 = false;
-                                interaction_state[2] = None;
-                            } else if !keys.pressed(bevy::input::keyboard::KeyCode::Escape) {
-                                navigation_state.2 = None;
-                                navigation_state.3 = true;
-                                navigation_state.4 = false;
-                            } else if navigation_state.1
-                                && navigation_state.3
-                                && !navigation_state.4
-                            {
-                                if keys.just_pressed(bevy::input::keyboard::KeyCode::Escape) {
-                                    navigation_state.2 = Some(std::time::Instant::now());
-                                } else if navigation_state.2.is_some_and(
-                                    |started: std::time::Instant| {
-                                        started.elapsed().as_secs_f64() >= 5.0f64
-                                    },
-                                ) {
-                                    navigation_state.0 = true;
-                                    navigation_state.1 = false;
-                                    navigation_state.2 = None;
-                                    navigation_state.3 = false;
-                                    navigation_state.4 = true;
-                                    *interaction_state = [None, None, None];
-                                }
-                            } else if !navigation_state.1
-                                && navigation_state.3
-                                && !navigation_state.4
-                            {
-                                if keys.just_pressed(bevy::input::keyboard::KeyCode::Escape) {
-                                    navigation_state.2 = Some(std::time::Instant::now());
-                                } else if navigation_state.2.is_some_and(
-                                    |started: std::time::Instant| {
-                                        started.elapsed().as_secs_f64() >= 7.0f64
-                                    },
-                                ) {
-                                    exits.write(bevy::app::AppExit::Success);
-                                    navigation_state.2 = None;
-                                    navigation_state.3 = false;
-                                    navigation_state.4 = true;
-                                    *interaction_state = [None, None, None];
-                                }
+                                focus_state.1 &= pressed_mask;
                             }
-
-                            match interaction_state[2] {
-                                Some(0u8) => {
-                                    navigation_state.0 = false;
-                                }
-                                Some(1u8) => {
-                                    navigation_state.0 = true;
-                                }
-                                Some(2u8) if navigation_state.0 && !navigation_state.1 => {
-                                    navigation_state.1 = true;
-                                    navigation_state.2 = None;
-                                    navigation_state.3 = !keys.pressed(
-                                        bevy::input::keyboard::KeyCode::Escape,
-                                    );
-                                    navigation_state.4 = false;
-                                    *interaction_state = [None, None, None];
-                                }
-                                _ => (),
-                            }
-
-                                                        anim.0[0][0] += ((interaction_state[0] == Some(0u8)) as u8 as f32
-                                - anim.0[0][0])
-                                .clamp(-time.delta_secs() / 0.15, time.delta_secs() / 0.15);
-                            anim.0[0][1] += ((interaction_state[0] == Some(1u8)) as u8 as f32
-                                - anim.0[0][1])
-                                .clamp(-time.delta_secs() / 0.15, time.delta_secs() / 0.15);
-                            anim.0[0][2] += ((interaction_state[0] == Some(2u8)) as u8 as f32
-                                - anim.0[0][2])
-                                .clamp(-time.delta_secs() / 0.15, time.delta_secs() / 0.15);
-                            anim.0[1][0] += ((interaction_state[1] == Some(0u8)) as u8 as f32
-                                - anim.0[1][0])
-                                .clamp(-time.delta_secs() / 0.11, time.delta_secs() / 0.11);
-                            anim.0[1][1] += ((interaction_state[1] == Some(1u8)) as u8 as f32
-                                - anim.0[1][1])
-                                .clamp(-time.delta_secs() / 0.11, time.delta_secs() / 0.11);
-                            anim.0[1][2] += ((interaction_state[1] == Some(2u8)) as u8 as f32
-                                - anim.0[1][2])
-                                .clamp(-time.delta_secs() / 0.11, time.delta_secs() / 0.11);
-                            anim.0[2][0] += (((interaction_state[2] == Some(0u8)) && (interaction_state[0] == Some(0u8)))
-                                as u8 as f32
-                                - anim.0[2][0])
-                                .clamp(-time.delta_secs() / 0.06, time.delta_secs() / 0.06);
-                            anim.0[2][1] += (((interaction_state[2] == Some(1u8)) && (interaction_state[0] == Some(1u8)))
-                                as u8 as f32
-                                - anim.0[2][1])
-                                .clamp(-time.delta_secs() / 0.06, time.delta_secs() / 0.06);
-                            anim.0[2][2] += (((interaction_state[2] == Some(2u8)) && (interaction_state[0] == Some(2u8)))
-                                as u8 as f32
-                                - anim.0[2][2])
-                                .clamp(-time.delta_secs() / 0.06, time.delta_secs() / 0.06);
-                            anim.1[0] += (navigation_state.0 as u8 as f32 - anim.1[0])
-                                .clamp(-time.delta_secs() / 0.15, time.delta_secs() / 0.15);
-                            anim.1[1] = if navigation_state.0 {
-                                anim.1[1]
-                                    + (1.0f32 - anim.1[1]).clamp(
-                                        -time.delta_secs() / 0.14,
-                                        time.delta_secs() / 0.14,
-                                    )
-                            } else {
-                                0.0
-                            };
-
-                            if handles.is_none() {
-                                *handles = Some([
-                                    images.add(
-                                        bevy::image::Image::from_buffer(
-                                            &[137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 26, 0, 0, 0, 22, 8, 6, 0, 0, 0, 222, 136, 140, 181, 0, 0, 0, 160, 73, 68, 65, 84, 120, 218, 99, 248, 255, 255, 63, 3, 61, 48, 57, 154, 140, 160, 152, 166, 22, 21, 2, 241, 15, 40, 46, 164, 133, 69, 50, 64, 124, 236, 63, 38, 56, 6, 149, 163, 138, 69, 49, 64, 252, 241, 63, 110, 240, 17, 170, 134, 108, 139, 68, 129, 120, 213, 127, 226, 193, 42, 168, 30, 146, 44, 114, 7, 226, 87, 255, 73, 7, 175, 160, 122, 9, 90, 196, 14, 196, 83, 255, 83, 14, 166, 66, 205, 194, 106, 145, 37, 16, 223, 249, 79, 61, 112, 7, 106, 38, 138, 69, 160, 176, 173, 0, 226, 6, 32, 222, 79, 5, 75, 246, 67, 205, 170, 128, 197, 27, 182, 248, 105, 160, 130, 69, 13, 196, 36, 134, 81, 139, 168, 110, 81, 3, 37, 106, 71, 45, 26, 181, 8, 175, 69, 14, 80, 133, 232, 216, 129, 18, 181, 116, 105, 152, 128, 48, 0, 173, 25, 163, 86, 246, 201, 209, 147, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130],
-                                            bevy::image::ImageType::Extension("png"),
-                                            bevy::image::CompressedImageFormats::NONE,
-                                            true,
-                                            bevy::image::ImageSampler::Default,
-                                            bevy::asset::RenderAssetUsages::RENDER_WORLD,
-                                        )
-                                        .expect("embedded home icon must decode"),
-                                    ),
-                                    images.add(
-                                        bevy::image::Image::from_buffer(
-                                            &[137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 26, 0, 0, 0, 22, 8, 6, 0, 0, 0, 222, 136, 140, 181, 0, 0, 0, 85, 73, 68, 65, 84, 120, 218, 99, 248, 255, 255, 63, 3, 61, 48, 140, 193, 14, 196, 139, 129, 248, 199, 127, 236, 224, 7, 84, 158, 29, 73, 51, 73, 122, 96, 154, 98, 254, 19, 7, 98, 144, 44, 34, 73, 15, 76, 83, 3, 145, 154, 26, 144, 44, 34, 73, 207, 168, 69, 67, 199, 34, 186, 165, 58, 186, 229, 35, 186, 149, 12, 163, 69, 208, 104, 17, 52, 106, 209, 104, 17, 52, 0, 69, 16, 0, 172, 77, 4, 129, 121, 239, 65, 171, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130],
-                                            bevy::image::ImageType::Extension("png"),
-                                            bevy::image::CompressedImageFormats::NONE,
-                                            true,
-                                            bevy::image::ImageSampler::Default,
-                                            bevy::asset::RenderAssetUsages::RENDER_WORLD,
-                                        )
-                                        .expect("embedded registry icon must decode"),
-                                    ),
-                                    images.add(
-                                        bevy::image::Image::from_buffer(
-                                            &[137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 26, 0, 0, 0, 26, 8, 6, 0, 0, 0, 169, 74, 76, 206, 0, 0, 0, 225, 73, 68, 65, 84, 120, 218, 99, 248, 255, 255, 63, 3, 61, 48, 195, 168, 69, 180, 176, 136, 29, 136, 207, 254, 135, 128, 43, 64, 236, 135, 69, 141, 31, 84, 238, 63, 84, 45, 59, 57, 22, 249, 33, 25, 176, 10, 136, 95, 65, 105, 118, 40, 70, 22, 131, 57, 200, 143, 28, 139, 10, 161, 6, 177, 35, 249, 176, 15, 136, 119, 64, 113, 31, 154, 220, 43, 168, 30, 146, 45, 10, 5, 226, 99, 88, 130, 243, 10, 20, 163, 7, 211, 49, 168, 30, 146, 45, 210, 130, 26, 136, 44, 54, 7, 136, 179, 160, 120, 14, 154, 220, 21, 168, 30, 178, 82, 221, 99, 36, 151, 135, 66, 131, 11, 38, 215, 135, 228, 3, 118, 168, 90, 178, 147, 247, 84, 104, 4, 203, 0, 241, 126, 32, 230, 131, 242, 253, 160, 236, 253, 80, 57, 63, 168, 90, 178, 45, 210, 130, 166, 170, 197, 64, 108, 137, 148, 148, 97, 73, 222, 18, 42, 183, 10, 95, 176, 17, 155, 97, 119, 32, 249, 12, 29, 192, 124, 178, 131, 26, 37, 3, 93, 44, 162, 91, 208, 209, 45, 49, 208, 37, 121, 211, 45, 195, 210, 173, 8, 162, 91, 161, 74, 183, 106, 130, 110, 21, 223, 104, 227, 100, 112, 88, 4, 0, 80, 10, 72, 141, 156, 49, 192, 226, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130],
-                                            bevy::image::ImageType::Extension("png"),
-                                            bevy::image::CompressedImageFormats::NONE,
-                                            true,
-                                            bevy::image::ImageSampler::Default,
-                                            bevy::asset::RenderAssetUsages::RENDER_WORLD,
-                                        )
-                                        .expect("embedded application icon must decode"),
-                                    ),
-                                    images.add(
-                                        bevy::image::Image::from_buffer(
-                                            &[137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 26, 0, 0, 0, 26, 8, 6, 0, 0, 0, 169, 74, 76, 206, 0, 0, 2, 65, 73, 68, 65, 84, 120, 156, 189, 150, 189, 106, 21, 81, 16, 128, 191, 185, 55, 49, 4, 99, 162, 68, 208, 70, 33, 32, 8, 42, 130, 16, 68, 252, 41, 4, 81, 176, 177, 18, 11, 125, 3, 75, 193, 198, 206, 214, 87, 8, 121, 5, 27, 219, 96, 165, 77, 42, 27, 3, 65, 20, 193, 42, 38, 138, 177, 72, 52, 201, 253, 44, 238, 172, 217, 172, 187, 119, 239, 109, 28, 24, 230, 236, 153, 191, 51, 115, 102, 230, 108, 208, 2, 106, 7, 232, 182, 136, 245, 34, 98, 175, 205, 214, 127, 129, 104, 98, 168, 157, 136, 232, 169, 151, 128, 123, 64, 15, 232, 84, 196, 138, 189, 119, 17, 241, 82, 141, 136, 112, 104, 239, 106, 36, 78, 171, 27, 14, 7, 87, 82, 183, 54, 205, 213, 19, 86, 97, 7, 88, 5, 4, 126, 55, 240, 123, 192, 58, 240, 93, 141, 148, 29, 30, 82, 9, 245, 136, 186, 172, 246, 212, 69, 245, 102, 226, 98, 238, 45, 171, 115, 101, 157, 58, 24, 107, 98, 68, 132, 121, 79, 63, 213, 53, 250, 247, 185, 18, 17, 175, 211, 232, 124, 238, 173, 69, 196, 39, 181, 59, 168, 242, 26, 29, 85, 34, 27, 207, 207, 201, 210, 29, 76, 38, 29, 207, 22, 24, 152, 178, 182, 59, 34, 171, 168, 108, 36, 56, 88, 173, 70, 68, 175, 205, 78, 107, 68, 21, 216, 140, 136, 93, 0, 117, 115, 20, 197, 97, 83, 215, 165, 31, 213, 3, 245, 84, 178, 174, 50, 66, 133, 181, 58, 202, 162, 144, 126, 186, 166, 128, 91, 201, 234, 228, 222, 177, 97, 157, 213, 130, 218, 201, 166, 157, 83, 215, 212, 213, 26, 153, 21, 117, 87, 189, 145, 223, 109, 51, 177, 214, 81, 55, 233, 98, 118, 254, 195, 116, 60, 145, 24, 234, 163, 228, 45, 169, 221, 145, 29, 165, 82, 168, 215, 178, 41, 223, 102, 9, 215, 69, 253, 166, 56, 200, 200, 81, 149, 162, 89, 82, 127, 169, 183, 213, 41, 117, 38, 105, 177, 62, 172, 222, 81, 183, 213, 247, 234, 88, 145, 242, 81, 156, 220, 31, 110, 150, 30, 128, 199, 77, 81, 69, 197, 73, 209, 140, 93, 96, 5, 56, 13, 188, 40, 216, 13, 103, 43, 108, 60, 1, 182, 128, 51, 192, 55, 248, 219, 236, 3, 163, 121, 154, 39, 92, 104, 77, 193, 190, 238, 66, 234, 60, 107, 138, 170, 28, 13, 234, 73, 117, 93, 221, 82, 207, 101, 222, 39, 146, 214, 97, 193, 59, 155, 58, 95, 213, 19, 101, 155, 112, 112, 214, 21, 235, 243, 192, 44, 253, 65, 58, 67, 63, 101, 189, 164, 117, 184, 151, 244, 11, 176, 9, 28, 7, 46, 86, 237, 215, 13, 213, 40, 209, 163, 17, 177, 23, 17, 59, 73, 235, 112, 55, 159, 135, 105, 246, 39, 205, 245, 138, 173, 253, 69, 169, 16, 102, 129, 87, 192, 101, 224, 3, 240, 28, 248, 81, 136, 53, 28, 172, 155, 114, 23, 128, 13, 224, 46, 176, 12, 68, 49, 217, 255, 169, 186, 156, 109, 211, 192, 60, 48, 1, 28, 202, 212, 13, 130, 160, 255, 172, 111, 3, 159, 35, 226, 163, 109, 63, 42, 67, 53, 91, 11, 212, 77, 145, 90, 163, 233, 172, 245, 81, 108, 242, 83, 247, 16, 254, 1, 138, 35, 55, 114, 200, 252, 29, 22, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130],
-                                            bevy::image::ImageType::Extension("png"),
-                                            bevy::image::CompressedImageFormats::NONE,
-                                            true,
-                                            bevy::image::ImageSampler::Default,
-                                            bevy::asset::RenderAssetUsages::RENDER_WORLD,
-                                        )
-                                        .expect("embedded flask icon must decode"),
-                                    ),
-                                    images.add(
-                                        bevy::image::Image::from_buffer(
-                                            &[137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 26, 0, 0, 0, 26, 8, 6, 0, 0, 0, 169, 74, 76, 206, 0, 0, 1, 111, 73, 68, 65, 84, 120, 156, 237, 148, 63, 47, 131, 81, 20, 198, 159, 251, 182, 108, 42, 37, 210, 197, 32, 49, 48, 25, 208, 8, 73, 135, 198, 32, 190, 140, 207, 96, 17, 187, 81, 24, 172, 34, 38, 22, 131, 193, 38, 26, 11, 139, 79, 96, 208, 133, 52, 42, 254, 244, 103, 112, 222, 244, 208, 146, 247, 109, 223, 193, 208, 39, 185, 57, 247, 222, 220, 251, 60, 247, 220, 243, 71, 26, 224, 191, 35, 100, 65, 2, 4, 73, 145, 164, 86, 8, 129, 44, 56, 59, 4, 128, 124, 230, 196, 78, 32, 2, 114, 110, 61, 1, 84, 129, 209, 248, 1, 153, 136, 184, 249, 36, 176, 9, 220, 243, 133, 53, 219, 207, 253, 206, 144, 76, 36, 103, 118, 26, 216, 5, 30, 105, 227, 25, 152, 249, 249, 152, 94, 68, 242, 102, 203, 192, 155, 19, 120, 49, 123, 144, 218, 27, 11, 178, 31, 177, 200, 34, 240, 4, 28, 1, 219, 192, 59, 240, 97, 98, 253, 123, 99, 4, 243, 38, 82, 115, 123, 91, 230, 205, 126, 106, 111, 236, 66, 193, 70, 17, 40, 1, 21, 160, 110, 164, 183, 192, 184, 157, 59, 182, 56, 77, 89, 38, 38, 243, 198, 5, 187, 2, 52, 129, 6, 80, 179, 47, 194, 217, 59, 224, 210, 206, 148, 237, 78, 186, 47, 139, 107, 0, 56, 4, 54, 128, 27, 160, 213, 69, 236, 21, 88, 240, 15, 236, 11, 192, 181, 35, 142, 179, 237, 193, 137, 244, 222, 25, 220, 23, 174, 2, 87, 192, 153, 75, 231, 38, 176, 156, 86, 164, 163, 85, 208, 110, 31, 35, 146, 78, 36, 45, 73, 58, 183, 189, 33, 73, 69, 73, 85, 73, 13, 73, 36, 109, 162, 221, 2, 24, 11, 149, 36, 213, 37, 93, 72, 218, 9, 33, 172, 75, 58, 149, 52, 43, 41, 10, 33, 180, 18, 185, 242, 23, 92, 66, 204, 185, 249, 48, 176, 103, 113, 26, 243, 231, 50, 3, 223, 59, 245, 10, 80, 200, 84, 200, 138, 48, 248, 117, 38, 196, 9, 197, 251, 175, 153, 1, 210, 224, 19, 115, 55, 200, 122, 225, 199, 109, 89, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130],
-                                            bevy::image::ImageType::Extension("png"),
-                                            bevy::image::CompressedImageFormats::NONE,
-                                            true,
-                                            bevy::image::ImageSampler::Default,
-                                            bevy::asset::RenderAssetUsages::RENDER_WORLD,
-                                        )
-                                        .expect("embedded rocket icon must decode"),
-                                    ),
-                                    images.add(
-                                        bevy::image::Image::from_buffer(
-                                            &[137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 32, 0, 0, 0, 32, 8, 6, 0, 0, 0, 115, 122, 122, 244, 0, 0, 0, 251, 73, 68, 65, 84, 120, 156, 237, 151, 61, 110, 194, 64, 16, 70, 223, 44, 136, 131, 164, 70, 162, 200, 173, 56, 3, 84, 156, 129, 138, 155, 112, 135, 116, 72, 105, 66, 110, 65, 129, 146, 248, 165, 240, 88, 114, 164, 132, 38, 254, 105, 246, 171, 102, 181, 171, 125, 159, 191, 177, 100, 15, 0, 106, 168, 37, 235, 141, 122, 84, 95, 213, 198, 255, 171, 201, 187, 142, 234, 38, 25, 69, 13, 122, 240, 200, 122, 175, 222, 6, 128, 254, 165, 155, 186, 255, 193, 85, 151, 185, 56, 245, 14, 126, 58, 204, 211, 119, 106, 242, 206, 78, 167, 100, 46, 187, 20, 118, 185, 113, 31, 24, 252, 155, 145, 123, 214, 59, 128, 80, 215, 192, 11, 176, 0, 10, 208, 246, 102, 60, 9, 52, 192, 23, 240, 92, 128, 45, 176, 202, 205, 177, 225, 125, 198, 10, 216, 134, 250, 6, 60, 77, 104, 0, 218, 20, 0, 222, 67, 245, 225, 209, 145, 85, 122, 110, 230, 144, 83, 188, 116, 143, 20, 101, 70, 56, 208, 182, 160, 26, 168, 6, 170, 129, 106, 160, 26, 168, 6, 234, 231, 248, 74, 155, 194, 148, 73, 116, 188, 107, 1, 206, 180, 41, 52, 19, 26, 104, 146, 121, 158, 255, 183, 60, 34, 46, 192, 33, 13, 124, 48, 110, 43, 76, 198, 2, 56, 68, 196, 101, 254, 209, 204, 185, 135, 211, 222, 98, 150, 241, 252, 27, 170, 132, 79, 195, 98, 249, 236, 84, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130],
-                                            bevy::image::ImageType::Extension("png"),
-                                            bevy::image::CompressedImageFormats::NONE,
-                                            true,
-                                            bevy::image::ImageSampler::Default,
-                                            bevy::asset::RenderAssetUsages::RENDER_WORLD,
-                                        )
-                                        .expect("embedded rounded surface must decode"),
-                                    ),
-                                    images.add(
-                                        bevy::image::Image::from_buffer(
-                                            &[137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 32, 0, 0, 0, 32, 8, 6, 0, 0, 0, 115, 122, 122, 244, 0, 0, 1, 237, 73, 68, 65, 84, 120, 156, 237, 151, 61, 107, 20, 81, 20, 134, 159, 51, 187, 9, 162, 136, 27, 140, 141, 65, 109, 2, 18, 176, 183, 178, 176, 88, 100, 177, 179, 181, 72, 103, 145, 202, 74, 16, 139, 228, 47, 216, 88, 8, 254, 0, 177, 181, 16, 132, 84, 54, 106, 29, 16, 59, 77, 64, 59, 21, 53, 235, 71, 118, 31, 139, 61, 55, 14, 203, 130, 176, 153, 196, 102, 95, 56, 220, 185, 115, 63, 222, 247, 158, 185, 51, 243, 222, 160, 6, 181, 21, 17, 131, 90, 125, 1, 144, 131, 227, 107, 153, 119, 156, 35, 106, 100, 85, 68, 12, 213, 51, 192, 45, 160, 7, 172, 100, 159, 96, 58, 20, 241, 219, 192, 11, 224, 65, 68, 108, 169, 17, 17, 238, 11, 168, 145, 95, 3, 30, 1, 75, 57, 176, 15, 12, 167, 36, 175, 227, 68, 150, 191, 129, 59, 192, 125, 160, 138, 136, 1, 106, 43, 69, 116, 253, 139, 103, 234, 117, 117, 81, 237, 100, 156, 154, 34, 58, 234, 130, 122, 89, 125, 88, 155, 127, 61, 57, 219, 168, 161, 158, 86, 63, 100, 227, 221, 6, 86, 60, 17, 106, 79, 253, 174, 14, 212, 43, 245, 134, 123, 73, 254, 60, 235, 45, 181, 157, 226, 154, 136, 150, 58, 159, 115, 111, 212, 178, 92, 161, 206, 169, 47, 83, 85, 55, 7, 180, 15, 97, 245, 85, 198, 162, 250, 69, 221, 85, 47, 144, 207, 232, 115, 166, 166, 147, 157, 167, 221, 245, 255, 20, 145, 229, 102, 102, 161, 91, 49, 122, 85, 234, 113, 20, 40, 223, 129, 65, 117, 68, 132, 227, 40, 25, 142, 255, 37, 96, 31, 51, 1, 51, 1, 51, 1, 51, 1, 51, 1, 51, 1, 69, 64, 249, 13, 31, 138, 15, 152, 128, 194, 99, 149, 149, 226, 128, 6, 147, 251, 55, 142, 189, 44, 231, 42, 224, 7, 176, 3, 28, 3, 150, 211, 13, 53, 254, 104, 138, 203, 82, 143, 3, 151, 24, 89, 244, 157, 42, 34, 250, 192, 38, 208, 2, 214, 242, 192, 208, 42, 246, 169, 65, 242, 249, 136, 24, 2, 55, 128, 179, 192, 22, 240, 182, 216, 242, 139, 234, 47, 245, 167, 218, 171, 13, 172, 154, 136, 218, 124, 231, 212, 247, 233, 7, 111, 150, 155, 229, 96, 114, 59, 27, 250, 105, 157, 151, 104, 8, 234, 73, 117, 85, 125, 151, 28, 79, 82, 92, 123, 252, 104, 182, 14, 108, 228, 184, 93, 224, 21, 7, 219, 152, 193, 232, 13, 91, 97, 148, 118, 128, 199, 192, 26, 240, 105, 92, 101, 17, 115, 85, 125, 170, 126, 179, 57, 12, 212, 215, 234, 234, 56, 95, 140, 137, 104, 71, 196, 94, 94, 159, 7, 150, 107, 43, 153, 6, 229, 251, 242, 17, 120, 147, 89, 30, 17, 231, 233, 248, 15, 174, 141, 117, 33, 160, 231, 172, 167, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130],
-                                            bevy::image::ImageType::Extension("png"),
-                                            bevy::image::CompressedImageFormats::NONE,
-                                            true,
-                                            bevy::image::ImageSampler::Default,
-                                            bevy::asset::RenderAssetUsages::RENDER_WORLD,
-                                        )
-                                        .expect("embedded focus outline must decode"),
-                                    ),
-                                    images.add(
-                                        bevy::image::Image::from_buffer(
-                                            &[
-                                                137u8, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82,
-                                                0, 0, 0, 32, 0, 0, 0, 32, 8, 6, 0, 0, 0, 115, 122, 122,
-                                                244, 0, 0, 4, 21, 73, 68, 65, 84, 120, 218, 205, 87, 205, 111, 227,
-                                                84, 16, 159, 121, 239, 57, 118, 92, 183, 73, 218, 212, 105, 13, 21, 103,
-                                                246, 180, 104, 89, 113, 70, 2, 137, 243, 242, 7, 32, 113, 41, 55, 184,
-                                                240, 33, 174, 28, 17, 255, 2, 112, 65, 149, 122, 218, 11, 168, 28, 89,
-                                                9, 4, 104, 133, 196, 138, 11, 165, 2, 41, 168, 85, 27, 251, 213, 86,
-                                                176, 147, 38, 239, 249, 13, 7, 156, 146, 186, 241, 54, 165, 65, 187, 35,
-                                                249, 98, 143, 223, 252, 102, 230, 55, 31, 15, 224, 9, 11, 86, 125, 32,
-                                                34, 92, 168, 33, 68, 154, 91, 153, 136, 248, 162, 61, 37, 34, 62, 203,
-                                                41, 81, 129, 54, 239, 118, 187, 245, 173, 173, 173, 90, 28, 199, 55, 50,
-                                                220, 106, 181, 64, 74, 73, 136, 216, 191, 50, 5, 5, 66, 148, 82, 126,
-                                                88, 171, 213, 182, 181, 214, 43, 90, 107, 68, 68, 188, 129, 231, 100, 219,
-                                                182, 34, 162, 251, 89, 150, 189, 31, 4, 129, 156, 78, 9, 155, 14, 17,
-                                                34, 146, 148, 242, 131, 181, 181, 181, 143, 148, 82, 207, 106, 173, 217, 77,
-                                                140, 23, 134, 112, 52, 26, 45, 53, 26, 141, 55, 57, 231, 95, 20, 78,
-                                                227, 133, 8, 76, 229, 198, 141, 162, 232, 15, 199, 113, 188, 225, 112, 248,
-                                                90, 150, 101, 143, 90, 173, 22, 198, 113, 76, 255, 197, 120, 179, 217, 4,
-                                                0, 128, 179, 179, 179, 166, 109, 219, 95, 122, 158, 119, 43, 138, 162, 187,
-                                                65, 16, 60, 44, 28, 206, 197, 52, 75, 227, 56, 182, 136, 104, 105, 48,
-                                                24, 104, 223, 247, 127, 244, 125, 255, 108, 65, 28, 76, 194, 48, 236, 90,
-                                                150, 245, 188, 101, 89, 94, 37, 9, 137, 136, 24, 99, 121, 17, 17, 179,
-                                                224, 66, 96, 0, 128, 68, 148, 87, 2, 64, 68, 36, 162, 156, 49, 182,
-                                                44, 165, 220, 11, 195, 48, 47, 1, 100, 69, 218, 204, 188, 117, 77, 68,
-                                                88, 232, 222, 30, 141, 70, 128, 136, 188, 18, 64, 191, 223, 71, 215, 117,
-                                                137, 115, 206, 27, 141, 198, 203, 229, 195, 148, 82, 144, 231, 57, 56, 142,
-                                                115, 253, 28, 36, 9, 228, 121, 126, 169, 242, 46, 0, 88, 94, 94, 54,
-                                                90, 107, 161, 181, 30, 158, 158, 158, 190, 158, 231, 249, 96, 82, 5, 68,
-                                                100, 16, 241, 227, 149, 149, 149, 59, 82, 202, 119, 140, 49, 143, 16, 145,
-                                                151, 67, 58, 163, 10, 24, 17, 25, 198, 216, 39, 142, 227, 188, 152, 101,
-                                                153, 121, 108, 35, 66, 68, 52, 198, 232, 245, 245, 245, 175, 17, 241, 130,
-                                                114, 20, 69, 167, 181, 90, 141, 143, 199, 227, 239, 131, 32, 120, 120, 157,
-                                                8, 68, 81, 20, 49, 198, 0, 0, 168, 76, 140, 153, 181, 219, 239, 247,
-                                                91, 73, 146, 172, 18, 81, 155, 136, 234, 69, 123, 182, 0, 0, 44, 203,
-                                                242, 138, 214, 106, 93, 163, 181, 207, 212, 21, 21, 221, 113, 156, 101, 153,
-                                                39, 132, 216, 83, 74, 173, 39, 73, 114, 207, 247, 253, 7, 189, 94, 143,
-                                                77, 170, 5, 17, 243, 147, 147, 147, 122, 20, 69, 239, 113, 206, 235, 90,
-                                                107, 50, 198, 76, 231, 151, 60, 207, 195, 52, 77, 63, 71, 196, 131, 94,
-                                                175, 135, 243, 2, 56, 207, 29, 34, 62, 103, 89, 86, 157, 136, 234, 179,
-                                                116, 180, 214, 14, 99, 236, 93, 206, 121, 35, 207, 115, 16, 226, 223, 227,
-                                                140, 49, 32, 132, 0, 34, 250, 6, 0, 14, 170, 38, 175, 168, 104, 223,
-                                                194, 117, 221, 190, 214, 250, 85, 173, 181, 173, 148, 250, 25, 0, 128, 49,
-                                                54, 225, 4, 1, 0, 4, 65, 144, 28, 31, 31, 63, 83, 242, 252, 92,
-                                                106, 181, 26, 116, 58, 157, 209, 100, 192, 205, 29, 1, 68, 68, 165, 148,
-                                                106, 183, 219, 223, 150, 145, 149, 193, 110, 110, 110, 102, 87, 228, 159, 93,
-                                                213, 157, 102, 10, 231, 156, 117, 187, 221, 85, 34, 106, 239, 239, 239, 219,
-                                                85, 231, 207, 49, 140, 30, 219, 81, 43, 73, 56, 28, 14, 27, 142, 227,
-                                                236, 41, 165, 214, 155, 205, 230, 61, 0, 120, 48, 181, 168, 32, 0, 64,
-                                                175, 215, 115, 163, 40, 122, 251, 42, 18, 118, 58, 157, 131, 170, 72, 60,
-                                                245, 36, 124, 69, 107, 109, 219, 182, 253, 196, 72, 248, 221, 2, 72, 136,
-                                                215, 229, 192, 57, 9, 139, 156, 35, 0, 80, 133, 7, 52, 135, 241, 201,
-                                                255, 243, 55, 34, 99, 12, 105, 173, 243, 41, 3, 72, 68, 76, 74, 137,
-                                                83, 3, 134, 73, 41, 189, 9, 9, 149, 82, 48, 153, 91, 174, 235, 98,
-                                                154, 166, 159, 2, 192, 239, 133, 141, 49, 17, 233, 89, 128, 69, 217, 112,
-                                                145, 59, 180, 44, 203, 67, 196, 191, 166, 191, 135, 97, 168, 11, 0, 3,
-                                                68, 52, 221, 110, 87, 185, 174, 251, 22, 0, 180, 138, 153, 63, 217, 21,
-                                                24, 231, 252, 62, 34, 30, 0, 192, 184, 248, 189, 81, 68, 132, 102, 110,
-                                                197, 69, 184, 77, 20, 69, 159, 181, 219, 237, 55, 194, 48, 252, 21, 0,
-                                                254, 100, 140, 161, 49, 102, 178, 197, 222, 22, 66, 172, 42, 165, 126, 66,
-                                                196, 164, 40, 45, 119, 86, 116, 137, 104, 88, 108, 85, 68, 68, 203, 190,
-                                                239, 191, 36, 165, 252, 77, 41, 245, 194, 198, 198, 198, 224, 210, 101, 133,
-                                                136, 144, 136, 240, 240, 240, 176, 29, 199, 241, 87, 74, 41, 42, 203, 104,
-                                                52, 162, 52, 77, 47, 189, 55, 198, 92, 122, 202, 146, 166, 233, 47, 71,
-                                                71, 71, 119, 203, 221, 177, 146, 161, 89, 150, 221, 65, 196, 165, 52, 77,
-                                                167, 171, 131, 79, 150, 19, 0, 32, 33, 4, 104, 173, 47, 223, 118, 254,
-                                                121, 15, 19, 29, 33, 132, 217, 217, 217, 249, 97, 123, 123, 91, 77, 173,
-                                                104, 213, 204, 93, 244, 189, 112, 222, 185, 112, 65, 118, 119, 119, 121, 177,
-                                                116, 44, 234, 249, 95, 156, 186, 177, 252, 13, 241, 250, 255, 72, 64, 177,
-                                                189, 18, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
-                                            ],
-                                            bevy::image::ImageType::Extension("png"),
-                                            bevy::image::CompressedImageFormats::NONE,
-                                            true,
-                                            bevy::image::ImageSampler::Default,
-                                            bevy::asset::RenderAssetUsages::RENDER_WORLD,
-                                        )
-                                        .expect("embedded workspace icon must decode"),
-                                    ),
+                            focus_state.3 = ((keys
+                                .pressed(bevy::input::keyboard::KeyCode::ControlLeft)
+                                && (focus_state.1 & 1u16) == 0)
+                                || (keys.pressed(bevy::input::keyboard::KeyCode::ControlRight)
+                                    && (focus_state.1 & 2u16) == 0))
+                                && !keys.any_pressed([
+                                    bevy::input::keyboard::KeyCode::ShiftLeft,
+                                    bevy::input::keyboard::KeyCode::ShiftRight,
+                                    bevy::input::keyboard::KeyCode::AltLeft,
+                                    bevy::input::keyboard::KeyCode::AltRight,
+                                    bevy::input::keyboard::KeyCode::SuperLeft,
+                                    bevy::input::keyboard::KeyCode::SuperRight,
                                 ]);
-                            }
-
-                            if slots.is_none() {
-                                handles.as_ref().cloned().into_iter().for_each(
-                                    |[
-                                        home_icon,
-                                        registry_icon,
-                                        app_icon,
-                                        flask_icon,
-                                        rocket_icon,
-                                        round_solid,
-                                        round_outline,
-                                        workspace_icon,
-                                    ]: [bevy::asset::Handle<bevy::image::Image>; 8]| {
-                                        *slots = Some([
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array(
-                                                            [0.090; 3],
-                                                        ),
-                                                        custom_size: Some(sidebar.size()),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        sidebar.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - sidebar.center().y,
-                                                        1.0,
-                                                    ),
-                                                    if title_metrics.0 == 0.0 && hud.unwrap_or(false) {
-                                                        bevy::camera::visibility::Visibility::Inherited
-                                                    } else {
-                                                        bevy::camera::visibility::Visibility::Hidden
-                                                    },
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array(
-                                                            [0.204; 3],
-                                                        ),
-                                                        custom_size: Some(bevy::math::Vec2::new(
-                                                            1.5,
-                                                            sidebar.height(),
-                                                        )),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        title_metrics.1 - 0.75
-                                                            - viewport.x / 2.0,
-                                                        0.0,
-                                                        2.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array(
-                                                            [0.204; 3],
-                                                        ),
-                                                        image: round_solid.clone(),
-                                                        custom_size: Some(panel.size()),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        panel.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - panel.center().y,
-                                                        1.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array(
-                                                            [0.063; 3],
-                                                        ),
-                                                        image: round_solid.clone(),
-                                                        custom_size: Some(bevy::math::Vec2::new(
-                                                            (panel.width() - 2.0).max(1.0),
-                                                            (panel.height() - 2.0).max(1.0),
-                                                        )),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        panel.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - panel.center().y,
-                                                        1.1,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array(
-                                                            [0.133; 3],
-                                                        ),
-                                                        image: round_solid.clone(),
-                                                        custom_size: Some(home_tab.size()),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        home_tab.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - home_tab.center().y,
-                                                        4.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array(
-                                                            [0.133; 3],
-                                                        ),
-                                                        image: round_solid.clone(),
-                                                        custom_size: Some(registry_tab.size()),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        registry_tab.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - registry_tab.center().y,
-                                                        4.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgba(
-                                                            0.463, 0.463, 0.463, 0.0,
-                                                        ),
-                                                        image: round_outline.clone(),
-                                                        custom_size: Some(home_tab.size()),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        home_tab.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - home_tab.center().y,
-                                                        4.5,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgba(
-                                                            0.463, 0.463, 0.463, 0.0,
-                                                        ),
-                                                        image: round_outline.clone(),
-                                                        custom_size: Some(registry_tab.size()),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        registry_tab.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - registry_tab.center().y,
-                                                        4.5,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array(
-                                                            [0.173; 3],
-                                                        ),
-                                                        image: round_solid.clone(),
-                                                        custom_size: Some(app_tile.size()),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        app_tile.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - app_tile.center().y,
-                                                        5.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array(
-                                                            [0.902; 3],
-                                                        ),
-                                                        image: app_icon.clone(),
-                                                        rect: Some(bevy::math::Rect::new(
-                                                            6.0, 4.0, 20.0, 22.0,
-                                                        )),
-                                                        custom_size: Some(bevy::math::Vec2::new(
-                                                            22.0, 28.0,
-                                                        )),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        app_tile.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - app_tile.center().y,
-                                                        6.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Text2d(std::string::String::from(
-                                                        if cfg!(target_os = "linux") {
-                                                            "Linux-Subsystem-for-Arxumbra"
-                                                        } else if cfg!(target_os = "macos") {
-                                                            "macOS-Subsystem-for-Arxumbra"
-                                                        } else {
-                                                            "Windows-Subsystem-for-Arxumbra"
-                                                        },
-                                                    )),
-                                                    bevy::text::TextFont {
-                                                        font_size: bevy::text::FontSize::Px(17.0),
-                                                        weight: bevy::text::FontWeight::SEMIBOLD,
-                                                        ..bevy::text::TextFont::default()
-                                                    },
-                                                    bevy::text::TextColor(
-                                                        bevy::color::Color::srgb_from_array(
-                                                            [0.902; 3],
-                                                        ),
-                                                    ),
-                                                    bevy::text::TextBounds::UNBOUNDED,
-                                                    bevy::text::TextLayout::no_wrap(),
-                                                    bevy::sprite::Anchor::CENTER_LEFT,
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        app_tile.max.x + 14.0 - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - app_tile.center().y,
-                                                        6.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array(
-                                                            [0.173; 3],
-                                                        ),
-                                                        image: round_solid.clone(),
-                                                        custom_size: Some(home_tile.size()),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        home_tile.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - home_tile.center().y,
-                                                        5.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array(
-                                                            [0.902; 3],
-                                                        ),
-                                                        image: home_icon.clone(),
-                                                        custom_size: Some(bevy::math::Vec2::new(
-                                                            24.0, 20.0,
-                                                        )),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        home_tile.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - home_tile.center().y,
-                                                        6.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array(
-                                                            [0.173; 3],
-                                                        ),
-                                                        image: round_solid.clone(),
-                                                        custom_size: Some(registry_tile.size()),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        registry_tile.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - registry_tile.center().y,
-                                                        5.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array(
-                                                            [0.902; 3],
-                                                        ),
-                                                        image: registry_icon.clone(),
-                                                        custom_size: Some(bevy::math::Vec2::new(
-                                                            24.0, 20.0,
-                                                        )),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        registry_tile.center().x
-                                                            - viewport.x / 2.0,
-                                                        viewport.y / 2.0
-                                                            - registry_tile.center().y,
-                                                        6.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Text2d(std::string::String::from(
-                                                        "Home",
-                                                    )),
-                                                    bevy::text::TextFont {
-                                                        font_size: bevy::text::FontSize::Px(16.0),
-                                                        ..bevy::text::TextFont::default()
-                                                    },
-                                                    bevy::text::TextColor(
-                                                        bevy::color::Color::srgb_from_array(
-                                                            [0.686; 3],
-                                                        ),
-                                                    ),
-                                                    bevy::text::TextBounds::UNBOUNDED,
-                                                    bevy::text::TextLayout::no_wrap(),
-                                                    bevy::sprite::Anchor::CENTER_LEFT,
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        home_tile.max.x + 12.0 - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - home_tab.center().y,
-                                                        6.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Text2d(std::string::String::from(
-                                                        "Extension Registry",
-                                                    )),
-                                                    bevy::text::TextFont {
-                                                        font_size: bevy::text::FontSize::Px(16.0),
-                                                        ..bevy::text::TextFont::default()
-                                                    },
-                                                    bevy::text::TextColor(
-                                                        bevy::color::Color::srgb_from_array(
-                                                            [0.686; 3],
-                                                        ),
-                                                    ),
-                                                    bevy::text::TextBounds::UNBOUNDED,
-                                                    bevy::text::TextLayout::no_wrap(),
-                                                    bevy::sprite::Anchor::CENTER_LEFT,
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        registry_tile.max.x + 12.0
-                                                            - viewport.x / 2.0,
-                                                        viewport.y / 2.0
-                                                            - registry_tab.center().y,
-                                                        6.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgba(
-                                                            0.204, 0.204, 0.204, 0.0,
-                                                        ),
-                                                        custom_size: Some(bevy::math::Vec2::new(
-                                                            section_divider.width(),
-                                                            1.5,
-                                                        )),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        section_divider.center().x
-                                                            - viewport.x / 2.0,
-                                                        viewport.y / 2.0
-                                                            - section_divider.center().y,
-                                                        2.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgba(
-                                                            0.133, 0.133, 0.133, 0.0,
-                                                        ),
-                                                        image: round_solid.clone(),
-                                                        custom_size: Some(
-                                                            registry_header_tile.size(),
-                                                        ),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        registry_header_tile.center().x
-                                                            - viewport.x / 2.0,
-                                                        viewport.y / 2.0
-                                                            - registry_header_tile.center().y,
-                                                        3.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgba(
-                                                            0.902, 0.902, 0.902, 0.0,
-                                                        ),
-                                                        image: registry_icon.clone(),
-                                                        custom_size: Some(bevy::math::Vec2::new(
-                                                            28.0, 24.0,
-                                                        )),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        registry_header_tile.center().x
-                                                            - viewport.x / 2.0,
-                                                        viewport.y / 2.0
-                                                            - registry_header_tile.center().y,
-                                                        4.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Text2d(std::string::String::from(
-                                                        "Extension Registry",
-                                                    )),
-                                                    bevy::text::TextFont {
-                                                        font_size: bevy::text::FontSize::Px(20.0),
-                                                        weight: bevy::text::FontWeight::SEMIBOLD,
-                                                        ..bevy::text::TextFont::default()
-                                                    },
-                                                    bevy::text::TextColor(bevy::color::Color::srgba(
-                                                        0.902, 0.902, 0.902, 0.0,
-                                                    )),
-                                                    bevy::text::TextBounds::UNBOUNDED,
-                                                    bevy::text::TextLayout::no_wrap(),
-                                                    bevy::sprite::Anchor::CENTER_LEFT,
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        registry_header_tile.max.x + 14.0
-                                                            - viewport.x / 2.0,
-                                                        viewport.y / 2.0
-                                                            - registry_header_tile.center().y,
-                                                        4.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array(
-                                                            [0.204; 3],
-                                                        ),
-                                                        image: round_solid.clone(),
-                                                        custom_size: Some(card.size()),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        card.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - card.center().y,
-                                                        2.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgba(
-                                                            0.090, 0.090, 0.090, 0.0,
-                                                        ),
-                                                        image: round_solid.clone(),
-                                                        custom_size: Some(bevy::math::Vec2::new(
-                                                            (card.width() - 2.0).max(1.0),
-                                                            (card.height() - 2.0).max(1.0),
-                                                        )),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        card.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - card.center().y,
-                                                        2.1,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgba(
-                                                            0.173, 0.173, 0.173, 0.0,
-                                                        ),
-                                                        image: round_solid.clone(),
-                                                        custom_size: Some(flask_tile.size()),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        flask_tile.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - flask_tile.center().y,
-                                                        4.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgba(
-                                                            0.902, 0.902, 0.902, 0.0,
-                                                        ),
-                                                        image: flask_icon.clone(),
-                                                        custom_size: Some(bevy::math::Vec2::new(
-                                                            25.5, 30.0,
-                                                        )),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        flask_tile.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - flask_tile.center().y,
-                                                        5.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Text2d(std::string::String::from(
-                                                        "Laboratory",
-                                                    )),
-                                                    bevy::text::TextFont {
-                                                        font_size: bevy::text::FontSize::Px(18.0),
-                                                        weight: bevy::text::FontWeight::SEMIBOLD,
-                                                        ..bevy::text::TextFont::default()
-                                                    },
-                                                    bevy::text::TextColor(bevy::color::Color::srgba(
-                                                        0.902, 0.902, 0.902, 0.0,
-                                                    )),
-                                                    bevy::text::TextBounds::UNBOUNDED,
-                                                    bevy::text::TextLayout::no_wrap(),
-                                                    bevy::sprite::Anchor::CENTER_LEFT,
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        flask_tile.max.x + 12.0
-                                                            - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - flask_tile.center().y,
-                                                        5.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgba(
-                                                            0.204, 0.204, 0.204, 0.0,
-                                                        ),
-                                                        custom_size: Some(bevy::math::Vec2::new(
-                                                            card_divider.width(),
-                                                            card_divider.height(),
-                                                        )),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        card_divider.center().x
-                                                            - viewport.x / 2.0,
-                                                        viewport.y / 2.0
-                                                            - card_divider.center().y,
-                                                        3.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgba(
-                                                            0.133, 0.133, 0.133, 0.0,
-                                                        ),
-                                                        image: round_solid.clone(),
-                                                        custom_size: Some(launch_button.size()),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        launch_button.center().x
-                                                            - viewport.x / 2.0,
-                                                        viewport.y / 2.0
-                                                            - launch_button.center().y,
-                                                        3.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgba(
-                                                            0.463, 0.463, 0.463, 0.0,
-                                                        ),
-                                                        image: round_outline.clone(),
-                                                        custom_size: Some(launch_button.size()),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        launch_button.center().x
-                                                            - viewport.x / 2.0,
-                                                        viewport.y / 2.0
-                                                            - launch_button.center().y,
-                                                        3.5,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgba(
-                                                            0.204, 0.204, 0.204, 0.0,
-                                                        ),
-                                                        image: round_solid.clone(),
-                                                        custom_size: Some(rocket_tile.size()),
-                                                        image_mode: bevy::sprite::SpriteImageMode::Sliced(
-                                                            bevy::sprite::TextureSlicer {
-                                                                border: bevy::sprite::BorderRect::all(
-                                                                    8.0,
-                                                                ),
-                                                                center_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                sides_scale_mode: bevy::sprite::SliceScaleMode::Stretch,
-                                                                max_corner_scale: 2.0,
-                                                            },
-                                                        ),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        rocket_tile.center().x
-                                                            - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - rocket_tile.center().y,
-                                                        4.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgba(
-                                                            0.686, 0.686, 0.686, 0.0,
-                                                        ),
-                                                        image: rocket_icon.clone(),
-                                                        custom_size: Some(bevy::math::Vec2::splat(
-                                                            26.0,
-                                                        )),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        rocket_tile.center().x
-                                                            - viewport.x / 2.0,
-                                                        viewport.y / 2.0
-                                                            - rocket_tile.center().y,
-                                                        5.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Text2d(std::string::String::from(
-                                                        "Launch",
-                                                    )),
-                                                    bevy::text::TextFont {
-                                                        font_size: bevy::text::FontSize::Px(15.0),
-                                                        ..bevy::text::TextFont::default()
-                                                    },
-                                                    bevy::text::TextColor(bevy::color::Color::srgba(
-                                                        0.686, 0.686, 0.686, 0.0,
-                                                    )),
-                                                    bevy::text::TextBounds::UNBOUNDED,
-                                                    bevy::text::TextLayout::no_wrap(),
-                                                    bevy::sprite::Anchor::CENTER_LEFT,
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        rocket_tile.max.x + 10.0
-                                                            - viewport.x / 2.0,
-                                                        viewport.y / 2.0
-                                                            - launch_button.center().y,
-                                                        5.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                        ]);
-                                        *workspace_slots = Some([
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array([0.204; 3]),
-                                                        custom_size: Some(bevy::math::Vec2::new(
-                                                            identity_divider.width(),
-                                                            identity_divider.height(),
-                                                        )),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        identity_divider.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - identity_divider.center().y,
-                                                        2.5,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array([0.902; 3]),
-                                                        image: flask_icon.clone(),
-                                                        custom_size: Some(bevy::math::Vec2::new(25.5, 30.0)),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        app_tile.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - app_tile.center().y,
-                                                        6.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Sprite {
-                                                        color: bevy::color::Color::srgb_from_array([0.902; 3]),
-                                                        image: workspace_icon.clone(),
-                                                        custom_size: Some(bevy::math::Vec2::new(28.0, 28.0)),
-                                                        ..bevy::sprite::Sprite::default()
-                                                    },
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        registry_header_tile.center().x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - registry_header_tile.center().y,
-                                                        4.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Text2d(std::string::String::from("Workspace")),
-                                                    bevy::text::TextFont {
-                                                        font_size: bevy::text::FontSize::Px(20.0),
-                                                        weight: bevy::text::FontWeight::SEMIBOLD,
-                                                        ..bevy::text::TextFont::default()
-                                                    },
-                                                    bevy::text::TextColor(bevy::color::Color::srgba(
-                                                        0.902, 0.902, 0.902, 0.0,
-                                                    )),
-                                                    bevy::text::TextBounds::UNBOUNDED,
-                                                    bevy::text::TextLayout::no_wrap(),
-                                                    bevy::sprite::Anchor::CENTER_LEFT,
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        registry_header_tile.max.x + 14.0 - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - registry_header_tile.center().y,
-                                                        4.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                            commands
-                                                .spawn((
-                                                    bevy::sprite::Text2d(std::string::String::from("Laboratory")),
-                                                    bevy::text::TextFont {
-                                                        font_size: bevy::text::FontSize::Px(17.0),
-                                                        weight: bevy::text::FontWeight::SEMIBOLD,
-                                                        ..bevy::text::TextFont::default()
-                                                    },
-                                                    bevy::text::TextColor(
-                                                        bevy::color::Color::srgb_from_array([0.902; 3]),
-                                                    ),
-                                                    bevy::text::TextBounds::UNBOUNDED,
-                                                    bevy::text::TextLayout::no_wrap(),
-                                                    bevy::sprite::Anchor::CENTER_LEFT,
-                                                    bevy::transform::components::Transform::from_xyz(
-                                                        app_tile.max.x + 14.0 - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - app_tile.center().y,
-                                                        6.0,
-                                                    ),
-                                                    bevy::camera::visibility::Visibility::Hidden,
-                                                ))
-                                                .id(),
-                                        ]);
-                                    },
-                                );
-                            }
-
-                            slots.as_ref().copied().into_iter().for_each(
-                                |[
-                                    sidebar_entity,
-                                    sidebar_divider_entity,
-                                    panel_border_entity,
-                                    panel_fill_entity,
-                                    home_tab_entity,
-                                    registry_tab_entity,
-                                    home_ring_entity,
-                                    registry_ring_entity,
-                                    app_tile_entity,
-                                    app_icon_entity,
-                                    title_entity,
-                                    home_tile_entity,
-                                    home_icon_entity,
-                                    registry_tile_entity,
-                                    registry_icon_entity,
-                                    home_label_entity,
-                                    registry_label_entity,
-                                    section_divider_entity,
-                                    section_tile_entity,
-                                    section_icon_entity,
-                                    section_title_entity,
-                                    card_border_entity,
-                                    card_fill_entity,
-                                    flask_tile_entity,
-                                    flask_icon_entity,
-                                    card_title_entity,
-                                    card_divider_entity,
-                                    launch_button_entity,
-                                    launch_ring_entity,
-                                    rocket_tile_entity,
-                                    rocket_icon_entity,
-                                    launch_label_entity,
-                                ]: [bevy::ecs::entity::Entity; 32]| {
-                                    [
-                                        (
-                                            sidebar_entity,
-                                            bevy::color::Color::srgb_from_array([0.090; 3]),
-                                            hud.unwrap_or(false),
-                                        ),
-                                        (
-                                            sidebar_divider_entity,
-                                            bevy::color::Color::srgb_from_array([0.204; 3]),
-                                            hud.unwrap_or(false),
-                                        ),
-                                        (
-                                            panel_border_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([0.204; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && title_metrics.0 > 0.0,
-                                        ),
-                                        (
-                                            panel_fill_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([0.063; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && title_metrics.0 > 0.0,
-                                        ),
-                                        (
-                                            home_tab_entity,
-                                            bevy::color::Color::srgb_from_array([
-                                                0.133
-                                                    + (0.173 - 0.133) * anim.0[0][0]
-                                                    + ((0.110 - 0.133)
-                                                        - (0.173 - 0.133) * anim.0[0][0])
-                                                        * anim.0[2][0]
-                                                    + (0.855
-                                                        + (0.894 - 0.855) * anim.0[0][0]
-                                                        + ((0.792 - 0.855)
-                                                            - (0.894 - 0.855) * anim.0[0][0])
-                                                            * anim.0[2][0]
-                                                        - (0.133
-                                                            + (0.173 - 0.133) * anim.0[0][0]
-                                                            + ((0.110 - 0.133)
-                                                                - (0.173 - 0.133) * anim.0[0][0])
-                                                                * anim.0[2][0]))
-                                                        * (1.0 - anim.1[0]); 3]),
-                                            hud.unwrap_or(false) && !navigation_state.1,
-                                        ),
-                                        (
-                                            registry_tab_entity,
-                                            bevy::color::Color::srgb_from_array([
-                                                0.133
-                                                    + (0.173 - 0.133) * anim.0[0][1]
-                                                    + ((0.110 - 0.133)
-                                                        - (0.173 - 0.133) * anim.0[0][1])
-                                                        * anim.0[2][1]
-                                                    + (0.855
-                                                        + (0.894 - 0.855) * anim.0[0][1]
-                                                        + ((0.792 - 0.855)
-                                                            - (0.894 - 0.855) * anim.0[0][1])
-                                                            * anim.0[2][1]
-                                                        - (0.133
-                                                            + (0.173 - 0.133) * anim.0[0][1]
-                                                            + ((0.110 - 0.133)
-                                                                - (0.173 - 0.133) * anim.0[0][1])
-                                                                * anim.0[2][1]))
-                                                        * anim.1[0]; 3]),
-                                            hud.unwrap_or(false) && !navigation_state.1,
-                                        ),
-                                        (
-                                            home_ring_entity,
-                                            bevy::color::Color::srgba(
-                                                0.463,
-                                                0.463,
-                                                0.463,
-                                                anim.0[1][0],
-                                            ),
-                                            hud.unwrap_or(false) && !navigation_state.1 && anim.0[1][0] > 0.0,
-                                        ),
-                                        (
-                                            registry_ring_entity,
-                                            bevy::color::Color::srgba(
-                                                0.463,
-                                                0.463,
-                                                0.463,
-                                                anim.0[1][1],
-                                            ),
-                                            hud.unwrap_or(false) && !navigation_state.1 && anim.0[1][1] > 0.0,
-                                        ),
-                                        (
-                                            app_tile_entity,
-                                            bevy::color::Color::srgb_from_array([0.173; 3]),
-                                            hud.unwrap_or(false),
-                                        ),
-                                        (
-                                            app_icon_entity,
-                                            bevy::color::Color::srgb_from_array([0.902; 3]),
-                                            hud.unwrap_or(false) && !navigation_state.1,
-                                        ),
-                                        (
-                                            home_tile_entity,
-                                            bevy::color::Color::srgb_from_array([
-                                                0.173
-                                                    + (0.204 - 0.173) * (1.0 - anim.1[0])
-                                                    + (0.173 - 0.133) * anim.0[0][0]
-                                                    - 0.050 * anim.0[2][0]; 3]),
-                                            hud.unwrap_or(false) && !navigation_state.1,
-                                        ),
-                                        (
-                                            home_icon_entity,
-                                            bevy::color::Color::srgb_from_array([
-                                                0.686
-                                                    + (0.902 - 0.686) * anim.0[0][0]
-                                                    + (0.902
-                                                        - (0.686
-                                                            + (0.902 - 0.686) * anim.0[0][0]))
-                                                        * (1.0 - anim.1[0]); 3]),
-                                            hud.unwrap_or(false) && !navigation_state.1,
-                                        ),
-                                        (
-                                            registry_tile_entity,
-                                            bevy::color::Color::srgb_from_array([
-                                                0.173
-                                                    + (0.204 - 0.173) * anim.1[0]
-                                                    + (0.173 - 0.133) * anim.0[0][1]
-                                                    - 0.050 * anim.0[2][1]; 3]),
-                                            hud.unwrap_or(false) && !navigation_state.1,
-                                        ),
-                                        (
-                                            registry_icon_entity,
-                                            bevy::color::Color::srgb_from_array([
-                                                0.686
-                                                    + (0.902 - 0.686) * anim.0[0][1]
-                                                    + (0.902
-                                                        - (0.686
-                                                            + (0.902 - 0.686) * anim.0[0][1]))
-                                                        * anim.1[0]; 3]),
-                                            hud.unwrap_or(false) && !navigation_state.1,
-                                        ),
-                                        (
-                                            section_divider_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([0.204; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && title_metrics.0 > 0.0,
-                                        ),
-                                        (
-                                            section_tile_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([0.133; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && title_metrics.0 > 0.0,
-                                        ),
-                                        (
-                                            section_icon_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([0.902; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && !navigation_state.1 && title_metrics.0 > 0.0,
-                                        ),
-                                        (
-                                            card_border_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([0.204; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && !navigation_state.1 && title_metrics.0 > 0.0,
-                                        ),
-                                        (
-                                            card_fill_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([0.090; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && !navigation_state.1 && title_metrics.0 > 0.0,
-                                        ),
-                                        (
-                                            flask_tile_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([0.173; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && !navigation_state.1 && title_metrics.0 > 0.0,
-                                        ),
-                                        (
-                                            flask_icon_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([0.902; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && !navigation_state.1 && title_metrics.0 > 0.0,
-                                        ),
-                                        (
-                                            card_divider_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([0.204; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && !navigation_state.1 && title_metrics.0 > 0.0,
-                                        ),
-                                        (
-                                            launch_button_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([
-                                                    0.133
-                                                        + (0.173 - 0.133) * anim.0[0][2]
-                                                        + ((0.110 - 0.133)
-                                                            - (0.173 - 0.133) * anim.0[0][2])
-                                                            * anim.0[2][2]; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && !navigation_state.1 && title_metrics.0 > 0.0,
-                                        ),
-                                        (
-                                            launch_ring_entity,
-                                            bevy::color::Color::srgba(
-                                                0.463,
-                                                0.463,
-                                                0.463,
-                                                anim.0[1][2] * anim.1[1],
-                                            ),
-                                            navigation_state.0
-                                                && !navigation_state.1
-                                                && title_metrics.0 > 0.0
-                                                && anim.0[1][2] > 0.0,
-                                        ),
-                                        (
-                                            rocket_tile_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([
-                                                    0.204
-                                                        + (0.04 * anim.0[0][2])
-                                                        - (0.05 * anim.0[2][2]); 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && !navigation_state.1 && title_metrics.0 > 0.0,
-                                        ),
-                                        (
-                                            rocket_icon_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([
-                                                    0.686
-                                                        + (0.902 - 0.686) * anim.0[0][2]; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && !navigation_state.1 && title_metrics.0 > 0.0,
-                                        ),
-                                    ]
-                                    .into_iter()
-                                    .for_each(
-                                        |(entity, colour, shown): (
-                                            bevy::ecs::entity::Entity,
-                                            bevy::color::Color,
-                                            bool,
-                                        )| {
-                                            sprites
-                                                .get(entity)
-                                                .map(
-                                                    |(sprite, _transform, visibility): (
-                                                        Option<&bevy::sprite::Sprite>,
-                                                        Option<&bevy::transform::components::Transform>,
-                                                        &bevy::camera::visibility::Visibility,
-                                                    )| {
-                                                        sprite.into_iter().for_each(
-                                                            |sprite: &bevy::sprite::Sprite| {
-                                                                if sprite.color != colour {
-                                                                    commands
-                                                                        .entity(entity)
-                                                                        .insert(bevy::sprite::Sprite {
-                                                                            color: colour,
-                                                                            ..sprite.clone()
-                                                                        });
-                                                                }
-                                                            },
-                                                        );
-                                                        if (*visibility
-                                                            == bevy::camera::visibility::Visibility::Inherited)
-                                                            != shown
-                                                        {
-                                                            commands.entity(entity).insert(if shown {
-                                                                bevy::camera::visibility::Visibility::Inherited
-                                                            } else {
-                                                                bevy::camera::visibility::Visibility::Hidden
-                                                            });
-                                                        }
-                                                    },
-                                                )
-                                                .ok();
-                                        },
-                                    );
-                                    [
-                                        (
-                                            title_entity,
-                                            bevy::color::Color::srgb_from_array([0.902; 3]),
-                                            hud.unwrap_or(false) && !navigation_state.1,
-                                        ),
-                                        (
-                                            home_label_entity,
-                                            bevy::color::Color::srgb_from_array([
-                                                0.686
-                                                    + (0.902 - 0.686) * anim.0[0][0]
-                                                    + (0.090
-                                                        - (0.686
-                                                            + (0.902 - 0.686) * anim.0[0][0]))
-                                                        * (1.0 - anim.1[0]); 3]),
-                                            hud.unwrap_or(false) && !navigation_state.1,
-                                        ),
-                                        (
-                                            registry_label_entity,
-                                            bevy::color::Color::srgb_from_array([
-                                                0.686
-                                                    + (0.902 - 0.686) * anim.0[0][1]
-                                                    + (0.090
-                                                        - (0.686
-                                                            + (0.902 - 0.686) * anim.0[0][1]))
-                                                        * anim.1[0]; 3]),
-                                            hud.unwrap_or(false) && !navigation_state.1,
-                                        ),
-                                        (
-                                            section_title_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([0.902; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && !navigation_state.1 && title_metrics.0 > 0.0,
-                                        ),
-                                        (
-                                            card_title_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([0.902; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && !navigation_state.1 && title_metrics.0 > 0.0,
-                                        ),
-                                        (
-                                            launch_label_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([
-                                                    0.686
-                                                        + (0.902 - 0.686) * anim.0[0][2]; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0 && !navigation_state.1 && title_metrics.0 > 0.0,
-                                        ),
-                                    ]
-                                    .into_iter()
-                                    .for_each(
-                                        |(entity, colour, shown): (
-                                            bevy::ecs::entity::Entity,
-                                            bevy::color::Color,
-                                            bool,
-                                        )| {
-                                            texts
-                                                .get(entity)
-                                                .map(
-                                                    |(text_colour, visibility): (
-                                                        Option<&bevy::text::TextColor>,
-                                                        &bevy::camera::visibility::Visibility,
-                                                    )| {
-                                                        text_colour.into_iter().for_each(
-                                                            |text_colour: &bevy::text::TextColor| {
-                                                                if text_colour.0 != colour {
-                                                                    commands.entity(entity).insert(
-                                                                        bevy::text::TextColor(colour),
-                                                                    );
-                                                                }
-                                                            },
-                                                        );
-                                                        if (*visibility
-                                                            == bevy::camera::visibility::Visibility::Inherited)
-                                                            != shown
-                                                        {
-                                                            commands.entity(entity).insert(if shown {
-                                                                bevy::camera::visibility::Visibility::Inherited
-                                                            } else {
-                                                                bevy::camera::visibility::Visibility::Hidden
-                                                            });
-                                                        }
-                                                    },
-                                                )
-                                                .ok();
-                                        },
-                                    );
-                                },
-                            );
-                            workspace_slots.as_ref().copied().into_iter().for_each(
-                                |[
-                                    identity_divider_entity,
-                                    laboratory_sidebar_icon_entity,
-                                    workspace_header_icon_entity,
-                                    workspace_header_title_entity,
-                                    laboratory_sidebar_title_entity,
-                                ]: [bevy::ecs::entity::Entity; 5]| {
-                                    [
-                                        (
-                                            identity_divider_entity,
-                                            bevy::color::Color::srgb_from_array([0.204; 3]),
-                                            hud.unwrap_or(false),
-                                        ),
-                                        (
-                                            laboratory_sidebar_icon_entity,
-                                            bevy::color::Color::srgb_from_array([0.902; 3]),
-                                            hud.unwrap_or(false) && navigation_state.1,
-                                        ),
-                                        (
-                                            workspace_header_icon_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([0.902; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0
-                                                && navigation_state.1
-                                                && title_metrics.0 > 0.0,
-                                        ),
-                                    ]
-                                    .into_iter()
-                                    .for_each(
-                                        |(entity, colour, shown): (
-                                            bevy::ecs::entity::Entity,
-                                            bevy::color::Color,
-                                            bool,
-                                        )| {
-                                            sprites
-                                                .get(entity)
-                                                .map(
-                                                    |(sprite, _transform, visibility): (
-                                                        Option<&bevy::sprite::Sprite>,
-                                                        Option<&bevy::transform::components::Transform>,
-                                                        &bevy::camera::visibility::Visibility,
-                                                    )| {
-                                                        sprite.into_iter().for_each(
-                                                            |sprite: &bevy::sprite::Sprite| {
-                                                                if sprite.color != colour {
-                                                                    commands
-                                                                        .entity(entity)
-                                                                        .insert(bevy::sprite::Sprite {
-                                                                            color: colour,
-                                                                            ..sprite.clone()
-                                                                        });
-                                                                }
-                                                            },
-                                                        );
-                                                        if (*visibility
-                                                            == bevy::camera::visibility::Visibility::Inherited)
-                                                            != shown
-                                                        {
-                                                            commands.entity(entity).insert(if shown {
-                                                                bevy::camera::visibility::Visibility::Inherited
-                                                            } else {
-                                                                bevy::camera::visibility::Visibility::Hidden
-                                                            });
-                                                        }
-                                                    },
-                                                )
-                                                .ok();
-                                        },
-                                    );
-                                    [
-                                        (
-                                            workspace_header_title_entity,
-                                            <bevy::color::Color as bevy::color::Alpha>::with_alpha(
-                                                &bevy::color::Color::srgb_from_array([0.902; 3]),
-                                                anim.1[1],
-                                            ),
-                                            navigation_state.0
-                                                && navigation_state.1
-                                                && title_metrics.0 > 0.0,
-                                        ),
-                                        (
-                                            laboratory_sidebar_title_entity,
-                                            bevy::color::Color::srgb_from_array([0.902; 3]),
-                                            hud.unwrap_or(false) && navigation_state.1,
-                                        ),
-                                    ]
-                                    .into_iter()
-                                    .for_each(
-                                        |(entity, colour, shown): (
-                                            bevy::ecs::entity::Entity,
-                                            bevy::color::Color,
-                                            bool,
-                                        )| {
-                                            texts
-                                                .get(entity)
-                                                .map(
-                                                    |(text_colour, visibility): (
-                                                        Option<&bevy::text::TextColor>,
-                                                        &bevy::camera::visibility::Visibility,
-                                                    )| {
-                                                        text_colour.into_iter().for_each(
-                                                            |text_colour: &bevy::text::TextColor| {
-                                                                if text_colour.0 != colour {
-                                                                    commands.entity(entity).insert(
-                                                                        bevy::text::TextColor(colour),
-                                                                    );
-                                                                }
-                                                            },
-                                                        );
-                                                        if (*visibility
-                                                            == bevy::camera::visibility::Visibility::Inherited)
-                                                            != shown
-                                                        {
-                                                            commands.entity(entity).insert(if shown {
-                                                                bevy::camera::visibility::Visibility::Inherited
-                                                            } else {
-                                                                bevy::camera::visibility::Visibility::Hidden
-                                                            });
-                                                        }
-                                                    },
-                                                )
-                                                .ok();
-                                        },
-                                    );
-                                },
-                            );
-                        },
-                    );
-
-                    if dot.is_none() {
-                        *dot = Some((
-                            commands
-                                .spawn((
-                                    bevy::sprite::Sprite {
-                                        image: images.add(
-                                            bevy::image::Image::new(
-                                                bevy::render::render_resource::Extent3d {
-                                                    width: 11u32,
-                                                    height: 11u32,
-                                                    depth_or_array_layers: 1u32,
-                                                },
-                                                bevy::render::render_resource::TextureDimension::D2,
-                                                Vec::<u8>::from([
-                                                    0u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 18, 18, 18, 255, 18, 18, 18, 255,
-18, 18, 18, 255, 18, 18, 18, 255, 18, 18, 18, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-18, 18, 18, 255, 18, 18, 18, 255, 18, 18, 18, 255, 18, 18, 18, 255, 18, 18, 18, 255, 18, 18, 18, 255, 18, 18, 18, 255, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 18, 18, 18, 255, 18, 18, 18, 255, 18, 18, 18, 255, 235, 235, 235, 255, 235, 235, 235, 255, 235, 235, 235, 255,
-18, 18, 18, 255, 18, 18, 18, 255, 18, 18, 18, 255, 0, 0, 0, 0, 0, 0, 0, 0, 18, 18, 18, 255, 18, 18, 18, 255, 235, 235, 235, 255,
-235, 235, 235, 255, 235, 235, 235, 255, 235, 235, 235, 255, 235, 235, 235, 255, 18, 18, 18, 255, 18, 18, 18, 255, 0, 0, 0, 0, 0, 0, 0, 0,
-18, 18, 18, 255, 18, 18, 18, 255, 235, 235, 235, 255, 235, 235, 235, 255, 235, 235, 235, 255, 235, 235, 235, 255, 235, 235, 235, 255, 18, 18, 18, 255,
-18, 18, 18, 255, 0, 0, 0, 0, 0, 0, 0, 0, 18, 18, 18, 255, 18, 18, 18, 255, 235, 235, 235, 255, 235, 235, 235, 255, 235, 235, 235, 255,
-235, 235, 235, 255, 235, 235, 235, 255, 18, 18, 18, 255, 18, 18, 18, 255, 0, 0, 0, 0, 0, 0, 0, 0, 18, 18, 18, 255, 18, 18, 18, 255,
-18, 18, 18, 255, 235, 235, 235, 255, 235, 235, 235, 255, 235, 235, 235, 255, 18, 18, 18, 255, 18, 18, 18, 255, 18, 18, 18, 255, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 18, 18, 18, 255, 18, 18, 18, 255, 18, 18, 18, 255, 18, 18, 18, 255, 18, 18, 18, 255, 18, 18, 18, 255,
-18, 18, 18, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 18, 18, 18, 255, 18, 18, 18, 255,
-18, 18, 18, 255, 18, 18, 18, 255, 18, 18, 18, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0,
-                                                ]),
-                                                bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb,
-                                                bevy::asset::RenderAssetUsages::RENDER_WORLD,
-                                            ),
-                                        ),
-                                        custom_size: Some(bevy::math::Vec2::splat(6.0)),
-                                        ..bevy::sprite::Sprite::default()
-                                    },
-                                    bevy::transform::components::Transform::from_xyz(
-                                        0.0, 0.0, 9.0,
-                                    ),
-                                    if window.focused {
-                                        bevy::camera::visibility::Visibility::Inherited
-                                    } else {
-                                        bevy::camera::visibility::Visibility::Hidden
-                                    },
-                                ))
-                                .id(),
-                            bevy::math::Vec2::new(
-                                viewport.x / 2.0,
-                                viewport.y / 2.0,
-                            ),
-                        ));
+                        }
                     }
 
-                    (*dot).into_iter().for_each(
-                        |(dot_entity, dot_position): (
-                            bevy::ecs::entity::Entity,
-                            bevy::math::Vec2,
+                    escape_state.3 = false;
+                    (*app_state).into_iter().for_each(
+                        |(cur_mode, cur_menu, cur_modal, cur_hover): (
+                            u8,
+                            bool,
+                            bool,
+                            std::option::Option<u8>,
                         )| {
-                            sprites
-                                .get(dot_entity)
-                                .map(
-                                    |(_sprite, transform, visibility): (
-                                        Option<&bevy::sprite::Sprite>,
-                                        Option<&bevy::transform::components::Transform>,
-                                        &bevy::camera::visibility::Visibility,
-                                    )| {
-                                        transform.into_iter().for_each(
-                                            |transform: &bevy::transform::components::Transform| {
-                                                if transform.translation.truncate()
-                                                    != bevy::math::Vec2::new(
-                                                        dot_position.x - viewport.x / 2.0,
-                                                        viewport.y / 2.0 - dot_position.y,
-                                                    )
-                                                {
-                                                    commands
-                                                        .entity(dot_entity)
-                                                        .insert(
-                                                            bevy::transform::components::Transform::from_xyz(
-                                                                dot_position.x - viewport.x / 2.0,
-                                                                viewport.y / 2.0 - dot_position.y,
-                                                                9.0,
-                                                            ),
-                                                        );
-                                                }
-                                            },
-                                        );
-                                        if (*visibility
-                                            == bevy::camera::visibility::Visibility::Inherited)
-                                            != window.focused
+                            if !window.focused
+                                || !keys.pressed(bevy::input::keyboard::KeyCode::Escape)
+                            {
+                                *escape_state = (std::option::Option::None, false, false, false);
+                            } else if (focus_state.1 & 256u16) == 0 && !escape_state.2 {
+                                if escape_state.0.is_none()
+                                    && keys.just_pressed(bevy::input::keyboard::KeyCode::Escape)
+                                {
+                                    *escape_state = (
+                                        std::option::Option::Some(std::time::Instant::now()),
+                                        cur_mode == 2u8,
+                                        false,
+                                        false,
+                                    );
+                                }
+                                escape_state.0.into_iter().for_each(
+                                    |started: std::time::Instant| {
+                                        if escape_state.1
+                                            && started.elapsed().as_secs_f64() >= 5.0f64
                                         {
-                                            commands
-                                                .entity(dot_entity)
-                                                .insert(if window.focused {
-                                                    bevy::camera::visibility::Visibility::Inherited
-                                                } else {
-                                                    bevy::camera::visibility::Visibility::Hidden
-                                                });
+                                            *escape_state =
+                                                (std::option::Option::None, false, true, true);
+                                            anim_state.2[3] = 0.0;
+                                            *app_state = std::option::Option::Some((
+                                                1u8,
+                                                cur_menu,
+                                                false,
+                                                cur_hover,
+                                            ));
+                                        } else if !escape_state.1
+                                            && started.elapsed().as_secs_f64() >= 7.0f64
+                                        {
+                                            exits.write(bevy::app::AppExit::Success);
+                                            *escape_state =
+                                                (std::option::Option::None, false, true, true);
                                         }
                                     },
-                                )
-                                .ok();
+                                );
+                            }
                         },
                     );
 
-                    if anim.0.iter().flatten().zip(
-                        [
-                            [
-                                (interaction_state[0] == Some(0u8)) as u8 as f32,
-                                (interaction_state[0] == Some(1u8)) as u8 as f32,
-                                (interaction_state[0] == Some(2u8)) as u8 as f32,
-                            ],
-                            [
-                                (interaction_state[1] == Some(0u8)) as u8 as f32,
-                                (interaction_state[1] == Some(1u8)) as u8 as f32,
-                                (interaction_state[1] == Some(2u8)) as u8 as f32,
-                            ],
-                            [
-                                ((interaction_state[2] == Some(0u8)
-                                    && interaction_state[0] == Some(0u8))
-                                    as u8 as f32),
-                                ((interaction_state[2] == Some(1u8)
-                                    && interaction_state[0] == Some(1u8))
-                                    as u8 as f32),
-                                ((interaction_state[2] == Some(2u8)
-                                    && interaction_state[0] == Some(2u8))
-                                    as u8 as f32),
-                            ],
-                        ]
-                        .iter()
-                        .flatten(),
-                    )
-                    .any(|(displayed, target): (&f32, &f32)| {
-                        (*displayed - *target).abs() > 0.001
-                    })
-                        || (anim.1[0] - navigation_state.0 as u8 as f32).abs() > 0.001
-                        || (anim.1[1]
-                            - if navigation_state.0 {
-                                1.0
-                            } else {
-                                0.0
-                            })
-                            .abs()
-                            > 0.001
-                        || (window.focused
-                            && (keys.pressed(
-                                bevy::input::keyboard::KeyCode::ControlLeft,
-                            ) || keys.pressed(
-                                bevy::input::keyboard::KeyCode::ControlRight,
-                            ))
-                            && (((keys.pressed(
-                                bevy::input::keyboard::KeyCode::KeyD,
-                            ) as u8 as f32)
-                                - (keys.pressed(
-                                    bevy::input::keyboard::KeyCode::KeyA,
-                                ) as u8 as f32))
-                                != 0.0
-                                || ((keys.pressed(
-                                    bevy::input::keyboard::KeyCode::KeyS,
-                                ) as u8 as f32)
-                                    - (keys.pressed(
-                                        bevy::input::keyboard::KeyCode::KeyW,
-                                    ) as u8 as f32))
-                                    != 0.0))
-                        || title_metrics.0 == 0.0
-                        || title_metrics.2 < 1.0 {
-                        if settings.focused_mode
-                            != bevy::winit::UpdateMode::reactive_low_power(
-                                std::time::Duration::from_millis(16),
+                    if !escape_state.3
+                        && window.focused
+                        && keys.just_pressed(bevy::input::keyboard::KeyCode::F1)
+                        && (focus_state.1 & 128u16) == 0
+                        && !keys.any_pressed([
+                            bevy::input::keyboard::KeyCode::ControlLeft,
+                            bevy::input::keyboard::KeyCode::ControlRight,
+                            bevy::input::keyboard::KeyCode::ShiftLeft,
+                            bevy::input::keyboard::KeyCode::ShiftRight,
+                            bevy::input::keyboard::KeyCode::AltLeft,
+                            bevy::input::keyboard::KeyCode::AltRight,
+                            bevy::input::keyboard::KeyCode::SuperLeft,
+                            bevy::input::keyboard::KeyCode::SuperRight,
+                        ])
+                    {
+                        (*app_state).into_iter().for_each(
+                            |(cur_mode, cur_menu, cur_modal, cur_hover): (
+                                u8,
+                                bool,
+                                bool,
+                                std::option::Option<u8>,
+                            )| {
+                                *app_state = std::option::Option::Some((
+                                    cur_mode,
+                                    !cur_menu,
+                                    cur_modal,
+                                    cur_hover,
+                                ));
+                            },
+                        );
+                    }
+
+                    ui_entities
+                        .as_ref()
+                        .into_iter()
+                        .for_each(|entities: &[bevy::ecs::entity::Entity; 45]| {
+                            layout_info
+                                .get(entities[5])
+                                .ok()
+                                .filter(|info: &bevy::text::TextLayoutInfo| {
+                                    info.scale_factor > 0.0
+                                        && info.size.x.is_finite()
+                                        && info.size.x > 0.0
+                                })
+                                .into_iter()
+                                .for_each(|info: &bevy::text::TextLayoutInfo| {
+                                    metrics_state.0 = info.size.x / info.scale_factor;
+                                });
+                        });
+
+                    metrics_state.1 = if metrics_state.0 > 0.0 {
+                        (((76.0 + metrics_state.0 + 26.0) / 8.0).ceil() * 8.0)
+                            .clamp(360.0, (metrics_state.2.x * 0.48).max(360.0))
+                    } else {
+                        384.0f32.min((metrics_state.2.x * 0.48).max(320.0))
+                    };
+
+                    (*dot_state).into_iter().for_each(
+                        |(dot_entity, prev_pos, prev_vel): (
+                            bevy::ecs::entity::Entity,
+                            bevy::math::Vec2,
+                            bevy::math::Vec2,
+                        )| {
+                            match bevy::math::Vec2::new(
+                                if focus_state.3 {
+                                    ((keys.pressed(bevy::input::keyboard::KeyCode::KeyD)
+                                        && (focus_state.1 & 32u16) == 0)
+                                        as u8 as f32)
+                                        - ((keys.pressed(bevy::input::keyboard::KeyCode::KeyA)
+                                            && (focus_state.1 & 8u16) == 0)
+                                            as u8 as f32)
+                                } else {
+                                    0.0
+                                },
+                                if focus_state.3 {
+                                    ((keys.pressed(bevy::input::keyboard::KeyCode::KeyS)
+                                        && (focus_state.1 & 16u16) == 0)
+                                        as u8 as f32)
+                                        - ((keys.pressed(bevy::input::keyboard::KeyCode::KeyW)
+                                            && (focus_state.1 & 4u16) == 0)
+                                            as u8 as f32)
+                                } else {
+                                    0.0
+                                },
                             )
-                        {
-                            settings.focused_mode =
-                                bevy::winit::UpdateMode::reactive_low_power(
-                                    std::time::Duration::from_millis(16),
-                                );
-                            settings.unfocused_mode = settings.focused_mode;
+                            .normalize_or_zero()
+                            {
+                                move_dir => {
+                                    match if move_dir == bevy::math::Vec2::ZERO {
+                                        bevy::math::Vec2::ZERO
+                                    } else {
+                                        prev_vel
+                                            + (move_dir * 540.0 - prev_vel)
+                                                * (1.0
+                                                    - (-(if prev_vel.dot(move_dir) < 0.0 {
+                                                        32.0f32
+                                                    } else {
+                                                        22.0f32
+                                                    }) * metrics_state.3)
+                                                        .exp())
+                                    } {
+                                        next_vel => {
+                                            *dot_state = std::option::Option::Some((
+                                                dot_entity,
+                                                (prev_pos + next_vel * metrics_state.3).clamp(
+                                                    bevy::math::Vec2::new(
+                                                        5.5f32.min(metrics_state.2.x * 0.5),
+                                                        5.5f32.min(metrics_state.2.y * 0.5),
+                                                    ),
+                                                    bevy::math::Vec2::new(
+                                                        (metrics_state.2.x - 5.5f32)
+                                                            .max(metrics_state.2.x * 0.5),
+                                                        (metrics_state.2.y - 5.5f32)
+                                                            .max(metrics_state.2.y * 0.5),
+                                                    ),
+                                                ),
+                                                next_vel,
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                    );
+
+                    match (
+                        metrics_state.2.x,
+                        metrics_state.2.y,
+                        metrics_state.1,
+                        bevy::math::Rect::new(18.0, 92.0, metrics_state.1 - 18.0, 140.0),
+                        bevy::math::Rect::new(18.0, 148.0, metrics_state.1 - 18.0, 196.0),
+                        bevy::math::Rect::new(
+                            metrics_state.1 + 16.0,
+                            16.0,
+                            (metrics_state.2.x - 16.0).max(metrics_state.1 + 96.0),
+                            (metrics_state.2.y - 16.0).max(96.0),
+                        ),
+                        bevy::math::Rect::from_center_size(
+                            metrics_state.2 * 0.5,
+                            bevy::math::Vec2::new(
+                                (metrics_state.2.x * 0.38)
+                                    .clamp(360.0, 560.0)
+                                    .min((metrics_state.2.x - 48.0).max(180.0)),
+                                (metrics_state.2.y * 0.36)
+                                    .clamp(240.0, 360.0)
+                                    .min((metrics_state.2.y - 48.0).max(140.0)),
+                            ),
+                        ),
+                        (*dot_state)
+                            .map(
+                                |(_, pos, _): (
+                                    bevy::ecs::entity::Entity,
+                                    bevy::math::Vec2,
+                                    bevy::math::Vec2,
+                                )| pos,
+                            )
+                            .unwrap_or(metrics_state.2 * 0.5),
+                    ) {
+                        (vw, vh, sw, row_one_rect, row_two_rect, panel_rect, modal_rect, dot_pos) => {
+                            match bevy::math::Rect::new(
+                                panel_rect.min.x + 28.0,
+                                122.0,
+                                (panel_rect.min.x + 28.0 + 480.0)
+                                    .min((panel_rect.max.x - 28.0).max(panel_rect.min.x + 200.0)),
+                                273.0,
+                            ) {
+                                card_rect => {
+                                    match bevy::math::Rect::new(
+                                        card_rect.max.x - 18.0 - 148.0,
+                                        213.0,
+                                        card_rect.max.x - 18.0,
+                                        257.0,
+                                    ) {
+                                        launch_rect => {
+                                            (*app_state).into_iter().for_each(
+                                                |(cur_mode, cur_menu, cur_modal, _prev_hover): (
+                                                    u8,
+                                                    bool,
+                                                    bool,
+                                                    std::option::Option<u8>,
+                                                )| {
+                                                    match match if !window.focused {
+                                                        std::option::Option::None
+                                                    } else if cur_modal && cur_mode == 2u8 {
+                                                        if modal_rect.contains(dot_pos)
+                                                            && ((dot_pos.x - modal_rect.center().x)
+                                                                .abs()
+                                                                - (modal_rect.width() * 0.5 - 14.0))
+                                                                .max(0.0)
+                                                                .hypot(
+                                                                    ((dot_pos.y
+                                                                        - modal_rect.center().y)
+                                                                        .abs()
+                                                                        - (modal_rect.height()
+                                                                            * 0.5
+                                                                            - 14.0))
+                                                                        .max(0.0),
+                                                                )
+                                                                <= 14.0
+                                                        {
+                                                            std::option::Option::None
+                                                        } else {
+                                                            std::option::Option::Some(4u8)
+                                                        }
+                                                    } else if cur_mode != 2u8 {
+                                                        if cur_menu
+                                                            && row_one_rect.contains(dot_pos)
+                                                            && ((dot_pos.x
+                                                                - row_one_rect.center().x)
+                                                                .abs()
+                                                                - (row_one_rect.width() * 0.5
+                                                                    - 9.0))
+                                                                .max(0.0)
+                                                                .hypot(
+                                                                    ((dot_pos.y
+                                                                        - row_one_rect.center().y)
+                                                                        .abs()
+                                                                        - (row_one_rect.height()
+                                                                            * 0.5
+                                                                            - 9.0))
+                                                                        .max(0.0),
+                                                                )
+                                                                <= 9.0
+                                                        {
+                                                            std::option::Option::Some(0u8)
+                                                        } else if cur_menu
+                                                            && row_two_rect.contains(dot_pos)
+                                                            && ((dot_pos.x
+                                                                - row_two_rect.center().x)
+                                                                .abs()
+                                                                - (row_two_rect.width() * 0.5
+                                                                    - 9.0))
+                                                                .max(0.0)
+                                                                .hypot(
+                                                                    ((dot_pos.y
+                                                                        - row_two_rect.center().y)
+                                                                        .abs()
+                                                                        - (row_two_rect.height()
+                                                                            * 0.5
+                                                                            - 9.0))
+                                                                        .max(0.0),
+                                                                )
+                                                                <= 9.0
+                                                        {
+                                                            std::option::Option::Some(1u8)
+                                                        } else if cur_mode == 1u8
+                                                            && metrics_state.0 > 0.0
+                                                            && launch_rect.contains(dot_pos)
+                                                            && ((dot_pos.x
+                                                                - launch_rect.center().x)
+                                                                .abs()
+                                                                - (launch_rect.width() * 0.5 - 9.0))
+                                                                .max(0.0)
+                                                                .hypot(
+                                                                    ((dot_pos.y
+                                                                        - launch_rect.center().y)
+                                                                        .abs()
+                                                                        - (launch_rect.height()
+                                                                            * 0.5
+                                                                            - 9.0))
+                                                                        .max(0.0),
+                                                                )
+                                                                <= 9.0
+                                                        {
+                                                            std::option::Option::Some(2u8)
+                                                        } else {
+                                                            std::option::Option::None
+                                                        }
+                                                    } else if cur_menu
+                                                        && row_one_rect.contains(dot_pos)
+                                                        && ((dot_pos.x - row_one_rect.center().x)
+                                                            .abs()
+                                                            - (row_one_rect.width() * 0.5 - 9.0))
+                                                            .max(0.0)
+                                                            .hypot(
+                                                                ((dot_pos.y
+                                                                    - row_one_rect.center().y)
+                                                                    .abs()
+                                                                    - (row_one_rect.height() * 0.5
+                                                                        - 9.0))
+                                                                    .max(0.0),
+                                                            )
+                                                            <= 9.0
+                                                    {
+                                                        std::option::Option::Some(3u8)
+                                                    } else {
+                                                        std::option::Option::None
+                                                    } {
+                                                        std::option::Option::Some(
+                                                            0u8 | 1u8 | 3u8,
+                                                        ) if !(dot_pos.x >= 0.0
+                                                            && dot_pos.x <= sw
+                                                            && dot_pos.y >= 0.0
+                                                            && dot_pos.y <= vh
+                                                            && (dot_pos.x - (sw - 14.0))
+                                                                .max(0.0)
+                                                                .hypot(
+                                                                    ((dot_pos.y - vh * 0.5).abs()
+                                                                        - (vh * 0.5 - 14.0))
+                                                                        .max(0.0),
+                                                                )
+                                                                <= 14.0) =>
+                                                        {
+                                                            std::option::Option::None
+                                                        }
+                                                        other => other,
+                                                    } {
+                                                        hit_target => {
+                                                            match if !escape_state.3
+                                                                && focus_state.3
+                                                                && keys.just_pressed(
+                                                                    bevy::input::keyboard::KeyCode::KeyE,
+                                                                )
+                                                                && (focus_state.1 & 64u16) == 0
+                                                            {
+                                                                match hit_target {
+                                                                    std::option::Option::Some(
+                                                                        0u8,
+                                                                    ) => (0u8, cur_menu, false),
+                                                                    std::option::Option::Some(
+                                                                        1u8,
+                                                                    ) => (1u8, cur_menu, false),
+                                                                    std::option::Option::Some(
+                                                                        2u8,
+                                                                    ) if cur_mode == 1u8
+                                                                        && !cur_modal =>
+                                                                    {
+                                                                        *escape_state = (
+                                                                            std::option::Option::None,
+                                                                            false,
+                                                                            keys.pressed(
+                                                                                bevy::input::keyboard::KeyCode::Escape,
+                                                                            ),
+                                                                            escape_state.3,
+                                                                        );
+                                                                        (2u8, cur_menu, false)
+                                                                    }
+                                                                    std::option::Option::Some(
+                                                                        3u8,
+                                                                    ) if cur_mode == 2u8
+                                                                        && !cur_modal =>
+                                                                    {
+                                                                        (2u8, cur_menu, true)
+                                                                    }
+                                                                    std::option::Option::Some(
+                                                                        4u8,
+                                                                    ) if cur_mode == 2u8
+                                                                        && cur_modal =>
+                                                                    {
+                                                                        (2u8, cur_menu, false)
+                                                                    }
+                                                                    _ => (
+                                                                        cur_mode, cur_menu,
+                                                                        cur_modal,
+                                                                    ),
+                                                                }
+                                                            } else {
+                                                                (cur_mode, cur_menu, cur_modal)
+                                                            } {
+                                                                (
+                                                                    next_mode,
+                                                                    next_menu,
+                                                                    next_modal,
+                                                                ) => {
+                                                                    *app_state =
+                                                                        std::option::Option::Some((
+                                                                            next_mode,
+                                                                            next_menu,
+                                                                            next_modal,
+                                                                            if !window.focused
+                                                                                || next_modal
+                                                                            {
+                                                                                std::option::Option::None
+                                                                            } else {
+                                                                                match hit_target {
+                                                                                    std::option::Option::Some(0u8)
+                                                                                        if next_mode != 2u8
+                                                                                            && next_menu =>
+                                                                                    {
+                                                                                        std::option::Option::Some(0u8)
+                                                                                    }
+                                                                                    std::option::Option::Some(1u8)
+                                                                                        if next_mode != 2u8
+                                                                                            && next_menu =>
+                                                                                    {
+                                                                                        std::option::Option::Some(1u8)
+                                                                                    }
+                                                                                    std::option::Option::Some(2u8)
+                                                                                        if next_mode == 1u8 =>
+                                                                                    {
+                                                                                        std::option::Option::Some(2u8)
+                                                                                    }
+                                                                                    std::option::Option::Some(3u8)
+                                                                                        if next_mode == 2u8
+                                                                                            && next_menu =>
+                                                                                    {
+                                                                                        std::option::Option::Some(3u8)
+                                                                                    }
+                                                                                    _ => std::option::Option::None,
+                                                                                }
+                                                                            },
+                                                                        ));
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                            );
+
+                                            (*app_state).into_iter().for_each(
+                                                |(final_mode, final_menu, final_modal, hovered): (
+                                                    u8,
+                                                    bool,
+                                                    bool,
+                                                    std::option::Option<u8>,
+                                                )| {
+                                                    [0usize, 1usize, 2usize, 3usize]
+                                                        .into_iter()
+                                                        .for_each(|idx: usize| {
+                                                            match (
+                                                                (hovered
+                                                                    == std::option::Option::Some(
+                                                                        idx as u8,
+                                                                    ))
+                                                                    as u8
+                                                                    as f32,
+                                                                ((hovered
+                                                                    == std::option::Option::Some(
+                                                                        idx as u8,
+                                                                    ))
+                                                                    && focus_state.3
+                                                                    && keys.pressed(
+                                                                        bevy::input::keyboard::KeyCode::KeyE,
+                                                                    )
+                                                                    && (focus_state.1 & 64u16)
+                                                                        == 0)
+                                                                    as u8
+                                                                    as f32,
+                                                            ) {
+                                                                (h_target, p_target) => {
+                                                                    anim_state.0[idx] = if (h_target
+                                                                        - anim_state.0[idx])
+                                                                        .abs()
+                                                                        <= 0.002
+                                                                    {
+                                                                        h_target
+                                                                    } else {
+                                                                        (anim_state.0[idx]
+                                                                            + (h_target
+                                                                                - anim_state.0[idx])
+                                                                                * (1.0
+                                                                                    - (-20.0f32
+                                                                                        * metrics_state.3)
+                                                                                        .exp())
+                                                                            + (h_target
+                                                                                - anim_state.0[idx])
+                                                                                .signum()
+                                                                                * 1.6f32
+                                                                                * metrics_state.3)
+                                                                            .clamp(
+                                                                                anim_state.0[idx]
+                                                                                    .min(h_target),
+                                                                                anim_state.0[idx]
+                                                                                    .max(h_target),
+                                                                            )
+                                                                    };
+                                                                    anim_state.1[idx] = if (p_target
+                                                                        - anim_state.1[idx])
+                                                                        .abs()
+                                                                        <= 0.002
+                                                                    {
+                                                                        p_target
+                                                                    } else {
+                                                                        (anim_state.1[idx]
+                                                                            + (p_target
+                                                                                - anim_state.1[idx])
+                                                                                * (1.0
+                                                                                    - (-28.0f32
+                                                                                        * metrics_state.3)
+                                                                                        .exp())
+                                                                            + (p_target
+                                                                                - anim_state.1[idx])
+                                                                                .signum()
+                                                                                * 2.4f32
+                                                                                * metrics_state.3)
+                                                                            .clamp(
+                                                                                anim_state.1[idx]
+                                                                                    .min(p_target),
+                                                                                anim_state.1[idx]
+                                                                                    .max(p_target),
+                                                                            )
+                                                                    };
+                                                                }
+                                                            }
+                                                        });
+
+                                                    [
+                                                        (
+                                                            0usize,
+                                                            if final_mode == 0u8 {
+                                                                0.0f32
+                                                            } else {
+                                                                1.0f32
+                                                            },
+                                                            18.0f32,
+                                                        ),
+                                                        (
+                                                            1usize,
+                                                            if final_mode == 0u8 {
+                                                                0.0f32
+                                                            } else {
+                                                                1.0f32
+                                                            },
+                                                            16.0f32,
+                                                        ),
+                                                        (
+                                                            2usize,
+                                                            if final_mode == 2u8 {
+                                                                1.0f32
+                                                            } else {
+                                                                0.0f32
+                                                            },
+                                                            18.0f32,
+                                                        ),
+                                                        (
+                                                            3usize,
+                                                            if final_mode == 2u8 && final_modal {
+                                                                1.0f32
+                                                            } else {
+                                                                0.0f32
+                                                            },
+                                                            20.0f32,
+                                                        ),
+                                                        (
+                                                            4usize,
+                                                            if final_menu {
+                                                                1.0f32
+                                                            } else {
+                                                                0.0f32
+                                                            },
+                                                            20.0f32,
+                                                        ),
+                                                    ]
+                                                    .into_iter()
+                                                    .for_each(
+                                                        |(idx, target, rate): (usize, f32, f32)| {
+                                                            anim_state.2[idx] = if (target
+                                                                - anim_state.2[idx])
+                                                                .abs()
+                                                                <= 0.002
+                                                            {
+                                                                target
+                                                            } else {
+                                                                (anim_state.2[idx]
+                                                                    + (target - anim_state.2[idx])
+                                                                        * (1.0
+                                                                            - (-rate
+                                                                                * metrics_state.3)
+                                                                                .exp())
+                                                                    + (target - anim_state.2[idx])
+                                                                        .signum()
+                                                                        * 1.6f32
+                                                                        * metrics_state.3)
+                                                                    .clamp(
+                                                                        anim_state.2[idx]
+                                                                            .min(target),
+                                                                        anim_state.2[idx]
+                                                                            .max(target),
+                                                                    )
+                                                            };
+                                                        },
+                                                    );
+
+                                                    ui_entities
+                                                        .as_ref()
+                                                        .copied()
+                                                        .into_iter()
+                                                        .for_each(
+                                                            |e: [bevy::ecs::entity::Entity; 45]| {
+                                                                match (
+                                                                    anim_state.2[0],
+                                                                    anim_state.2[1],
+                                                                    anim_state.2[2],
+                                                                    anim_state.2[3],
+                                                                    anim_state.2[4],
+                                                                    0.97f32
+                                                                        + 0.03f32
+                                                                            * anim_state.2[3],
+                                                                ) {
+                                                                    (
+                                                                        nav_t,
+                                                                        panel_t,
+                                                                        ws_t,
+                                                                        modal_t,
+                                                                        menu_t,
+                                                                        m_scale,
+                                                                    ) => {
+                                                                        [
+                                                                            (
+                                                                                e[0],
+                                                                                bevy::math::Vec2::new(sw, vh),
+                                                                                bevy::math::Vec3::new(sw * 0.5 - vw * 0.5, 0.0, 1.0),
+                                                                                bevy::color::Color::srgba(0.180, 0.180, 0.180, menu_t),
+                                                                                menu_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[1],
+                                                                                bevy::math::Vec2::new((sw - 1.0).max(1.0), (vh - 2.0).max(1.0)),
+                                                                                bevy::math::Vec3::new((sw - 1.0).max(1.0) * 0.5 - vw * 0.5, 0.0, 1.1),
+                                                                                bevy::color::Color::srgba(0.086, 0.086, 0.086, menu_t),
+                                                                                menu_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[2],
+                                                                                bevy::math::Vec2::splat(44.0),
+                                                                                bevy::math::Vec3::new(40.0 - vw * 0.5, vh * 0.5 - 44.0, 2.0),
+                                                                                bevy::color::Color::srgba(0.149, 0.149, 0.149, menu_t),
+                                                                                menu_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[3],
+                                                                                bevy::math::Vec2::splat(26.0),
+                                                                                bevy::math::Vec3::new(40.0 - vw * 0.5, vh * 0.5 - 44.0, 3.0),
+                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, menu_t * (1.0 - ws_t)),
+                                                                                menu_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[4],
+                                                                                bevy::math::Vec2::splat(26.0),
+                                                                                bevy::math::Vec3::new(40.0 - vw * 0.5, vh * 0.5 - 44.0, 3.1),
+                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, menu_t * ws_t),
+                                                                                menu_t > 0.0 && ws_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[7],
+                                                                                bevy::math::Vec2::new((sw - 36.0).max(1.0), 1.0),
+                                                                                bevy::math::Vec3::new(sw * 0.5 - vw * 0.5, vh * 0.5 - 78.5, 2.0),
+                                                                                bevy::color::Color::srgba(0.176, 0.176, 0.176, menu_t),
+                                                                                menu_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[8],
+                                                                                row_one_rect.size(),
+                                                                                bevy::math::Vec3::new(row_one_rect.center().x - vw * 0.5, vh * 0.5 - row_one_rect.center().y, 2.0),
+                                                                                bevy::color::Color::srgba(
+                                                                                    (0.125 + 0.044 * anim_state.0[0] - 0.025 * anim_state.1[0]) * nav_t
+                                                                                        + (0.865 + 0.035 * anim_state.0[0] - 0.045 * anim_state.1[0]) * (1.0 - nav_t),
+                                                                                    (0.125 + 0.044 * anim_state.0[0] - 0.025 * anim_state.1[0]) * nav_t
+                                                                                        + (0.865 + 0.035 * anim_state.0[0] - 0.045 * anim_state.1[0]) * (1.0 - nav_t),
+                                                                                    (0.125 + 0.044 * anim_state.0[0] - 0.025 * anim_state.1[0]) * nav_t
+                                                                                        + (0.865 + 0.035 * anim_state.0[0] - 0.045 * anim_state.1[0]) * (1.0 - nav_t),
+                                                                                    menu_t * (1.0 - ws_t),
+                                                                                ),
+                                                                                menu_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[9],
+                                                                                row_one_rect.size(),
+                                                                                bevy::math::Vec3::new(row_one_rect.center().x - vw * 0.5, vh * 0.5 - row_one_rect.center().y, 2.5),
+                                                                                bevy::color::Color::srgba(0.520, 0.520, 0.520, anim_state.0[0] * menu_t * (1.0 - ws_t)),
+                                                                                menu_t > 0.0 && ws_t < 1.0 && anim_state.0[0] > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[10],
+                                                                                bevy::math::Vec2::splat(36.0),
+                                                                                bevy::math::Vec3::new(42.0 - vw * 0.5, vh * 0.5 - 116.0, 3.0),
+                                                                                bevy::color::Color::srgba(
+                                                                                    0.176 + 0.030 * anim_state.0[0] - 0.020 * anim_state.1[0] - 0.015 * (1.0 - nav_t),
+                                                                                    0.176 + 0.030 * anim_state.0[0] - 0.020 * anim_state.1[0] - 0.015 * (1.0 - nav_t),
+                                                                                    0.176 + 0.030 * anim_state.0[0] - 0.020 * anim_state.1[0] - 0.015 * (1.0 - nav_t),
+                                                                                    menu_t * (1.0 - ws_t),
+                                                                                ),
+                                                                                menu_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[11],
+                                                                                bevy::math::Vec2::splat(22.0),
+                                                                                bevy::math::Vec3::new(42.0 - vw * 0.5, vh * 0.5 - 116.0, 4.0),
+                                                                                bevy::color::Color::srgba(
+                                                                                    (0.780 + 0.157 * anim_state.0[0]) * nav_t + 0.937 * (1.0 - nav_t),
+                                                                                    (0.780 + 0.157 * anim_state.0[0]) * nav_t + 0.937 * (1.0 - nav_t),
+                                                                                    (0.780 + 0.157 * anim_state.0[0]) * nav_t + 0.937 * (1.0 - nav_t),
+                                                                                    menu_t * (1.0 - ws_t),
+                                                                                ),
+                                                                                menu_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[13],
+                                                                                row_two_rect.size(),
+                                                                                bevy::math::Vec3::new(row_two_rect.center().x - vw * 0.5, vh * 0.5 - row_two_rect.center().y, 2.0),
+                                                                                bevy::color::Color::srgba(
+                                                                                    (0.125 + 0.044 * anim_state.0[1] - 0.025 * anim_state.1[1]) * (1.0 - nav_t)
+                                                                                        + (0.865 + 0.035 * anim_state.0[1] - 0.045 * anim_state.1[1]) * nav_t,
+                                                                                    (0.125 + 0.044 * anim_state.0[1] - 0.025 * anim_state.1[1]) * (1.0 - nav_t)
+                                                                                        + (0.865 + 0.035 * anim_state.0[1] - 0.045 * anim_state.1[1]) * nav_t,
+                                                                                    (0.125 + 0.044 * anim_state.0[1] - 0.025 * anim_state.1[1]) * (1.0 - nav_t)
+                                                                                        + (0.865 + 0.035 * anim_state.0[1] - 0.045 * anim_state.1[1]) * nav_t,
+                                                                                    menu_t * (1.0 - ws_t),
+                                                                                ),
+                                                                                menu_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[14],
+                                                                                row_two_rect.size(),
+                                                                                bevy::math::Vec3::new(row_two_rect.center().x - vw * 0.5, vh * 0.5 - row_two_rect.center().y, 2.5),
+                                                                                bevy::color::Color::srgba(0.520, 0.520, 0.520, anim_state.0[1] * menu_t * (1.0 - ws_t)),
+                                                                                menu_t > 0.0 && ws_t < 1.0 && anim_state.0[1] > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[15],
+                                                                                bevy::math::Vec2::splat(36.0),
+                                                                                bevy::math::Vec3::new(42.0 - vw * 0.5, vh * 0.5 - 172.0, 3.0),
+                                                                                bevy::color::Color::srgba(
+                                                                                    0.176 + 0.030 * anim_state.0[1] - 0.020 * anim_state.1[1] - 0.015 * nav_t,
+                                                                                    0.176 + 0.030 * anim_state.0[1] - 0.020 * anim_state.1[1] - 0.015 * nav_t,
+                                                                                    0.176 + 0.030 * anim_state.0[1] - 0.020 * anim_state.1[1] - 0.015 * nav_t,
+                                                                                    menu_t * (1.0 - ws_t),
+                                                                                ),
+                                                                                menu_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[16],
+                                                                                bevy::math::Vec2::splat(22.0),
+                                                                                bevy::math::Vec3::new(42.0 - vw * 0.5, vh * 0.5 - 172.0, 4.0),
+                                                                                bevy::color::Color::srgba(
+                                                                                    (0.780 + 0.157 * anim_state.0[1]) * (1.0 - nav_t) + 0.937 * nav_t,
+                                                                                    (0.780 + 0.157 * anim_state.0[1]) * (1.0 - nav_t) + 0.937 * nav_t,
+                                                                                    (0.780 + 0.157 * anim_state.0[1]) * (1.0 - nav_t) + 0.937 * nav_t,
+                                                                                    menu_t * (1.0 - ws_t),
+                                                                                ),
+                                                                                menu_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[18],
+                                                                                row_one_rect.size(),
+                                                                                bevy::math::Vec3::new(row_one_rect.center().x - vw * 0.5, vh * 0.5 - row_one_rect.center().y, 2.1),
+                                                                                bevy::color::Color::srgba(
+                                                                                    0.145 + 0.050 * anim_state.0[3] - 0.030 * anim_state.1[3],
+                                                                                    0.145 + 0.050 * anim_state.0[3] - 0.030 * anim_state.1[3],
+                                                                                    0.145 + 0.050 * anim_state.0[3] - 0.030 * anim_state.1[3],
+                                                                                    menu_t * ws_t,
+                                                                                ),
+                                                                                menu_t > 0.0 && ws_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[19],
+                                                                                row_one_rect.size(),
+                                                                                bevy::math::Vec3::new(row_one_rect.center().x - vw * 0.5, vh * 0.5 - row_one_rect.center().y, 2.6),
+                                                                                bevy::color::Color::srgba(
+                                                                                    0.275 + 0.280 * anim_state.0[3],
+                                                                                    0.275 + 0.280 * anim_state.0[3],
+                                                                                    0.275 + 0.280 * anim_state.0[3],
+                                                                                    menu_t * ws_t,
+                                                                                ),
+                                                                                menu_t > 0.0 && ws_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[20],
+                                                                                bevy::math::Vec2::splat(36.0),
+                                                                                bevy::math::Vec3::new(42.0 - vw * 0.5, vh * 0.5 - 116.0, 3.1),
+                                                                                bevy::color::Color::srgba(
+                                                                                    0.200 + 0.045 * anim_state.0[3] - 0.025 * anim_state.1[3],
+                                                                                    0.200 + 0.045 * anim_state.0[3] - 0.025 * anim_state.1[3],
+                                                                                    0.200 + 0.045 * anim_state.0[3] - 0.025 * anim_state.1[3],
+                                                                                    menu_t * ws_t,
+                                                                                ),
+                                                                                menu_t > 0.0 && ws_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[21],
+                                                                                bevy::math::Vec2::splat(20.0),
+                                                                                bevy::math::Vec3::new(42.0 - vw * 0.5, vh * 0.5 - 116.0, 4.1),
+                                                                                bevy::color::Color::srgba(
+                                                                                    0.880 + 0.090 * anim_state.0[3],
+                                                                                    0.880 + 0.090 * anim_state.0[3],
+                                                                                    0.880 + 0.090 * anim_state.0[3],
+                                                                                    menu_t * ws_t,
+                                                                                ),
+                                                                                menu_t > 0.0 && ws_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[23],
+                                                                                panel_rect.size(),
+                                                                                bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - panel_rect.center().y, 1.0),
+                                                                                bevy::color::Color::srgba(0.180, 0.180, 0.180, panel_t),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[24],
+                                                                                bevy::math::Vec2::new((panel_rect.width() - 2.0).max(1.0), (panel_rect.height() - 2.0).max(1.0)),
+                                                                                bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - panel_rect.center().y, 1.1),
+                                                                                bevy::color::Color::srgba(0.063, 0.063, 0.063, panel_t),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[25],
+                                                                                bevy::math::Vec2::splat(44.0),
+                                                                                bevy::math::Vec3::new(panel_rect.min.x + 50.0 - vw * 0.5, vh * 0.5 - 60.0, 2.0),
+                                                                                bevy::color::Color::srgba(0.133, 0.133, 0.133, panel_t),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[26],
+                                                                                bevy::math::Vec2::splat(25.0),
+                                                                                bevy::math::Vec3::new(panel_rect.min.x + 50.0 - vw * 0.5, vh * 0.5 - 60.0, 3.0),
+                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, panel_t * (1.0 - ws_t)),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[27],
+                                                                                bevy::math::Vec2::splat(26.0),
+                                                                                bevy::math::Vec3::new(panel_rect.min.x + 50.0 - vw * 0.5, vh * 0.5 - 60.0, 3.1),
+                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, panel_t * ws_t),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[30],
+                                                                                bevy::math::Vec2::new((panel_rect.width() - 56.0).max(1.0), 1.0),
+                                                                                bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 98.5, 2.0),
+                                                                                bevy::color::Color::srgba(0.176, 0.176, 0.176, panel_t),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[31],
+                                                                                card_rect.size(),
+                                                                                bevy::math::Vec3::new(card_rect.center().x - vw * 0.5, vh * 0.5 - card_rect.center().y, 2.0),
+                                                                                bevy::color::Color::srgba(0.188, 0.188, 0.188, panel_t * (1.0 - ws_t)),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[32],
+                                                                                bevy::math::Vec2::new((card_rect.width() - 2.0).max(1.0), (card_rect.height() - 2.0).max(1.0)),
+                                                                                bevy::math::Vec3::new(card_rect.center().x - vw * 0.5, vh * 0.5 - card_rect.center().y, 2.1),
+                                                                                bevy::color::Color::srgba(0.090, 0.090, 0.090, panel_t * (1.0 - ws_t)),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[33],
+                                                                                bevy::math::Vec2::splat(42.0),
+                                                                                bevy::math::Vec3::new(card_rect.min.x + 39.0 - vw * 0.5, vh * 0.5 - 161.0, 3.0),
+                                                                                bevy::color::Color::srgba(0.157, 0.157, 0.157, panel_t * (1.0 - ws_t)),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[34],
+                                                                                bevy::math::Vec2::splat(25.0),
+                                                                                bevy::math::Vec3::new(card_rect.min.x + 39.0 - vw * 0.5, vh * 0.5 - 161.0, 4.0),
+                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, panel_t * (1.0 - ws_t)),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[36],
+                                                                                bevy::math::Vec2::new((card_rect.width() - 36.0).max(1.0), 1.0),
+                                                                                bevy::math::Vec3::new(card_rect.center().x - vw * 0.5, vh * 0.5 - 198.5, 3.0),
+                                                                                bevy::color::Color::srgba(0.176, 0.176, 0.176, panel_t * (1.0 - ws_t)),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[37],
+                                                                                launch_rect.size(),
+                                                                                bevy::math::Vec3::new(launch_rect.center().x - vw * 0.5, vh * 0.5 - launch_rect.center().y, 3.0),
+                                                                                bevy::color::Color::srgba(
+                                                                                    0.215 + 0.060 * anim_state.0[2] - 0.035 * anim_state.1[2],
+                                                                                    0.215 + 0.060 * anim_state.0[2] - 0.035 * anim_state.1[2],
+                                                                                    0.215 + 0.060 * anim_state.0[2] - 0.035 * anim_state.1[2],
+                                                                                    panel_t * (1.0 - ws_t),
+                                                                                ),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[38],
+                                                                                launch_rect.size(),
+                                                                                bevy::math::Vec3::new(launch_rect.center().x - vw * 0.5, vh * 0.5 - launch_rect.center().y, 3.5),
+                                                                                bevy::color::Color::srgba(
+                                                                                    0.360 + 0.360 * anim_state.0[2],
+                                                                                    0.360 + 0.360 * anim_state.0[2],
+                                                                                    0.360 + 0.360 * anim_state.0[2],
+                                                                                    panel_t * (1.0 - ws_t),
+                                                                                ),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[39],
+                                                                                bevy::math::Vec2::splat(32.0),
+                                                                                bevy::math::Vec3::new(launch_rect.min.x + 22.0 - vw * 0.5, vh * 0.5 - 235.0, 4.0),
+                                                                                bevy::color::Color::srgba(
+                                                                                    0.265 + 0.055 * anim_state.0[2] - 0.030 * anim_state.1[2],
+                                                                                    0.265 + 0.055 * anim_state.0[2] - 0.030 * anim_state.1[2],
+                                                                                    0.265 + 0.055 * anim_state.0[2] - 0.030 * anim_state.1[2],
+                                                                                    panel_t * (1.0 - ws_t),
+                                                                                ),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[40],
+                                                                                bevy::math::Vec2::splat(20.0),
+                                                                                bevy::math::Vec3::new(launch_rect.min.x + 22.0 - vw * 0.5, vh * 0.5 - 235.0, 5.0),
+                                                                                bevy::color::Color::srgba(
+                                                                                    0.910 + 0.075 * anim_state.0[2],
+                                                                                    0.910 + 0.075 * anim_state.0[2],
+                                                                                    0.910 + 0.075 * anim_state.0[2],
+                                                                                    panel_t * (1.0 - ws_t),
+                                                                                ),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[42],
+                                                                                bevy::math::Vec2::new(vw, vh),
+                                                                                bevy::math::Vec3::new(0.0, 0.0, 12.0),
+                                                                                bevy::color::Color::srgba(0.0, 0.0, 0.0, 0.58 * modal_t),
+                                                                                modal_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[43],
+                                                                                modal_rect.size() * m_scale,
+                                                                                bevy::math::Vec3::new(0.0, 0.0, 13.0),
+                                                                                bevy::color::Color::srgba(0.245, 0.245, 0.245, modal_t),
+                                                                                modal_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[44],
+                                                                                (modal_rect.size() - bevy::math::Vec2::splat(2.0)).max(bevy::math::Vec2::ONE) * m_scale,
+                                                                                bevy::math::Vec3::new(0.0, 0.0, 13.1),
+                                                                                bevy::color::Color::srgba(0.094, 0.094, 0.094, modal_t),
+                                                                                modal_t > 0.0,
+                                                                            ),
+                                                                        ]
+                                                                        .into_iter()
+                                                                        .for_each(
+                                                                            |(entity, size, pos, colour, shown): (
+                                                                                bevy::ecs::entity::Entity,
+                                                                                bevy::math::Vec2,
+                                                                                bevy::math::Vec3,
+                                                                                bevy::color::Color,
+                                                                                bool,
+                                                                            )| {
+                                                                                sprites
+                                                                                    .get(entity)
+                                                                                    .map(
+                                                                                        |(sprite, transform, visibility): (
+                                                                                            std::option::Option<&bevy::sprite::Sprite>,
+                                                                                            std::option::Option<&bevy::transform::components::Transform>,
+                                                                                            &bevy::camera::visibility::Visibility,
+                                                                                        )| {
+                                                                                            sprite.into_iter().for_each(
+                                                                                                |sprite: &bevy::sprite::Sprite| {
+                                                                                                    if sprite.color != colour
+                                                                                                        || sprite.custom_size
+                                                                                                            != std::option::Option::Some(size)
+                                                                                                    {
+                                                                                                        commands.entity(entity).insert(
+                                                                                                            bevy::sprite::Sprite {
+                                                                                                                color: colour,
+                                                                                                                custom_size:
+                                                                                                                    std::option::Option::Some(
+                                                                                                                        size,
+                                                                                                                    ),
+                                                                                                                ..sprite.clone()
+                                                                                                            },
+                                                                                                        );
+                                                                                                    }
+                                                                                                },
+                                                                                            );
+                                                                                            transform.into_iter().for_each(
+                                                                                                |transform: &bevy::transform::components::Transform| {
+                                                                                                    if transform.translation != pos {
+                                                                                                        commands.entity(entity).insert(
+                                                                                                            bevy::transform::components::Transform::from_translation(pos),
+                                                                                                        );
+                                                                                                    }
+                                                                                                },
+                                                                                            );
+                                                                                            if (*visibility
+                                                                                                == bevy::camera::visibility::Visibility::Inherited)
+                                                                                                != shown
+                                                                                            {
+                                                                                                commands.entity(entity).insert(if shown {
+                                                                                                    bevy::camera::visibility::Visibility::Inherited
+                                                                                                } else {
+                                                                                                    bevy::camera::visibility::Visibility::Hidden
+                                                                                                });
+                                                                                            }
+                                                                                        },
+                                                                                    )
+                                                                                    .ok();
+                                                                            },
+                                                                        );
+
+                                                                        [
+                                                                            (
+                                                                                e[5],
+                                                                                bevy::math::Vec3::new(76.0 - vw * 0.5, vh * 0.5 - 44.0, 3.0),
+                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, menu_t * (1.0 - ws_t)),
+                                                                                menu_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[6],
+                                                                                bevy::math::Vec3::new(76.0 - vw * 0.5, vh * 0.5 - 44.0, 3.1),
+                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, menu_t * ws_t),
+                                                                                menu_t > 0.0 && ws_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[12],
+                                                                                bevy::math::Vec3::new(72.0 - vw * 0.5, vh * 0.5 - 116.0, 4.0),
+                                                                                bevy::color::Color::srgba(
+                                                                                    (0.780 + 0.157 * anim_state.0[0]) * nav_t + 0.086 * (1.0 - nav_t),
+                                                                                    (0.780 + 0.157 * anim_state.0[0]) * nav_t + 0.086 * (1.0 - nav_t),
+                                                                                    (0.780 + 0.157 * anim_state.0[0]) * nav_t + 0.086 * (1.0 - nav_t),
+                                                                                    menu_t * (1.0 - ws_t),
+                                                                                ),
+                                                                                menu_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[17],
+                                                                                bevy::math::Vec3::new(72.0 - vw * 0.5, vh * 0.5 - 172.0, 4.0),
+                                                                                bevy::color::Color::srgba(
+                                                                                    (0.780 + 0.157 * anim_state.0[1]) * (1.0 - nav_t) + 0.086 * nav_t,
+                                                                                    (0.780 + 0.157 * anim_state.0[1]) * (1.0 - nav_t) + 0.086 * nav_t,
+                                                                                    (0.780 + 0.157 * anim_state.0[1]) * (1.0 - nav_t) + 0.086 * nav_t,
+                                                                                    menu_t * (1.0 - ws_t),
+                                                                                ),
+                                                                                menu_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[22],
+                                                                                bevy::math::Vec3::new(72.0 - vw * 0.5, vh * 0.5 - 116.0, 4.1),
+                                                                                bevy::color::Color::srgba(
+                                                                                    0.880 + 0.090 * anim_state.0[3],
+                                                                                    0.880 + 0.090 * anim_state.0[3],
+                                                                                    0.880 + 0.090 * anim_state.0[3],
+                                                                                    menu_t * ws_t,
+                                                                                ),
+                                                                                menu_t > 0.0 && ws_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[28],
+                                                                                bevy::math::Vec3::new(panel_rect.min.x + 86.0 - vw * 0.5, vh * 0.5 - 60.0, 3.0),
+                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, panel_t * (1.0 - ws_t)),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[29],
+                                                                                bevy::math::Vec3::new(panel_rect.min.x + 86.0 - vw * 0.5, vh * 0.5 - 60.0, 3.1),
+                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, panel_t * ws_t),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0,
+                                                                            ),
+                                                                            (
+                                                                                e[35],
+                                                                                bevy::math::Vec3::new(card_rect.min.x + 74.0 - vw * 0.5, vh * 0.5 - 161.0, 4.0),
+                                                                                bevy::color::Color::srgba(0.937, 0.937, 0.937, panel_t * (1.0 - ws_t)),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                            (
+                                                                                e[41],
+                                                                                bevy::math::Vec3::new(launch_rect.min.x + 48.0 - vw * 0.5, vh * 0.5 - 235.0, 5.0),
+                                                                                bevy::color::Color::srgba(
+                                                                                    0.910 + 0.075 * anim_state.0[2],
+                                                                                    0.910 + 0.075 * anim_state.0[2],
+                                                                                    0.910 + 0.075 * anim_state.0[2],
+                                                                                    panel_t * (1.0 - ws_t),
+                                                                                ),
+                                                                                metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t < 1.0,
+                                                                            ),
+                                                                        ]
+                                                                        .into_iter()
+                                                                        .for_each(
+                                                                            |(entity, pos, colour, shown): (
+                                                                                bevy::ecs::entity::Entity,
+                                                                                bevy::math::Vec3,
+                                                                                bevy::color::Color,
+                                                                                bool,
+                                                                            )| {
+                                                                                texts
+                                                                                    .get(entity)
+                                                                                    .map(
+                                                                                        |(text_colour, transform, visibility): (
+                                                                                            std::option::Option<&bevy::text::TextColor>,
+                                                                                            std::option::Option<&bevy::transform::components::Transform>,
+                                                                                            &bevy::camera::visibility::Visibility,
+                                                                                        )| {
+                                                                                            text_colour.into_iter().for_each(
+                                                                                                |text_colour: &bevy::text::TextColor| {
+                                                                                                    if text_colour.0 != colour {
+                                                                                                        commands.entity(entity).insert(
+                                                                                                            bevy::text::TextColor(colour),
+                                                                                                        );
+                                                                                                    }
+                                                                                                },
+                                                                                            );
+                                                                                            transform.into_iter().for_each(
+                                                                                                |transform: &bevy::transform::components::Transform| {
+                                                                                                    if transform.translation != pos {
+                                                                                                        commands.entity(entity).insert(
+                                                                                                            bevy::transform::components::Transform::from_translation(pos),
+                                                                                                        );
+                                                                                                    }
+                                                                                                },
+                                                                                            );
+                                                                                            if (*visibility
+                                                                                                == bevy::camera::visibility::Visibility::Inherited)
+                                                                                                != shown
+                                                                                            {
+                                                                                                commands.entity(entity).insert(if shown {
+                                                                                                    bevy::camera::visibility::Visibility::Inherited
+                                                                                                } else {
+                                                                                                    bevy::camera::visibility::Visibility::Hidden
+                                                                                                });
+                                                                                            }
+                                                                                        },
+                                                                                    )
+                                                                                    .ok();
+                                                                            },
+                                                                        );
+                                                                    }
+                                                                }
+                                                            },
+                                                        );
+
+                                                    (*dot_state).into_iter().for_each(
+                                                        |(dot_entity, cur_dot_pos, cur_dot_vel): (
+                                                            bevy::ecs::entity::Entity,
+                                                            bevy::math::Vec2,
+                                                            bevy::math::Vec2,
+                                                        )| {
+                                                            sprites
+                                                                .get(dot_entity)
+                                                                .map(
+                                                                    |(_sprite, transform, visibility): (
+                                                                        std::option::Option<&bevy::sprite::Sprite>,
+                                                                        std::option::Option<&bevy::transform::components::Transform>,
+                                                                        &bevy::camera::visibility::Visibility,
+                                                                    )| {
+                                                                        transform.into_iter().for_each(
+                                                                            |transform: &bevy::transform::components::Transform| {
+                                                                                if transform.translation
+                                                                                    != bevy::math::Vec3::new(
+                                                                                        cur_dot_pos.x - vw * 0.5,
+                                                                                        vh * 0.5 - cur_dot_pos.y,
+                                                                                        20.0,
+                                                                                    )
+                                                                                {
+                                                                                    commands.entity(dot_entity).insert(
+                                                                                        bevy::transform::components::Transform::from_xyz(
+                                                                                            cur_dot_pos.x - vw * 0.5,
+                                                                                            vh * 0.5 - cur_dot_pos.y,
+                                                                                            20.0,
+                                                                                        ),
+                                                                                    );
+                                                                                }
+                                                                            },
+                                                                        );
+                                                                        if (*visibility
+                                                                            == bevy::camera::visibility::Visibility::Inherited)
+                                                                            != window.focused
+                                                                        {
+                                                                            commands.entity(dot_entity).insert(
+                                                                                if window.focused {
+                                                                                    bevy::camera::visibility::Visibility::Inherited
+                                                                                } else {
+                                                                                    bevy::camera::visibility::Visibility::Hidden
+                                                                                },
+                                                                            );
+                                                                        }
+                                                                    },
+                                                                )
+                                                                .ok();
+
+                                                            match if focus_state.2 < 4u8
+                                                                || metrics_state.0 == 0.0
+                                                                || (window.focused
+                                                                    && cur_dot_vel
+                                                                        != bevy::math::Vec2::ZERO)
+                                                                || anim_state
+                                                                    .0
+                                                                    .iter()
+                                                                    .zip([0u8, 1u8, 2u8, 3u8])
+                                                                    .any(|(v, idx): (&f32, u8)| {
+                                                                        (*v - ((hovered
+                                                                            == std::option::Option::Some(
+                                                                                idx,
+                                                                            ))
+                                                                            as u8
+                                                                            as f32))
+                                                                            .abs()
+                                                                            > 0.0
+                                                                    })
+                                                                || anim_state
+                                                                    .1
+                                                                    .iter()
+                                                                    .zip([0u8, 1u8, 2u8, 3u8])
+                                                                    .any(|(v, idx): (&f32, u8)| {
+                                                                        (*v - (((hovered
+                                                                            == std::option::Option::Some(
+                                                                                idx,
+                                                                            ))
+                                                                            && focus_state.3
+                                                                            && keys.pressed(
+                                                                                bevy::input::keyboard::KeyCode::KeyE,
+                                                                            )
+                                                                            && (focus_state.1
+                                                                                & 64u16)
+                                                                                == 0)
+                                                                            as u8
+                                                                            as f32))
+                                                                            .abs()
+                                                                            > 0.0
+                                                                    })
+                                                                || (anim_state.2[0]
+                                                                    - if final_mode == 0u8 {
+                                                                        0.0
+                                                                    } else {
+                                                                        1.0
+                                                                    })
+                                                                    .abs()
+                                                                    > 0.0
+                                                                || (anim_state.2[1]
+                                                                    - if final_mode == 0u8 {
+                                                                        0.0
+                                                                    } else {
+                                                                        1.0
+                                                                    })
+                                                                    .abs()
+                                                                    > 0.0
+                                                                || (anim_state.2[2]
+                                                                    - if final_mode == 2u8 {
+                                                                        1.0
+                                                                    } else {
+                                                                        0.0
+                                                                    })
+                                                                    .abs()
+                                                                    > 0.0
+                                                                || (anim_state.2[3]
+                                                                    - if final_mode == 2u8
+                                                                        && final_modal
+                                                                    {
+                                                                        1.0
+                                                                    } else {
+                                                                        0.0
+                                                                    })
+                                                                    .abs()
+                                                                    > 0.0
+                                                                || (anim_state.2[4]
+                                                                    - if final_menu {
+                                                                        1.0
+                                                                    } else {
+                                                                        0.0
+                                                                    })
+                                                                    .abs()
+                                                                    > 0.0
+                                                            {
+                                                                bevy::winit::UpdateMode::Continuous
+                                                            } else if window.focused
+                                                                && escape_state.0.is_some()
+                                                            {
+                                                                bevy::winit::UpdateMode::reactive_low_power(
+                                                                    std::time::Duration::from_millis(
+                                                                        25,
+                                                                    ),
+                                                                )
+                                                            } else {
+                                                                bevy::winit::UpdateMode::reactive_low_power(
+                                                                    std::time::Duration::MAX,
+                                                                )
+                                                            } {
+                                                                desired_focused_mode => {
+                                                                    if settings.focused_mode
+                                                                        != desired_focused_mode
+                                                                    {
+                                                                        settings.focused_mode =
+                                                                            desired_focused_mode;
+                                                                    }
+                                                                    if settings.unfocused_mode
+                                                                        != bevy::winit::UpdateMode::reactive_low_power(
+                                                                            std::time::Duration::MAX,
+                                                                        )
+                                                                    {
+                                                                        settings.unfocused_mode =
+                                                                            bevy::winit::UpdateMode::reactive_low_power(
+                                                                                std::time::Duration::MAX,
+                                                                            );
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                    );
+                                                },
+                                            );
+                                        }
+                                    }
+                                }
+                            }
                         }
-                    } else if window.focused
-                        && keys.pressed(bevy::input::keyboard::KeyCode::Escape)
-                    {
-                        settings.focused_mode = navigation_state
-                            .2
-                            .map(|started: std::time::Instant| {
-                                bevy::winit::UpdateMode::reactive_low_power(
-                                    std::time::Duration::from_secs_f64(
-                                        ((if navigation_state.1 {
-                                            5.0f64
-                                        } else {
-                                            7.0f64
-                                        }) - started.elapsed().as_secs_f64())
-                                            .max(0.016f64),
-                                    ),
-                                )
-                            })
-                            .unwrap_or(
-                                bevy::winit::UpdateMode::reactive_low_power(
-                                    std::time::Duration::MAX,
-                                ),
-                            );
-                        settings.unfocused_mode = settings.focused_mode;
-                    } else if settings.focused_mode
-                        != bevy::winit::UpdateMode::reactive_low_power(
-                            std::time::Duration::MAX,
-                        )
-                    {
-                        settings.focused_mode =
-                            bevy::winit::UpdateMode::reactive_low_power(
-                                std::time::Duration::MAX,
-                            );
-                        settings.unfocused_mode = settings.focused_mode;
                     }
                 });
             },
