@@ -151,10 +151,7 @@ fn main() {
                 '_,
                 (std::option::Option<std::time::Instant>, bool, bool, bool),
             >,
-             mut app_state: bevy::ecs::system::Local<
-                '_,
-                std::option::Option<(u8, bool, bool, std::option::Option<u8>)>,
-            >,
+             mut app_state: bevy::ecs::system::Local<'_, [u8; 4]>,
              mut dot_state: bevy::ecs::system::Local<
                 '_,
                 std::option::Option<(
@@ -177,13 +174,7 @@ fn main() {
                 std::option::Option<[bevy::ecs::entity::Entity; 45]>,
             >| {
                 windows.single().into_iter().for_each(|window: &bevy::window::Window| {
-                    if app_state.is_none() {
-                        *app_state = std::option::Option::Some((
-                            0u8,
-                            true,
-                            false,
-                            std::option::Option::None,
-                        ));
+                    if focus_state.2 == 0u8 {
                         anim_state.2 = [0.0, 0.0, 0.0, 0.0, 1.0];
                     }
 
@@ -1761,54 +1752,36 @@ fn main() {
                     }
 
                     escape_state.3 = false;
-                    (*app_state).into_iter().for_each(
-                        |(cur_mode, cur_menu, cur_modal, cur_hover): (
-                            u8,
-                            bool,
-                            bool,
-                            std::option::Option<u8>,
-                        )| {
-                            if !window.focused
-                                || !keys.pressed(bevy::input::keyboard::KeyCode::Escape)
-                            {
-                                *escape_state = (std::option::Option::None, false, false, false);
-                            } else if (focus_state.1 & 256u16) == 0 && !escape_state.2 {
-                                if escape_state.0.is_none()
-                                    && keys.just_pressed(bevy::input::keyboard::KeyCode::Escape)
+                    if !window.focused || !keys.pressed(bevy::input::keyboard::KeyCode::Escape) {
+                        *escape_state = (std::option::Option::None, false, false, false);
+                    } else if (focus_state.1 & 256u16) == 0 && !escape_state.2 {
+                        if escape_state.0.is_none()
+                            && keys.just_pressed(bevy::input::keyboard::KeyCode::Escape)
+                        {
+                            *escape_state = (
+                                std::option::Option::Some(std::time::Instant::now()),
+                                app_state[0] == 2u8,
+                                false,
+                                false,
+                            );
+                        }
+                        escape_state
+                            .0
+                            .into_iter()
+                            .for_each(|started: std::time::Instant| {
+                                if escape_state.1 && started.elapsed().as_secs_f64() >= 5.0f64 {
+                                    *escape_state = (std::option::Option::None, false, true, true);
+                                    anim_state.2[3] = 0.0;
+                                    app_state[0] = 1u8;
+                                    app_state[2] = 0u8;
+                                } else if !escape_state.1
+                                    && started.elapsed().as_secs_f64() >= 7.0f64
                                 {
-                                    *escape_state = (
-                                        std::option::Option::Some(std::time::Instant::now()),
-                                        cur_mode == 2u8,
-                                        false,
-                                        false,
-                                    );
+                                    exits.write(bevy::app::AppExit::Success);
+                                    *escape_state = (std::option::Option::None, false, true, true);
                                 }
-                                escape_state.0.into_iter().for_each(
-                                    |started: std::time::Instant| {
-                                        if escape_state.1
-                                            && started.elapsed().as_secs_f64() >= 5.0f64
-                                        {
-                                            *escape_state =
-                                                (std::option::Option::None, false, true, true);
-                                            anim_state.2[3] = 0.0;
-                                            *app_state = std::option::Option::Some((
-                                                1u8,
-                                                cur_menu,
-                                                false,
-                                                cur_hover,
-                                            ));
-                                        } else if !escape_state.1
-                                            && started.elapsed().as_secs_f64() >= 7.0f64
-                                        {
-                                            exits.write(bevy::app::AppExit::Success);
-                                            *escape_state =
-                                                (std::option::Option::None, false, true, true);
-                                        }
-                                    },
-                                );
-                            }
-                        },
-                    );
+                            });
+                    }
 
                     if !escape_state.3
                         && window.focused
@@ -1825,21 +1798,7 @@ fn main() {
                             bevy::input::keyboard::KeyCode::SuperRight,
                         ])
                     {
-                        (*app_state).into_iter().for_each(
-                            |(cur_mode, cur_menu, cur_modal, cur_hover): (
-                                u8,
-                                bool,
-                                bool,
-                                std::option::Option<u8>,
-                            )| {
-                                *app_state = std::option::Option::Some((
-                                    cur_mode,
-                                    !cur_menu,
-                                    cur_modal,
-                                    cur_hover,
-                                ));
-                            },
-                        );
+                        app_state[1] = u8::from(app_state[1] == 0u8);
                     }
 
                     ui_entities
@@ -1994,13 +1953,13 @@ fn main() {
                                     257.0,
                                 ))
                                 .for_each(|launch_rect: bevy::math::Rect| {
-                                    (*app_state).into_iter().for_each(
-                                        |(cur_mode, cur_menu, cur_modal, _prev_hover): (
-                                            u8,
-                                            bool,
-                                            bool,
-                                            std::option::Option<u8>,
-                                        )| {
+                                    std::iter::once((
+                                        app_state[0],
+                                        app_state[1] == 0u8,
+                                        app_state[2] != 0u8,
+                                    ))
+                                    .for_each(
+                                        |(cur_mode, cur_menu, cur_modal): (u8, bool, bool)| {
                                             std::iter::once(
                                                 match if !window.focused {
                                                     std::option::Option::None
@@ -2172,73 +2131,69 @@ fn main() {
                                                         bool,
                                                         bool,
                                                     )| {
-                                                        *app_state = std::option::Option::Some((
+                                                        *app_state = [
                                                             next_mode,
-                                                            next_menu,
-                                                            next_modal,
+                                                            u8::from(!next_menu),
+                                                            u8::from(next_modal),
                                                             if !window.focused || next_modal {
-                                                                std::option::Option::None
+                                                                0u8
                                                             } else {
                                                                 match hit_target {
                                                                     std::option::Option::Some(0u8)
                                                                         if next_mode != 2u8
                                                                             && next_menu =>
                                                                     {
-                                                                        std::option::Option::Some(
-                                                                            0u8,
-                                                                        )
+                                                                        1u8
                                                                     }
                                                                     std::option::Option::Some(1u8)
                                                                         if next_mode != 2u8
                                                                             && next_menu =>
                                                                     {
-                                                                        std::option::Option::Some(
-                                                                            1u8,
-                                                                        )
+                                                                        2u8
                                                                     }
                                                                     std::option::Option::Some(2u8)
                                                                         if next_mode == 1u8 =>
                                                                     {
-                                                                        std::option::Option::Some(
-                                                                            2u8,
-                                                                        )
+                                                                        3u8
                                                                     }
                                                                     std::option::Option::Some(3u8)
                                                                         if next_mode == 2u8
                                                                             && next_menu =>
                                                                     {
-                                                                        std::option::Option::Some(
-                                                                            3u8,
-                                                                        )
+                                                                        4u8
                                                                     }
-                                                                    _ => std::option::Option::None,
+                                                                    _ => 0u8,
                                                                 }
                                                             },
-                                                        ));
+                                                        ];
                                                     },
                                                 );
                                             });
                                         },
                                     );
 
-                                    (*app_state).into_iter().for_each(
+                                    std::iter::once((
+                                        app_state[0],
+                                        app_state[1] == 0u8,
+                                        app_state[2] != 0u8,
+                                        app_state[3],
+                                    ))
+                                    .for_each(
                                         |(final_mode, final_menu, final_modal, hovered): (
                                             u8,
                                             bool,
                                             bool,
-                                            std::option::Option<u8>,
+                                            u8,
                                         )| {
                                             [0u8, 1u8, 2u8, 3u8].into_iter().for_each(
                                                 |idx: u8| {
                                                     std::iter::once((
                                                         usize::from(idx),
                                                         f32::from(u8::from(
-                                                            hovered
-                                                                == std::option::Option::Some(idx),
+                                                            hovered == idx.saturating_add(1),
                                                         )),
                                                         f32::from(u8::from(
-                                                            (hovered
-                                                                == std::option::Option::Some(idx))
+                                                            (hovered == idx.saturating_add(1))
                                                                 && focus_state.3
                                                                 && keys.pressed(
                                                                     bevy::input::keyboard::KeyCode::KeyE,
@@ -3652,9 +3607,8 @@ fn main() {
                                                                 .any(|(v, idx): (&f32, u8)| {
                                                                     (*v - f32::from(u8::from(
                                                                         hovered
-                                                                            == std::option::Option::Some(
-                                                                                idx,
-                                                                            ),
+                                                                            == idx
+                                                                                .saturating_add(1),
                                                                     )))
                                                                     .abs()
                                                                         > 0.0
@@ -3666,9 +3620,8 @@ fn main() {
                                                                 .any(|(v, idx): (&f32, u8)| {
                                                                     (*v - f32::from(u8::from(
                                                                         (hovered
-                                                                            == std::option::Option::Some(
-                                                                                idx,
-                                                                            ))
+                                                                            == idx
+                                                                                .saturating_add(1))
                                                                             && focus_state.3
                                                                             && keys.pressed(
                                                                                 bevy::input::keyboard::KeyCode::KeyE,
