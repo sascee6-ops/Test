@@ -150,32 +150,36 @@ jobs:
             for y in range(12, h - 12):
               for x in range(12, w - 12):
                 c = px[x, y]
-                if c[0] < 235 or c[1] < 235 or c[2] < 235:
+                if c[0] < 250 or c[1] < 250 or c[2] < 250:
                   continue
                 x0 = x
-                while x0 - 1 >= 0 and px[x0 - 1, y][0] >= 235:
+                while x0 - 1 >= 0 and px[x0 - 1, y][0] >= 250:
                   x0 -= 1
                 x1 = x
-                while x1 + 1 < w and px[x1 + 1, y][0] >= 235:
+                while x1 + 1 < w and px[x1 + 1, y][0] >= 250:
                   x1 += 1
                 if not (9 <= x1 - x0 + 1 <= 11):
                   continue
                 y0 = y
-                while y0 - 1 >= 0 and px[x, y0 - 1][0] >= 235:
+                while y0 - 1 >= 0 and px[x, y0 - 1][0] >= 250:
                   y0 -= 1
                 y1 = y
-                while y1 + 1 < h and px[x, y1 + 1][0] >= 235:
+                while y1 + 1 < h and px[x, y1 + 1][0] >= 250:
                   y1 += 1
                 if not (9 <= y1 - y0 + 1 <= 11):
                   continue
                 cx = (x0 + x1) // 2
                 cy = (y0 + y1) // 2
-                chord = sum(1 for dx in range(-8, 9) if px[cx + dx, cy - 4][0] >= 235)
+                chord = sum(1 for dx in range(-8, 9) if px[cx + dx, cy - 4][0] >= 250)
                 if not (5 <= chord <= 9):
                   continue
-                if px[cx - 8, cy][0] >= 235 or px[cx + 8, cy][0] >= 235:
+                if px[cx - 8, cy][0] >= 250 or px[cx + 8, cy][0] >= 250:
                   continue
-                if px[cx, cy - 8][0] >= 235 or px[cx, cy + 8][0] >= 235:
+                if px[cx, cy - 8][0] >= 250 or px[cx, cy + 8][0] >= 250:
+                  continue
+                if px[cx - 6, cy - 6][0] >= 250 or px[cx + 6, cy - 6][0] >= 250:
+                  continue
+                if px[cx - 6, cy + 6][0] >= 250 or px[cx + 6, cy + 6][0] >= 250:
                   continue
                 return (cx, cy)
             return None
