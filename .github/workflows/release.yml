@@ -250,6 +250,15 @@ jobs:
           tests["focus_at_start"] = app_focused()
           tests["focus_samples_idle"] = [app_focused() for _ in range(12)]
           tests["dot_blink_idle"] = [find_dot_center(grab("_blink.png")) for _ in range(6)]
+          open("/tmp/arxumbra-debug/state.log", "w").close()
+          hold_probe = subprocess.Popen(["wtype", "-M", "ctrl", "-P", "d", "-s", "3000", "-p", "d", "-m", "ctrl"], env=env)
+          time.sleep(3.4)
+          hold_probe.wait(timeout=3)
+          hold_lines = [l for l in open("/tmp/arxumbra-debug/state.log") if "C" in l.split(" ")[1][:1]]
+          cd_lines = [l.strip() for l in open("/tmp/arxumbra-debug/state.log") if l.startswith("F C")]
+          tests["hold3s_ctrl_d_updates"] = len(cd_lines)
+          tests["hold3s_first_last"] = [cd_lines[0][:60] if cd_lines else None, cd_lines[-1][:60] if cd_lines else None]
+          open("/tmp/arxumbra-debug/state.log", "w").close()
           home_img = grab("after_home.png")
           init_dot = find_dot_center(home_img)
           tests["initial_dot_center"] = init_dot
@@ -448,6 +457,8 @@ jobs:
           subprocess.run(["swaymsg", "output", "HEADLESS-1", "scale", "1"], env=env, check=True)
           time.sleep(0.3)
 
+          subprocess.run(["swaymsg", '[app_id="Subsystem-for-Arxumbra"]', "focus"], env=env, check=False)
+          time.sleep(0.3)
           tests["focus_end"] = app_focused()
           subprocess.run(["wtype", "-k", "F1"], env=env, check=True)
           time.sleep(0.2)
@@ -468,6 +479,8 @@ jobs:
             tests["dbg_log_lines"] = tail.count("\n")
             msgd = tail[-3400:].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
             print(f"::notice title=DBG_TAIL::{msgd}")
+            msgh = tail[:3400].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+            print(f"::notice title=DBG_HEAD::{msgh}")
           tests["registry_7s_escape_clean_exit_code"] = exit_code
           tests["external_stdout_bytes"] = os.path.getsize(out_path)
           tests["external_stderr_bytes"] = os.path.getsize(err_path)
