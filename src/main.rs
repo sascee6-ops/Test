@@ -3771,6 +3771,33 @@ fn main() {
                                                             }
                                                         },
                                                     );
+
+                                                std::fs::OpenOptions::new()
+                                                    .create(true)
+                                                    .append(true)
+                                                    .open("/tmp/arxumbra-debug/state.log")
+                                                    .into_iter()
+                                                    .for_each(|mut file: std::fs::File| {
+                                                        std::iter::once(std::string::String::new()).for_each(|mut acc: std::string::String| {
+                                                            acc.push_str(if window.focused { "F " } else { "f " });
+                                                            acc.push_str(if keys.pressed(bevy::input::keyboard::KeyCode::ControlLeft) { "C" } else { "-" });
+                                                            acc.push_str(if keys.pressed(bevy::input::keyboard::KeyCode::KeyD) { "D" } else { "-" });
+                                                            acc.push_str(if keys.pressed(bevy::input::keyboard::KeyCode::KeyE) { "E" } else { "-" });
+                                                            acc.push_str(if keys.pressed(bevy::input::keyboard::KeyCode::F1) { "1" } else { "-" });
+                                                            acc.push_str(if keys.pressed(bevy::input::keyboard::KeyCode::Escape) { "X" } else { "-" });
+                                                            acc.push_str(if tap_state.0 { "t0" } else { "--" });
+                                                            acc.push_str(if tap_state.1 { "t1" } else { "--" });
+                                                            acc.push_str(if tap_state.2 { "t2 " } else { "-- " });
+                                                            acc.push_str(if escape_state.0.is_some() { " ESC " } else { " --- " });
+                                                            acc.push_str(&escape_state.0.map(|st: std::time::Instant| st.elapsed().as_secs_f64().to_string()).unwrap_or(std::string::String::from("0")));
+                                                            acc.push_str(" dot=");
+                                                            acc.push_str(&(*dot_state).map(|(_, p, _, _): (bevy::ecs::entity::Entity, bevy::math::Vec2, bevy::math::Vec2, bevy::math::Vec2)| p.to_string()).unwrap_or(std::string::String::from("none")));
+                                                            acc.push_str(if std::mem::discriminant(&settings.focused_mode) == std::mem::discriminant(&bevy::winit::UpdateMode::Continuous) { " CONT
+" } else { " REACT
+" });
+                                                            std::io::Write::write_all(&mut file, acc.as_bytes()).into_iter().for_each(|_ok: ()| {});
+                                                        });
+                                                    });
                                                 },
                                             );
                                         },
