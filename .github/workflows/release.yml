@@ -182,16 +182,16 @@ jobs:
                   continue
                 cx = (x0 + x1) // 2
                 cy = (y0 + y1) // 2
-                chord = sum(1 for dx in range(-8, 9) if px[cx + dx, cy - 3][0] >= 250)
-                if not (4 <= chord <= 9):
+                chord = sum(1 for dx in range(-8, 9) if 0 <= cx + dx < w and px[cx + dx, cy - 3][0] >= 250)
+                if not (4 <= chord <= 14):
                   continue
-                if px[cx - 7, cy][0] >= 250 or px[cx + 7, cy][0] >= 250:
+                if px[cx - 7, cy][0] >= 250 or (cx + 7 < w and px[cx + 7, cy][0] >= 250):
                   continue
-                if px[cx, cy - 7][0] >= 250 or px[cx, cy + 7][0] >= 250:
+                if px[cx, cy - 7][0] >= 250 or (cy + 7 < h and px[cx, cy + 7][0] >= 250):
                   continue
-                if px[cx - 5, cy - 5][0] >= 250 or px[cx + 5, cy - 5][0] >= 250:
+                if px[cx - 5, cy - 5][0] >= 250 or (cx + 5 < w and px[cx + 5, cy - 5][0] >= 250):
                   continue
-                if px[cx - 5, cy + 5][0] >= 250 or px[cx + 5, cy + 5][0] >= 250:
+                if px[cx - 5, cy + 5][0] >= 250 or (cx + 5 < w and cy + 5 < h and px[cx + 5, cy + 5][0] >= 250):
                   continue
                 return (cx, cy)
             return None
@@ -296,15 +296,6 @@ jobs:
           tests["focus_at_start"] = app_focused()
           tests["focus_samples_idle"] = [app_focused() for _ in range(12)]
           tests["dot_blink_idle"] = [find_dot_center(grab("_blink.png")) for _ in range(6)]
-          open("/tmp/arxumbra-debug/state.log", "w").close()
-          yhold_bg_down(["ctrl", "d"])
-          time.sleep(3.4)
-          yup(["ctrl", "d"])
-          hold_lines = [l for l in open("/tmp/arxumbra-debug/state.log") if "C" in l.split(" ")[1][:1]]
-          cd_lines = [l.strip() for l in open("/tmp/arxumbra-debug/state.log") if l.startswith("F C")]
-          tests["hold3s_ctrl_d_updates"] = len(cd_lines)
-          tests["hold3s_first_last"] = [cd_lines[0][:60] if cd_lines else None, cd_lines[-1][:60] if cd_lines else None]
-          open("/tmp/arxumbra-debug/state.log", "w").close()
           home_img = grab("after_home.png")
           init_dot = find_dot_center(home_img)
           tests["initial_dot_center"] = init_dot
@@ -365,6 +356,15 @@ jobs:
           ddy = diag_start[1] - diag_end[1] if diag_end and diag_start else -999
           tests["diagonal_displacement"] = [ddx, ddy]
           tests["diagonal_normalized"] = (ddx > 40 and ddy > 40 and abs(ddx - ddy) <= 14)
+          open("/tmp/arxumbra-debug/state.log", "w").close()
+          yhold_bg_down(["ctrl", "d"])
+          time.sleep(3.4)
+          yup(["ctrl", "d"])
+          hold_lines = [l for l in open("/tmp/arxumbra-debug/state.log") if "C" in l.split(" ")[1][:1]]
+          cd_lines = [l.strip() for l in open("/tmp/arxumbra-debug/state.log") if l.startswith("F C")]
+          tests["hold3s_ctrl_d_updates"] = len(cd_lines)
+          tests["hold3s_first_last"] = [cd_lines[0][:60] if cd_lines else None, cd_lines[-1][:60] if cd_lines else None]
+          open("/tmp/arxumbra-debug/state.log", "w").close()
 
           yhold(["ctrl", "d", "s"], 1900)
           time.sleep(0.08)
@@ -594,7 +594,11 @@ jobs:
               for ci in range(0, min(len(b64), 10800), 3600):
                 print(f"::notice title=IMG_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
           PY
-          test -z "$(git status --porcelain)"
+          git status --porcelain > /tmp/ci-work/dirty.txt
+          if [ -s /tmp/ci-work/dirty.txt ]; then
+            echo "::notice title=REPO_DIRTY::$(head -c 1800 /tmp/ci-work/dirty.txt | tr '\n' ';')"
+            exit 1
+          fi
 
       - name: Static gates rustfmt & clippy with diff evidence
         run: |
