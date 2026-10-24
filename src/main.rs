@@ -3793,7 +3793,7 @@ fn main() {
                                                             acc.push_str(" dot=");
                                                             acc.push_str(&(*dot_state).map(|(_, p, _, _): (bevy::ecs::entity::Entity, bevy::math::Vec2, bevy::math::Vec2, bevy::math::Vec2)| p.to_string()).unwrap_or(std::string::String::from("none")));
                                                             acc.push_str(" v=");
-                                                            acc.push_str(&(*dot_state).map(|(de, _, _, _): (bevy::ecs::entity::Entity, bevy::math::Vec2, bevy::math::Vec2, bevy::math::Vec2)| sprites.get(de).map(|(sp, tr, vi): (&bevy::sprite::Sprite, &bevy::transform::components::Transform, &bevy::camera::visibility::Visibility)| std::format!("{:?} @{:.0},{:.0} a{:.2}", vi, tr.translation.x, tr.translation.y, sp.color.alpha())).unwrap_or(std::string::String::from("nosprite"))).unwrap_or(std::string::String::from("nodot")));
+                                                            acc.push_str(&(*dot_state).map(|(de, _, _, _): (bevy::ecs::entity::Entity, bevy::math::Vec2, bevy::math::Vec2, bevy::math::Vec2)| sprites.get(de).map(|(sp, tr, vi): (&bevy::sprite::Sprite, &bevy::transform::components::Transform, &bevy::camera::visibility::Visibility)| std::format!("{:?} @{:.0},{:.0} a{:.2}", vi, tr.translation.x, tr.translation.y, bevy::color::Alpha::alpha(&sp.color))).unwrap_or(std::string::String::from("nosprite"))).unwrap_or(std::string::String::from("nodot")));
                                                             acc.push_str(if std::mem::discriminant(&settings.focused_mode) == std::mem::discriminant(&bevy::winit::UpdateMode::Continuous) { " CONT
 " } else { " REACT
 " });
