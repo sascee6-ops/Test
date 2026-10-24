@@ -157,14 +157,16 @@ jobs:
             return None
 
           app_node = None
-          for _ in range(120):
-            time.sleep(0.05)
+          for _ in range(300):
+            time.sleep(0.1)
             tree = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True))
             app_node = find_app_node(tree)
-            if app_node:
+            if app_node and app_node.get("focused"):
               break
 
-          time.sleep(0.5)
+          time.sleep(0.8)
+          tree = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True))
+          app_node = find_app_node(tree) or app_node
 
           def grab(name):
             p = os.path.join(ev, name)
@@ -226,8 +228,33 @@ jobs:
               return [0, -1, -1, -1, -1]
             return [len(xs), min(xs), max(xs), min(ys), max(ys)]
 
+          PPM = [0.5]
+
+          def calibrate_ppm():
+            a = find_dot_center(grab("_cal1.png"))
+            if not a:
+              return
+            yhold(["ctrl", "d"], 200)
+            time.sleep(0.06)
+            b = find_dot_center(grab("_cal2.png"))
+            if a and b and b[0] > a[0] + 20:
+              PPM[0] = min(3.0, max(0.2, (b[0] - a[0]) / 200.0))
+              yhold(["ctrl", "a"], 200)
+              time.sleep(0.06)
+            for _ in range(4):
+              c = find_dot_center(grab("_cal3.png"))
+              if not c or (abs(c[0] - a[0]) <= 3 and abs(c[1] - a[1]) <= 3):
+                break
+              dx = a[0] - c[0]
+              dy = a[1] - c[1]
+              if abs(dx) > 3:
+                yhold(["ctrl", "d" if dx > 0 else "a"], max(16, int(abs(dx) / PPM[0] * 0.9)))
+              if abs(dy) > 3:
+                yhold(["ctrl", "s" if dy > 0 else "w"], max(16, int(abs(dy) / PPM[0] * 0.9)))
+              time.sleep(0.06)
+
           def move_dot_to(tx, ty):
-            for _ in range(14):
+            for _ in range(16):
               im = grab("_probe.png")
               cur = find_dot_center(im)
               if not cur:
@@ -238,12 +265,12 @@ jobs:
                 return cur
               if abs(dx) > 4:
                 k = "d" if dx > 0 else "a"
-                ms = max(18, min(1400, int(abs(dx) / 0.50)))
+                ms = max(16, min(1400, int(abs(dx) / PPM[0] * 0.9)))
                 yhold(["ctrl", k], ms)
                 time.sleep(0.05)
               if abs(dy) > 4:
                 k = "s" if dy > 0 else "w"
-                ms = max(18, min(1400, int(abs(dy) / 0.50)))
+                ms = max(16, min(1400, int(abs(dy) / PPM[0] * 0.9)))
                 yhold(["ctrl", k], ms)
                 time.sleep(0.05)
             return find_dot_center(grab("_probe.png"))
@@ -285,6 +312,8 @@ jobs:
             time.sleep(0.035)
             ykey("29:u")
             time.sleep(0.32)
+
+          calibrate_ppm()
 
           tests = {"elf_dt_needed": needed_libs, "zero_x11_dt_needed": all("X11" not in l and "xcb" not in l for l in needed_libs)}
 
@@ -559,6 +588,18 @@ jobs:
             if app_focused():
               break
           tests["focus_end"] = app_focused()
+          if not tests["focus_end"]:
+            _ftree = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True))
+            def _fnode(n):
+              if n.get("focused"):
+                return (n.get("app_id"), n.get("name"), n.get("type"))
+              for k in ("nodes", "floating_nodes"):
+                for ch in n.get(k, []):
+                  r = _fnode(ch)
+                  if r:
+                    return r
+              return None
+            tests["dbg_focus_tree"] = _fnode(_ftree)
           ykey("59:d", "59:u")
           time.sleep(0.2)
           exit_hold = yhold_bg_down(["Escape"])
