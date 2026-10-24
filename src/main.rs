@@ -158,6 +158,7 @@ fn main() {
                     bevy::ecs::entity::Entity,
                     bevy::math::Vec2,
                     bevy::math::Vec2,
+                    bevy::math::Vec2,
                 )>,
             >,
              mut metrics_state: bevy::ecs::system::Local<
@@ -172,7 +173,28 @@ fn main() {
              mut ui_entities: bevy::ecs::system::Local<
                 '_,
                 std::option::Option<[bevy::ecs::entity::Entity; 45]>,
+            >,
+             mut tap_state: bevy::ecs::system::Local<'_, (bool, bool, bool)>,
+             mut key_events: bevy::ecs::event::EventReader<
+                '_,
+                '_,
+                bevy::input::keyboard::KeyboardInput,
             >| {
+                *tap_state = (false, false, false);
+                key_events.read().for_each(
+                    |key_event: &bevy::input::keyboard::KeyboardInput| {
+                        if key_event.state == bevy::input::ButtonState::Pressed
+                            && !key_event.repeat
+                        {
+                            match key_event.key_code {
+                                bevy::input::keyboard::KeyCode::F1 => tap_state.0 = true,
+                                bevy::input::keyboard::KeyCode::KeyE => tap_state.1 = true,
+                                bevy::input::keyboard::KeyCode::Escape => tap_state.2 = true,
+                                _ => {}
+                            }
+                        }
+                    },
+                );
                 windows.single().into_iter().for_each(|window: &bevy::window::Window| {
                     if focus_state.2 == 0u8 {
                         anim_state.2 = [0.0, 0.0, 0.0, 0.0, 1.0];
@@ -1679,11 +1701,9 @@ fn main() {
                                             },
                                         ))
                                         .id(),
-                                    bevy::math::Vec2::new(
-                                        window.width() * 0.5,
-                                        window.height() * 0.5,
-                                    ),
+                                    bevy::math::Vec2::new(-1.0, -1.0),
                                     bevy::math::Vec2::ZERO,
+                                    bevy::math::Vec2::new(window.width(), window.height()),
                                 ));
                             },
                         );
@@ -1693,6 +1713,36 @@ fn main() {
                     metrics_state.2 =
                         bevy::math::Vec2::new(window.width().max(1.0), window.height().max(1.0));
                     metrics_state.3 = time.delta_secs().clamp(0.0, 0.05);
+
+                    if focus_state.2 >= 2u8 {
+                        (*dot_state).into_iter().for_each(
+                            |(dot_entity, prev_pos, _prev_vel, prev_size): (
+                                bevy::ecs::entity::Entity,
+                                bevy::math::Vec2,
+                                bevy::math::Vec2,
+                                bevy::math::Vec2,
+                            )| {
+                                if (prev_size != metrics_state.2
+                                    && prev_pos == prev_size * 0.5)
+                                    || (prev_pos.x < 0.0 && prev_size == metrics_state.2)
+                                {
+                                    *dot_state = std::option::Option::Some((
+                                        dot_entity,
+                                        metrics_state.2 * 0.5,
+                                        bevy::math::Vec2::ZERO,
+                                        metrics_state.2,
+                                    ));
+                                } else if prev_size != metrics_state.2 {
+                                    *dot_state = std::option::Option::Some((
+                                        dot_entity,
+                                        prev_pos,
+                                        bevy::math::Vec2::ZERO,
+                                        metrics_state.2,
+                                    ));
+                                }
+                            },
+                        );
+                    }
 
                     match (
                         window.focused,
@@ -1715,8 +1765,9 @@ fn main() {
                             focus_state.3 = false;
                             *escape_state = (std::option::Option::None, false, false, false);
                             (*dot_state).into_iter().for_each(
-                                |(dot_entity, dot_pos, _dot_vel): (
+                                |(dot_entity, dot_pos, _dot_vel, dot_size): (
                                     bevy::ecs::entity::Entity,
+                                    bevy::math::Vec2,
                                     bevy::math::Vec2,
                                     bevy::math::Vec2,
                                 )| {
@@ -1724,6 +1775,7 @@ fn main() {
                                         dot_entity,
                                         dot_pos,
                                         bevy::math::Vec2::ZERO,
+                                        dot_size,
                                     ));
                                 },
                             );
@@ -1755,9 +1807,7 @@ fn main() {
                     if !window.focused || !keys.pressed(bevy::input::keyboard::KeyCode::Escape) {
                         *escape_state = (std::option::Option::None, false, false, false);
                     } else if (focus_state.1 & 256u16) == 0 && !escape_state.2 {
-                        if escape_state.0.is_none()
-                            && keys.just_pressed(bevy::input::keyboard::KeyCode::Escape)
-                        {
+                        if escape_state.0.is_none() && tap_state.2 {
                             *escape_state = (
                                 std::option::Option::Some(std::time::Instant::now()),
                                 app_state[0] == 2u8,
@@ -1785,7 +1835,7 @@ fn main() {
 
                     if !escape_state.3
                         && window.focused
-                        && keys.just_pressed(bevy::input::keyboard::KeyCode::F1)
+                        && tap_state.0
                         && (focus_state.1 & 128u16) == 0
                         && !keys.any_pressed([
                             bevy::input::keyboard::KeyCode::ControlLeft,
@@ -1826,8 +1876,9 @@ fn main() {
                     };
 
                     (*dot_state).into_iter().for_each(
-                        |(dot_entity, prev_pos, prev_vel): (
+                        |(dot_entity, prev_pos, prev_vel, _prev_size): (
                             bevy::ecs::entity::Entity,
+                            bevy::math::Vec2,
                             bevy::math::Vec2,
                             bevy::math::Vec2,
                         )| {
@@ -1888,6 +1939,7 @@ fn main() {
                                             ),
                                         ),
                                         next_vel,
+                                        metrics_state.2,
                                     ));
                                 });
                             });
@@ -1919,11 +1971,12 @@ fn main() {
                         ),
                         (*dot_state)
                             .map(
-                                |(_, pos, _): (
+                                |(_, pos, _, _): (
                                     bevy::ecs::entity::Entity,
                                     bevy::math::Vec2,
                                     bevy::math::Vec2,
-                                )| pos,
+                                    bevy::math::Vec2,
+                                )| pos.max(bevy::math::Vec2::ZERO),
                             )
                             .unwrap_or(metrics_state.2 * 0.5),
                     ))
@@ -2081,9 +2134,7 @@ fn main() {
                                                 std::iter::once(
                                                     if !escape_state.3
                                                         && focus_state.3
-                                                        && keys.just_pressed(
-                                                            bevy::input::keyboard::KeyCode::KeyE,
-                                                        )
+                                                        && tap_state.1
                                                         && (focus_state.1 & 64u16) == 0
                                                     {
                                                         match hit_target {
@@ -3549,8 +3600,9 @@ fn main() {
                                             );
 
                                             (*dot_state).into_iter().for_each(
-                                                |(dot_entity, cur_dot_pos, cur_dot_vel): (
+                                                |(dot_entity, cur_dot_pos, cur_dot_vel, _): (
                                                     bevy::ecs::entity::Entity,
+                                                    bevy::math::Vec2,
                                                     bevy::math::Vec2,
                                                     bevy::math::Vec2,
                                                 )| {
@@ -3675,16 +3727,10 @@ fn main() {
                                                                 })
                                                                 .abs()
                                                                 > 0.0
+                                                            || (window.focused
+                                                                && escape_state.0.is_some())
                                                         {
                                                             bevy::winit::UpdateMode::Continuous
-                                                        } else if window.focused
-                                                            && escape_state.0.is_some()
-                                                        {
-                                                            bevy::winit::UpdateMode::reactive_low_power(
-                                                                std::time::Duration::from_millis(
-                                                                    25,
-                                                                ),
-                                                            )
                                                         } else {
                                                             bevy::winit::UpdateMode::reactive_low_power(
                                                                 std::time::Duration::MAX,
