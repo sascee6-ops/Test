@@ -26,6 +26,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
+            pkg-config libwayland-dev libxkbcommon-dev \
             sway grim wtype jq time mesa-vulkan-drivers vulkan-tools python3-pil
 
       - name: Select latest verified dated nightly & run inexpensive static checks
