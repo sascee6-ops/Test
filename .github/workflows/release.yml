@@ -390,8 +390,12 @@ jobs:
           subprocess.run(["wtype", "-k", "F1"], env=env, check=True)
           time.sleep(0.2)
           exit_hold = subprocess.Popen(["wtype", "-P", "Escape", "-s", "7600", "-p", "Escape"], env=env)
-          exit_code = app.wait(timeout=10)
-          exit_hold.wait(timeout=3)
+          try:
+              exit_code = app.wait(timeout=11)
+          except subprocess.TimeoutExpired:
+              exit_code = -999
+              app.terminate()
+          exit_hold.wait(timeout=4)
           out_f.close()
           err_f.close()
           sway.terminate()
