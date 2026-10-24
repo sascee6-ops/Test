@@ -123,29 +123,27 @@ fn main() {
                 bevy::ecs::system::Commands<'_, '_>,
                 bevy::ecs::system::ResMut<'_, bevy::winit::WinitSettings>,
             ),
-             (sprites, texts, layout_info): (
-                bevy::ecs::system::Query<
-                    '_,
-                    '_,
-                    (
-                        std::option::Option<&bevy::sprite::Sprite>,
-                        std::option::Option<&bevy::transform::components::Transform>,
-                        &bevy::camera::visibility::Visibility,
-                    ),
-                    bevy::ecs::query::Without<bevy::text::TextColor>,
-                >,
-                bevy::ecs::system::Query<
-                    '_,
-                    '_,
-                    (
-                        std::option::Option<&bevy::text::TextColor>,
-                        std::option::Option<&bevy::transform::components::Transform>,
-                        &bevy::camera::visibility::Visibility,
-                    ),
-                    bevy::ecs::query::Without<bevy::sprite::Sprite>,
-                >,
-                bevy::ecs::system::Query<'_, '_, &bevy::text::TextLayoutInfo>,
-            ),
+             sprites: bevy::ecs::system::Query<
+                '_,
+                '_,
+                (
+                    std::option::Option<&bevy::sprite::Sprite>,
+                    std::option::Option<&bevy::transform::components::Transform>,
+                    &bevy::camera::visibility::Visibility,
+                ),
+                bevy::ecs::query::Without<bevy::text::TextColor>,
+            >,
+             texts: bevy::ecs::system::Query<
+                '_,
+                '_,
+                (
+                    std::option::Option<&bevy::text::TextColor>,
+                    std::option::Option<&bevy::transform::components::Transform>,
+                    &bevy::camera::visibility::Visibility,
+                ),
+                bevy::ecs::query::Without<bevy::sprite::Sprite>,
+            >,
+             layout_info: bevy::ecs::system::Query<'_, '_, &bevy::text::TextLayoutInfo>,
              mut focus_state: bevy::ecs::system::Local<'_, (bool, u16, u8, bool)>,
              mut escape_state: bevy::ecs::system::Local<
                 '_,
@@ -2746,7 +2744,8 @@ fn main() {
                                                                             )| {
                                                                                 sprites
                                                                                     .get(entity)
-                                                                                    .map(
+                                                                                    .into_iter()
+                                                                                    .for_each(
                                                                                         |(sprite, transform, visibility): (
                                                                                             std::option::Option<&bevy::sprite::Sprite>,
                                                                                             std::option::Option<&bevy::transform::components::Transform>,
@@ -2791,8 +2790,7 @@ fn main() {
                                                                                                 });
                                                                                             }
                                                                                         },
-                                                                                    )
-                                                                                    .ok();
+                                                                                    );
                                                                             },
                                                                         );
 
@@ -2882,7 +2880,8 @@ fn main() {
                                                                             )| {
                                                                                 texts
                                                                                     .get(entity)
-                                                                                    .map(
+                                                                                    .into_iter()
+                                                                                    .for_each(
                                                                                         |(text_colour, transform, visibility): (
                                                                                             std::option::Option<&bevy::text::TextColor>,
                                                                                             std::option::Option<&bevy::transform::components::Transform>,
@@ -2917,8 +2916,7 @@ fn main() {
                                                                                                 });
                                                                                             }
                                                                                         },
-                                                                                    )
-                                                                                    .ok();
+                                                                                    );
                                                                             },
                                                                         );
                                                                     }
@@ -2934,7 +2932,8 @@ fn main() {
                                                         )| {
                                                             sprites
                                                                 .get(dot_entity)
-                                                                .map(
+                                                                .into_iter()
+                                                                .for_each(
                                                                     |(_sprite, transform, visibility): (
                                                                         std::option::Option<&bevy::sprite::Sprite>,
                                                                         std::option::Option<&bevy::transform::components::Transform>,
@@ -2972,8 +2971,7 @@ fn main() {
                                                                             );
                                                                         }
                                                                     },
-                                                                )
-                                                                .ok();
+                                                                );
 
                                                             match if focus_state.2 < 4u8
                                                                 || metrics_state.0 == 0.0

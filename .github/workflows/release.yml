@@ -36,7 +36,7 @@ jobs:
             python3 - "$1" "$2" << 'PY'
           import sys
           title, path = sys.argv[1], sys.argv[2]
-          txt = open(path, errors="replace").read()[-45000:]
+          txt = open(path, errors="replace").read()[-3400:]
           esc = txt.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
           print(f"::notice title={title}::{esc}")
           PY
@@ -72,7 +72,7 @@ jobs:
           }
 
           CLIPPY_RC=0
-          cargo +"${SELECTED_TC}" clippy --locked --target x86_64-unknown-linux-gnu -- -D warnings >/tmp/ci-work/clippy.log 2>&1 || CLIPPY_RC=$?
+          cargo +"${SELECTED_TC}" clippy --quiet --locked --target x86_64-unknown-linux-gnu -- -D warnings >/tmp/ci-work/clippy.log 2>&1 || CLIPPY_RC=$?
           if [ "${CLIPPY_RC}" -ne 0 ]; then
             emit_note "CLIPPY_ERR" /tmp/ci-work/clippy.log
             exit 1
@@ -143,7 +143,7 @@ jobs:
       - name: Build untouched df47cac baseline & capture native-Wayland BEFORE evidence
         run: |
           exec 2> >(tee /tmp/ci-work/step_base.err >&2)
-          trap 'python3 -c "import sys; t=open(\"/tmp/ci-work/step_base.err\",errors=\"replace\").read()[-30000:].replace(\"%\",\"%25\").replace(\"\\r\",\"%0D\").replace(\"\\n\",\"%0A\"); print(f\"::notice title=STEP_BASE_ERR::{t}\")"' ERR
+          trap 'python3 -c "import sys; t=open(\"/tmp/ci-work/step_base.err\",errors=\"replace\").read()[-3400:].replace(\"%\",\"%25\").replace(\"\\r\",\"%0D\").replace(\"\\n\",\"%0A\"); print(f\"::notice title=STEP_BASE_ERR::{t}\")"' ERR
           set -euo pipefail
           TC="$(cat /tmp/ci-work/selected_tc.txt)"
           mkdir -p /tmp/ci-work/baseline-src /tmp/ci-work/baseline-stage
@@ -289,18 +289,18 @@ jobs:
           print(f"::notice title=BASELINE_DF47CAC::{msg}")
 
           for shot in ["before_home.png", "before_registry.png"]:
-            im = Image.open(os.path.join(ev, shot))
+            im = Image.open(os.path.join(ev, shot)).resize((960, 540), Image.Resampling.LANCZOS).convert("L")
             out_p = os.path.join(ev, "opt_" + shot)
             im.save(out_p, format="PNG", optimize=True, compress_level=9)
             b64 = base64.b64encode(open(out_p, "rb").read()).decode("ascii")
-            if len(b64) < 58000:
-                print(f"::notice title=IMG_{shot}::{b64}")
+            for ci in range(0, min(len(b64), 10800), 3600):
+                print(f"::notice title=IMG_{shot}_{ci//3600}::{b64[ci:ci+3600]}")
           PY
 
       - name: Run controlled compiler & linker flag experiments (V14 §6)
         run: |
           exec 2> >(tee /tmp/ci-work/step_exp.err >&2)
-          trap 'python3 -c "t=open(\"/tmp/ci-work/step_exp.err\",errors=\"replace\").read()[-30000:].replace(\"%\",\"%25\").replace(\"\\r\",\"%0D\").replace(\"\\n\",\"%0A\"); print(f\"::notice title=STEP_EXP_ERR::{t}\")"' ERR
+          trap 'python3 -c "t=open(\"/tmp/ci-work/step_exp.err\",errors=\"replace\").read()[-3400:].replace(\"%\",\"%25\").replace(\"\\r\",\"%0D\").replace(\"\\n\",\"%0A\"); print(f\"::notice title=STEP_EXP_ERR::{t}\")"' ERR
           set -euo pipefail
           TC="$(cat /tmp/ci-work/selected_tc.txt)"
           CFG_E_FLAGS="$(cat /tmp/ci-work/verified_rustflags.json)"
@@ -492,7 +492,7 @@ jobs:
       - name: Run full Native-Wayland V14 functional, geometry, motion, modal & Escape acceptance suite
         run: |
           exec 2> >(tee /tmp/ci-work/step_wl.err >&2)
-          trap 'python3 -c "t=open(\"/tmp/ci-work/step_wl.err\",errors=\"replace\").read()[-30000:].replace(\"%\",\"%25\").replace(\"\\r\",\"%0D\").replace(\"\\n\",\"%0A\"); print(f\"::notice title=STEP_WL_ERR::{t}\")"' ERR
+          trap 'python3 -c "t=open(\"/tmp/ci-work/step_wl.err\",errors=\"replace\").read()[-3400:].replace(\"%\",\"%25\").replace(\"\\r\",\"%0D\").replace(\"\\n\",\"%0A\"); print(f\"::notice title=STEP_WL_ERR::{t}\")"' ERR
           set -euo pipefail
           mkdir -p /tmp/ci-work/isolated-run
           cp /tmp/ci-work/bins/cfg_e_fat_o3_mir_gc /tmp/ci-work/isolated-run/Subsystem-for-Arxumbra
@@ -861,12 +861,12 @@ jobs:
           for shot in shots:
             p = os.path.join(ev, shot)
             if os.path.exists(p):
-                im = Image.open(p)
+                im = Image.open(p).resize((960, 540), Image.Resampling.LANCZOS).convert("L")
                 op = os.path.join(ev, "opt_" + shot)
                 im.save(op, format="PNG", optimize=True, compress_level=9)
                 b64 = base64.b64encode(open(op, "rb").read()).decode("ascii")
-                if len(b64) < 60000:
-                    print(f"::notice title=IMG_{shot}::{b64}")
+                for ci in range(0, min(len(b64), 7200), 3600):
+                    print(f"::notice title=IMG_{shot}_{ci//3600}::{b64[ci:ci+3600]}")
 
           with open(os.environ["GITHUB_STEP_SUMMARY"], "w") as sf:
             sf.write("## Static Checks\n```json\n" + open("/tmp/ci-work/static_checks.json").read() + "\n```\n")
