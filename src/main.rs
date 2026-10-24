@@ -181,7 +181,7 @@ fn main() {
                     '_,
                     bevy::input::keyboard::KeyboardInput,
                 >,
-            ),
+            )| {
                 *tap_state = (false, false, false);
                 key_events.read().for_each(
                     |key_event: &bevy::input::keyboard::KeyboardInput| {
