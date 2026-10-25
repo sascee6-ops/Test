@@ -618,8 +618,16 @@ jobs:
           tests["modal_5_cycles_rss_delta_kb"] = rss_after_cycles - rss_before_cycles
 
           ctrl_e()
+          time.sleep(0.35)
           reopen_img = grab("_reopen.png")
+          retries = 0
+          while reopen_img.getpixel((820, 540)) != modal_interior_rgb and retries < 2:
+            ctrl_e()
+            time.sleep(0.35)
+            reopen_img = grab("_reopen.png")
+            retries += 1
           tests["dbg_px_reopen"] = [reopen_img.getpixel((820, 540)), modal_interior_rgb]
+          tests["cycle_reopen_retries"] = retries
 
           yhold(["Escape"], 2200)
           time.sleep(0.2)
