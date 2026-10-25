@@ -280,33 +280,43 @@ jobs:
               time.sleep(0.06)
 
           def move_dot_to(tx, ty):
-            for _ in range(16):
+            v = PPM[0] if PPM[0] else 1.5
+            c = None
+            for _ in range(24):
               im = grab("_probe.png")
-              cur = find_dot_center(im)
-              if not cur:
+              c = find_dot_center(im)
+              if not c:
                 break
-              dx = tx - cur[0]
-              dy = ty - cur[1]
-              if abs(dx) <= 6 and abs(dy) <= 6:
-                return cur
-              if abs(dx) > 4:
-                k = "d" if dx > 0 else "a"
-                ms = max(16, min(1400, int(abs(dx) / PPM[0] * 0.7)))
-                yhold(["ctrl", k], ms)
+              dx = tx - c[0]
+              dy = ty - c[1]
+              if abs(dx) <= 5 and abs(dy) <= 5:
+                return c
+              if abs(dx) > 5:
+                ms = max(8, min(1400, int(abs(dx) / v * 0.9)))
+                c0 = c[0]
+                yhold(["ctrl", "d" if dx > 0 else "a"], ms)
                 time.sleep(0.05)
-              if abs(dy) > 4:
-                k = "s" if dy > 0 else "w"
-                ms = max(16, min(1400, int(abs(dy) / PPM[0] * 0.7)))
-                yhold(["ctrl", k], ms)
+                c2 = find_dot_center(grab("_probe.png"))
+                if c2 and abs(c2[0] - c0) > 4:
+                  v = max(0.6, min(3.0, abs(c2[0] - c0) / ms))
+                c = c2 if c2 else c
+                dy = ty - c[1]
+              if abs(dy) > 5:
+                ms = max(8, min(1400, int(abs(dy) / v * 0.9)))
+                c0 = c[1]
+                yhold(["ctrl", "s" if dy > 0 else "w"], ms)
                 time.sleep(0.05)
-            return find_dot_center(grab("_probe.png"))
+                c2 = find_dot_center(grab("_probe.png"))
+                if c2 and abs(c2[1] - c0) > 4:
+                  v = max(0.6, min(3.0, abs(c2[1] - c0) / ms))
+                c = c2 if c2 else c
+            return c if c else find_dot_center(grab("_probe.png"))
 
           def goto(tx, ty):
             c = None
-            for _ in range(4):
-              move_dot_to(tx, ty)
-              c = find_dot_center(grab("_probe.png"))
-              if c and abs(c[0] - tx) <= 3 and abs(c[1] - ty) <= 3:
+            for _ in range(3):
+              c = move_dot_to(tx, ty)
+              if c and abs(c[0] - tx) <= 6 and abs(c[1] - ty) <= 6:
                 return c
             return c
 
