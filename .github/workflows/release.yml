@@ -1009,10 +1009,10 @@ jobs:
           dt = round(time.time() - t0, 1)
           combined = p.stdout + "\n" + p.stderr
           chk(p.returncode, "BUILD", combined)
-          inv = [ln for ln in combined.splitlines() if ln.startswith("Running `") and "subsystem_for_arxumbra" in ln.lower()]
+          inv = [ln for ln in combined.splitlines() if "Running `" in ln and "subsystem_for_arxumbra" in ln.lower()]
           if not inv:
-              runl = [ln for ln in combined.splitlines() if ln.startswith("Running `")]
-              notice("AUD_FAIL_INV", json.dumps({"running_line_count": len(runl), "samples": [l[:260] for l in runl[:2]]}))
+              runl = [ln for ln in combined.splitlines() if "Running `" in ln]
+              notice("AUD_FAIL_INV", json.dumps({"running_line_count": len(runl), "samples": [l.strip()[:260] for l in runl[:2]]}))
               raise SystemExit(1)
           last = inv[-1]
           missing = [f for f in ("opt-level=3", "codegen-units=1", "panic=abort", "strip=symbols") if f not in last]
