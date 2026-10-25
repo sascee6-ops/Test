@@ -1,6 +1,9 @@
 name: release
 
 on:
+  push:
+    branches:
+      - arena/2494d094-test
   workflow_dispatch:
 
 permissions:
@@ -16,7 +19,7 @@ jobs:
         shell: bash
         run: |
           git init .
-          git remote add origin https://github.com/sascee6-ops/Test.git
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
           git fetch --depth 1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
       - name: Stage 1
@@ -70,7 +73,7 @@ jobs:
         shell: bash
         run: |
           git init .
-          git remote add origin https://github.com/sascee6-ops/Test.git
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
           git fetch --depth 1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
       - name: Stage 1
@@ -124,7 +127,7 @@ jobs:
         shell: bash
         run: |
           git init .
-          git remote add origin https://github.com/sascee6-ops/Test.git
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
           git fetch --depth 1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
       - name: Stage 1
@@ -173,7 +176,7 @@ jobs:
         shell: bash
         run: |
           git init .
-          git remote add origin https://github.com/sascee6-ops/Test.git
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
           git fetch --depth 1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
       - name: Stage 1
@@ -222,7 +225,7 @@ jobs:
         shell: bash
         run: |
           git init .
-          git remote add origin https://github.com/sascee6-ops/Test.git
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
           git fetch --depth 1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
       - name: Stage 1
@@ -271,7 +274,7 @@ jobs:
         shell: bash
         run: |
           git init .
-          git remote add origin https://github.com/sascee6-ops/Test.git
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
           git fetch --depth 1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
       - name: Stage 1
