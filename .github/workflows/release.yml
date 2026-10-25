@@ -960,6 +960,15 @@ jobs:
           timeout 1500 cargo +nightly-2026-10-24 check --target x86_64-unknown-linux-gnu > /tmp/deptry/check.log 2>&1
           echo "bevy-main check exit: $?"
           python3 -c "t=(open('/tmp/deptry/lock.log',errors='replace').read()[-1200:] + open('/tmp/deptry/check.log',errors='replace').read()[-2200:]).replace('%','%25').replace('\r','%0D').replace('\n','%0A'); print('::notice title=BEVY_MAIN_DIAG::' + t)"
+          python3 - << 'PY'
+          import base64, hashlib
+          raw = open("/tmp/deptry/Cargo.lock", "rb").read()
+          b64 = base64.b64encode(raw).decode()
+          chunks = [b64[i:i + 3400] for i in range(0, len(b64), 3400)]
+          print("::notice title=LOCK_CHUNKS::total=%d sha256=%s" % (len(chunks), hashlib.sha256(raw).hexdigest()))
+          for idx, c in enumerate(chunks):
+              print("::notice title=LOCK_B64_%03d::%s" % (idx, c))
+          PY
           set -e
       - name: Етап 17
         run: |
