@@ -999,8 +999,23 @@ jobs:
         run: |
           set -e
           CIW="${RUNNER_TEMP}/ci-work"
-          cp "${CIW}/ctarget/aarch64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${CIW}/stage/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
-          chmod 755 "${CIW}/stage/@NAME@"
+          if ! cp "${CIW}/ctarget/aarch64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${CIW}/stage/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"; then
+            PYBIN="$(command -v python3 || command -v python)"
+            "$PYBIN" - "${CIW}/ctarget" << 'PY'
+          import os, sys
+          root = sys.argv[1]
+          hits = []
+          for dp, dn, fn in os.walk(root):
+              for f in fn:
+                  if "Subsystem" in f:
+                      hits.append(os.path.join(dp, f))
+              if len(hits) > 12:
+                  break
+          print("::notice title=STAGE_FAIL::" + str(hits[:12]).replace("%", "%25")[:3500])
+          PY
+            exit 1
+          fi
+          chmod 755 "${CIW}/stage/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 5
         shell: bash
         run: |
@@ -1173,8 +1188,23 @@ jobs:
         run: |
           set -e
           CIW="${RUNNER_TEMP}/ci-work"
-          cp "${CIW}/ctarget/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${CIW}/stage/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
-          chmod 755 "${CIW}/stage/@NAME@"
+          if ! cp "${CIW}/ctarget/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${CIW}/stage/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"; then
+            PYBIN="$(command -v python3 || command -v python)"
+            "$PYBIN" - "${CIW}/ctarget" << 'PY'
+          import os, sys
+          root = sys.argv[1]
+          hits = []
+          for dp, dn, fn in os.walk(root):
+              for f in fn:
+                  if "Subsystem" in f:
+                      hits.append(os.path.join(dp, f))
+              if len(hits) > 12:
+                  break
+          print("::notice title=STAGE_FAIL::" + str(hits[:12]).replace("%", "%25")[:3500])
+          PY
+            exit 1
+          fi
+          chmod 755 "${CIW}/stage/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 5
         shell: bash
         run: |
@@ -1341,8 +1371,23 @@ jobs:
         run: |
           set -e
           CIW="${RUNNER_TEMP}/ci-work"
-          cp "${CIW}/ctarget/aarch64-apple-darwin/release/Subsystem-for-Arxumbra" "${CIW}/stage/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
-          chmod 755 "${CIW}/stage/@NAME@"
+          if ! cp "${CIW}/ctarget/aarch64-apple-darwin/release/Subsystem-for-Arxumbra" "${CIW}/stage/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"; then
+            PYBIN="$(command -v python3 || command -v python)"
+            "$PYBIN" - "${CIW}/ctarget" << 'PY'
+          import os, sys
+          root = sys.argv[1]
+          hits = []
+          for dp, dn, fn in os.walk(root):
+              for f in fn:
+                  if "Subsystem" in f:
+                      hits.append(os.path.join(dp, f))
+              if len(hits) > 12:
+                  break
+          print("::notice title=STAGE_FAIL::" + str(hits[:12]).replace("%", "%25")[:3500])
+          PY
+            exit 1
+          fi
+          chmod 755 "${CIW}/stage/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 4
         shell: bash
         run: |
@@ -1509,8 +1554,23 @@ jobs:
         run: |
           set -e
           CIW="${RUNNER_TEMP}/ci-work"
-          cp "${CIW}/ctarget/x86_64-apple-darwin/release/Subsystem-for-Arxumbra" "${CIW}/stage/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
-          chmod 755 "${CIW}/stage/@NAME@"
+          if ! cp "${CIW}/ctarget/x86_64-apple-darwin/release/Subsystem-for-Arxumbra" "${CIW}/stage/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"; then
+            PYBIN="$(command -v python3 || command -v python)"
+            "$PYBIN" - "${CIW}/ctarget" << 'PY'
+          import os, sys
+          root = sys.argv[1]
+          hits = []
+          for dp, dn, fn in os.walk(root):
+              for f in fn:
+                  if "Subsystem" in f:
+                      hits.append(os.path.join(dp, f))
+              if len(hits) > 12:
+                  break
+          print("::notice title=STAGE_FAIL::" + str(hits[:12]).replace("%", "%25")[:3500])
+          PY
+            exit 1
+          fi
+          chmod 755 "${CIW}/stage/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 4
         shell: bash
         run: |
@@ -1677,7 +1737,22 @@ jobs:
         run: |
           set -e
           CIW="${RUNNER_TEMP}/ci-work"
-          cp "${CIW}/ctarget/aarch64-pc-windows-msvc/release/Subsystem-for-Arxumbra.exe" "${CIW}/stage/AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
+          if ! cp "${CIW}/ctarget/aarch64-pc-windows-msvc/release/Subsystem-for-Arxumbra.exe" "${CIW}/stage/AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"; then
+            PYBIN="$(command -v python3 || command -v python)"
+            "$PYBIN" - "${CIW}/ctarget" << 'PY'
+          import os, sys
+          root = sys.argv[1]
+          hits = []
+          for dp, dn, fn in os.walk(root):
+              for f in fn:
+                  if "Subsystem" in f:
+                      hits.append(os.path.join(dp, f))
+              if len(hits) > 12:
+                  break
+          print("::notice title=STAGE_FAIL::" + str(hits[:12]).replace("%", "%25")[:3500])
+          PY
+            exit 1
+          fi
       - name: Stage 4
         shell: bash
         run: |
@@ -1844,7 +1919,22 @@ jobs:
         run: |
           set -e
           CIW="${RUNNER_TEMP}/ci-work"
-          cp "${CIW}/ctarget/x86_64-pc-windows-msvc/release/Subsystem-for-Arxumbra.exe" "${CIW}/stage/x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
+          if ! cp "${CIW}/ctarget/x86_64-pc-windows-msvc/release/Subsystem-for-Arxumbra.exe" "${CIW}/stage/x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"; then
+            PYBIN="$(command -v python3 || command -v python)"
+            "$PYBIN" - "${CIW}/ctarget" << 'PY'
+          import os, sys
+          root = sys.argv[1]
+          hits = []
+          for dp, dn, fn in os.walk(root):
+              for f in fn:
+                  if "Subsystem" in f:
+                      hits.append(os.path.join(dp, f))
+              if len(hits) > 12:
+                  break
+          print("::notice title=STAGE_FAIL::" + str(hits[:12]).replace("%", "%25")[:3500])
+          PY
+            exit 1
+          fi
       - name: Stage 4
         shell: bash
         run: |
