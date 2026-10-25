@@ -10,899 +10,110 @@ permissions:
   contents: read
 
 jobs:
-  linux_acceptance:
-    name: x86_64-Linux Acceptance Gate (temporary)
+  diag_linux:
+    name: Linux Stage 0 Diagnostic (temporary)
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    steps:
-      - name: Stage 0
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      - name: Stage 1
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libwayland-dev libxkbcommon-dev \
-            sway grim mesa-vulkan-drivers libwayland-client0 \
-            python3-pil time file binutils >/dev/null
-          sudo apt-get install -y --no-install-recommends libxkbcommon-utils xkb-data >/dev/null 2>&1 || true
-          mkdir -p /tmp/ci-work/evidence /tmp/ci-work/isolated-run /tmp/arxumbra-debug
-      - name: Stage 2
-        run: |
-          rustup toolchain install nightly-2026-10-25 --profile minimal --component rustfmt --component clippy >/dev/null 2>&1
-
-          set +e
-          cargo +nightly-2026-10-25 build \
-            --bin Subsystem-for-Arxumbra \
-            --target x86_64-unknown-linux-gnu \
-            --release \
-            --locked \
-            --target-dir /tmp/ci-work/ctarget \
-            --config 'build.incremental=false' \
-            --config 'profile.release.opt-level=3' \
-            --config 'profile.release.lto="fat"' \
-            --config 'profile.release.codegen-units=1' \
-            --config 'profile.release.panic="abort"' \
-            --config 'profile.release.strip="symbols"' \
-            --config 'profile.release.debug=false' \
-            --config 'profile.release.overflow-checks=true' \
-            > /tmp/ci-work/build.log 2>&1
-          BUILD_CODE=$?
-          set -e
-          if [ "${BUILD_CODE}" -ne 0 ]; then
-            python3 -c "t=open('/tmp/ci-work/build.log',errors='replace').read()[-3600:].replace('%','%25').replace('\r','%0D').replace('\n','%0A'); print(f'::notice title=BUILD_ERR::{t}')"
-            exit "${BUILD_CODE}"
-          fi
-
-          cp /tmp/ci-work/ctarget/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra /tmp/ci-work/isolated-run/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-          chmod 755 /tmp/ci-work/isolated-run/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-      - name: Stage 3
-        run: |
-          exec 2> >(tee /tmp/ci-work/step_wl.err >&2)
-          cat > /tmp/ci-work/err_trap.py << 'TRAP'
-          import os
-          t = open('/tmp/ci-work/step_wl.err', errors='replace').read()[-2200:]
-          print('::notice title=STEP_WL_ERR::' + t.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
-          p = '/tmp/ci-work/remaster_stderr.bin'
-          if os.path.exists(p):
-              s = open(p, errors='replace').read()[-2200:]
-              print('::notice title=APP_STDERR::' + s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
-          p2 = '/tmp/ci-work/remaster_stdout.bin'
-          if os.path.exists(p2):
-              s2 = open(p2, errors='replace').read()[-600:]
-              print('::notice title=APP_STDOUT::' + s2.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
-          TRAP
-          sed -i 's/^          //' /tmp/ci-work/err_trap.py
-          trap 'python3 /tmp/ci-work/err_trap.py' ERR
-          set -euo pipefail
-
-          python3 - << 'PY'
-          import base64, json, os, subprocess, sys, time
-          import threading, faulthandler, io as _io
-          def _wd():
-            time.sleep(480)
-            buf = _io.StringIO()
-            faulthandler.dump_traceback(file=buf)
-            msg = buf.getvalue().replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-            print("::notice title=HANG_TRACE::" + msg[:3500], flush=True)
-            time.sleep(120)
-            buf2 = _io.StringIO()
-            faulthandler.dump_traceback(file=buf2)
-            msg2 = buf2.getvalue().replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-            print("::notice title=HANG_TRACE2::" + msg2[:3500], flush=True)
-          threading.Thread(target=_wd, daemon=True).start()
-          from PIL import Image
-
-          ev = "/tmp/ci-work/evidence"
-          rt_dir = "/tmp/ci-work/xdg-accept"
-          os.makedirs(rt_dir, exist_ok=True)
-          os.chmod(rt_dir, 0o700)
-
-          dyn_out = subprocess.check_output(["readelf", "-d", "/tmp/ci-work/isolated-run/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"], text=True)
-          needed_libs = [l.split("[")[1].split("]")[0] for l in dyn_out.splitlines() if "(NEEDED)" in l and "[" in l]
-
-          sway_cfg = "/tmp/ci-work/sway_accept.cfg"
-          with open(sway_cfg, "w") as f:
-            f.write("xwayland disable\ndefault_border none\ndefault_floating_border none\noutput * bg #000000 solid_color\n")
-
-          env = os.environ.copy()
-          env.update({
-            "XDG_RUNTIME_DIR": rt_dir,
-            "WLR_BACKENDS": "headless",
-            "WLR_LIBINPUT_NO_DEVICES": "1",
-            "WLR_RENDERER": "pixman",
-            "LIBGL_ALWAYS_SOFTWARE": "1",
-          })
-          env.pop("DISPLAY", None)
-
-          sway = subprocess.Popen(["sway", "-c", sway_cfg], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-          for _ in range(60):
-            time.sleep(0.1)
-            socks = [x for x in os.listdir(rt_dir) if x.startswith("wayland-") and not x.endswith(".lock")]
-            swaysocks = [x for x in os.listdir(rt_dir) if x.startswith("sway-ipc.")]
-            if socks and swaysocks:
-              env["WAYLAND_DISPLAY"] = socks[0]
-              env["SWAYSOCK"] = os.path.join(rt_dir, swaysocks[0])
-              break
-
-          subprocess.run(["swaymsg", "output", "HEADLESS-1", "resolution", "1920x1080", "scale", "1"], env=env, check=True)
-          time.sleep(0.2)
-
-          km_path = "/tmp/ci-work/keymap.xkb"
-          import shutil
-          if shutil.which("xkbcli"):
-            with open(km_path, "wb") as kfm:
-              subprocess.run(["xkbcli", "compile-keymap"], stdout=kfm, check=True)
-          else:
-            subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "--break-system-packages", "xkbcommon"], check=True)
-            kms = subprocess.check_output([sys.executable, "-c", "from xkbcommon import xkb; ctx = xkb.Context(); km = ctx.keymap_new_from_names(); s = km.get_as_string() if hasattr(km, 'get_as_string') else km.as_string(); print(s)"], text=True)
-            open(km_path, "w").write(kms)
-          open("/tmp/ci-work/vkinj.py", "wb").write(base64.b64decode("aW1wb3J0IG9zLCBzb2NrZXQsIHN0cnVjdCwgc3lzLCB0aW1lCgpYS0IgPSAiIiJ4a2Jfa2V5bWFwIHsKICB4a2Jfa2V5Y29kZXMgImsiIHsKICAgIG1pbmltdW0gPSA4OyBtYXhpbXVtID0gMjU1OwogICAgPEVTQz4gPSA5OyA8VEFCPiA9IDIzOyA8UkVUPiA9IDM2OyA8TENUTD4gPSAzNzsgPExGU0g+ID0gNTA7IDxMQUxUPiA9IDY0OwogICAgPFNQQ0U+ID0gNjU7IDxGSzAxPiA9IDY3OyA8UkdIVD4gPSAxMTQ7IDxXS0VZPiA9IDI1OyA8QUtFWT4gPSAzODsgPFNLRVk+ID0gMzk7CiAgICA8REtFWT4gPSA0MDsgPEVLRVk+ID0gMjY7CiAgfTsKICB4a2JfdHlwZXMgImsiIHsKICAgIHR5cGUgIk9ORV9MRVZFTCIgeyBtb2RpZmllcnMgPSBub25lOyBtYXBbbm9uZV0gPSBMZXZlbDE7IGxldmVsX25hbWVbTGV2ZWwxXSA9ICJPbmUiOyB9OwogICAgdHlwZSAiVFdPX0xFVkVMIiB7IG1vZGlmaWVycyA9IFNoaWZ0OyBtYXBbU2hpZnRdID0gTGV2ZWwyOyBsZXZlbF9uYW1lW0xldmVsMV0gPSAiQmFzZSI7IGxldmVsX25hbWVbTGV2ZWwyXSA9ICJTaGlmdCI7IH07CiAgICB0eXBlICJBTFBIQUJFVElDIiB7IG1vZGlmaWVycyA9IFNoaWZ0ICsgTG9jazsgbWFwW1NoaWZ0XSA9IExldmVsMjsgbWFwW0xvY2tdID0gTGV2ZWwyOyBsZXZlbF9uYW1lW0xldmVsMV0gPSAiQmFzZSI7IGxldmVsX25hbWVbTGV2ZWwyXSA9ICJDYXBzIjsgfTsKICB9OwogIHhrYl9jb21wYXRpYmlsaXR5ICJrIiB7CiAgICBpbnRlcnByZXQgQ29udHJvbF9MICsgQW55T2ZPck5vbmUoYWxsKSB7IGFjdGlvbiA9IFNldE1vZHMobW9kaWZpZXJzID0gQ29udHJvbCk7IH07CiAgICBpbnRlcnByZXQgU2hpZnRfTCArIEFueU9mT3JOb25lKGFsbCkgeyBhY3Rpb24gPSBTZXRNb2RzKG1vZGlmaWVycyA9IFNoaWZ0KTsgfTsKICAgIGludGVycHJldCBBbHRfTCArIEFueU9mT3JOb25lKGFsbCkgeyBhY3Rpb24gPSBTZXRNb2RzKG1vZGlmaWVycyA9IE1vZDEpOyB9OwogIH07CiAgeGtiX3N5bWJvbHMgImsiIHsKICAgIGtleSA8RVNDPiB7IFsgRXNjYXBlIF0gfTsKICAgIGtleSA8VEFCPiB7IFsgVGFiIF0gfTsKICAgIGtleSA8UkVUPiB7IFsgUmV0dXJuIF0gfTsKICAgIGtleSA8TENUTD4geyBbIENvbnRyb2xfTCBdIH07CiAgICBrZXkgPExGU0g+IHsgWyBTaGlmdF9MIF0gfTsKICAgIGtleSA8TEFMVD4geyBbIEFsdF9MIF0gfTsKICAgIGtleSA8U1BDRT4geyBbIHNwYWNlIF0gfTsKICAgIGtleSA8RkswMT4geyBbIEYxIF0gfTsKICAgIGtleSA8UkdIVD4geyBbIFJpZ2h0IF0gfTsKICAgIGtleSA8V0tFWT4geyB0eXBlID0gIkFMUEhBQkVUSUMiLCBbIHcsIFcgXSB9OwogICAga2V5IDxBS0VZPiB7IHR5cGUgPSAiQUxQSEFCRVRJQyIsIFsgYSwgQSBdIH07CiAgICBrZXkgPFNLRVk+IHsgdHlwZSA9ICJBTFBIQUJFVElDIiwgWyBzLCBTIF0gfTsKICAgIGtleSA8REtFWT4geyB0eXBlID0gIkFMUEhBQkVUSUMiLCBbIGQsIEQgXSB9OwogICAga2V5IDxFS0VZPiB7IHR5cGUgPSAiQUxQSEFCRVRJQyIsIFsgZSwgRSBdIH07CiAgfTsKfTsKIiIiCgoKZGVmIG1haW4oKToKICAgIHNvY2tfcGF0aCA9IG9zLnBhdGguam9pbigKICAgICAgICBvcy5lbnZpcm9uWyJYREdfUlVOVElNRV9ESVIiXSwgb3MuZW52aXJvbi5nZXQoIldBWUxBTkRfRElTUExBWSIsICJ3YXlsYW5kLTAiKQogICAgKQogICAgcyA9IHNvY2tldC5zb2NrZXQoc29ja2V0LkFGX1VOSVgsIHNvY2tldC5TT0NLX1NUUkVBTSkKICAgIHMuc2V0dGltZW91dCg4LjApCiAgICBzLmNvbm5lY3Qoc29ja19wYXRoKQogICAgYnVmID0gYiIiCgogICAgZGVmIHNlbmQob2JqLCBvcGNvZGUsIHBheWxvYWQ9YiIiLCBmZHM9Tm9uZSk6CiAgICAgICAgc2l6ZSA9IDggKyBsZW4ocGF5bG9hZCkKICAgICAgICBoZHIgPSBzdHJ1Y3QucGFjaygiPElJIiwgb2JqLCAoc2l6ZSA8PCAxNikgfCBvcGNvZGUpCiAgICAgICAgaWYgZmRzOgogICAgICAgICAgICBzLnNlbmRtc2coCiAgICAgICAgICAgICAgICBbaGRyICsgcGF5bG9hZF0sCiAgICAgICAgICAgICAgICBbKHNvY2tldC5TT0xfU09DS0VULCBzb2NrZXQuU0NNX1JJR0hUUywgc3RydWN0LnBhY2soIjxpIiwgKmZkcykpXSwKICAgICAgICAgICAgKQogICAgICAgIGVsc2U6CiAgICAgICAgICAgIHMuc2VuZGFsbChoZHIgKyBwYXlsb2FkKQoKICAgIGRlZiBzdHJpKHgpOgogICAgICAgIGIgPSB4LmVuY29kZSgpICsgYiJceDAwIgogICAgICAgIGIgKz0gYiJceDAwIiAqICgoNCAtIGxlbihiKSAlIDQpICUgNCkKICAgICAgICByZXR1cm4gc3RydWN0LnBhY2soIjxJIiwgbGVuKHgpICsgMSkgKyBiCgogICAgZGVmIHJlY3ZfbXNncygpOgogICAgICAgIG5vbmxvY2FsIGJ1ZgogICAgICAgIG91dCA9IFtdCiAgICAgICAgd2hpbGUgVHJ1ZToKICAgICAgICAgICAgdHJ5OgogICAgICAgICAgICAgICAgcy5zZXR0aW1lb3V0KDIuMCkKICAgICAgICAgICAgICAgIGRhdGEgPSBzLnJlY3YoNjU1MzYpCiAgICAgICAgICAgIGV4Y2VwdCBzb2NrZXQudGltZW91dDoKICAgICAgICAgICAgICAgIHJldHVybiBvdXQKICAgICAgICAgICAgaWYgbm90IGRhdGE6CiAgICAgICAgICAgICAgICByZXR1cm4gb3V0CiAgICAgICAgICAgIGJ1ZiArPSBkYXRhCiAgICAgICAgICAgIHdoaWxlIGxlbihidWYpID49IDg6CiAgICAgICAgICAgICAgICBvYmosIHN6b3AgPSBzdHJ1Y3QudW5wYWNrKCI8SUkiLCBidWZbOjhdKQogICAgICAgICAgICAgICAgc3ogPSBzem9wID4+IDE2CiAgICAgICAgICAgICAgICBpZiBzeiA8IDggb3IgbGVuKGJ1ZikgPCBzejoKICAgICAgICAgICAgICAgICAgICBicmVhawogICAgICAgICAgICAgICAgb3V0LmFwcGVuZCgob2JqLCBzem9wICYgMHhGRkZGLCBidWZbODpzel0pKQogICAgICAgICAgICAgICAgYnVmID0gYnVmW3N6Ol0KCiAgICBzZW5kKDEsIDEsIHN0cnVjdC5wYWNrKCI8SSIsIDIpKQogICAgZ2xvID0ge30KICAgIGRlYWRsaW5lID0gdGltZS50aW1lKCkgKyA2CiAgICB3aGlsZSAiendwX3ZpcnR1YWxfa2V5Ym9hcmRfbWFuYWdlcl92MSIgbm90IGluIGdsbyBvciAid2xfc2VhdCIgbm90IGluIGdsbzoKICAgICAgICBpZiB0aW1lLnRpbWUoKSA+IGRlYWRsaW5lOgogICAgICAgICAgICBzeXMuZXhpdCgidmstaW5qZWN0b3I6IGdsb2JhbHMgbm90IGZvdW5kIikKICAgICAgICBmb3Igb2JqLCBvcCwgcGF5bG9hZCBpbiByZWN2X21zZ3MoKToKICAgICAgICAgICAgaWYgb2JqID09IDIgYW5kIG9wID09IDA6CiAgICAgICAgICAgICAgICBuYW1lID0gc3RydWN0LnVucGFjaygiPEkiLCBwYXlsb2FkWzo0XSlbMF0KICAgICAgICAgICAgICAgIHJlc3QgPSBwYXlsb2FkWzQ6XQogICAgICAgICAgICAgICAgbG4gPSBzdHJ1Y3QudW5wYWNrKCI8SSIsIHJlc3RbOjRdKVswXQogICAgICAgICAgICAgICAgZ2xvW3Jlc3RbNCA6IDQgKyBsbiAtIDFdLmRlY29kZSgpXSA9IG5hbWUKICAgIHNlbmQoCiAgICAgICAgMiwKICAgICAgICAwLAogICAgICAgIHN0cnVjdC5wYWNrKCI8SSIsIGdsb1sid2xfc2VhdCJdKQogICAgICAgICsgc3RyaSgid2xfc2VhdCIpCiAgICAgICAgKyBzdHJ1Y3QucGFjaygiPElJIiwgNSwgMyksCiAgICApCiAgICBzZW5kKAogICAgICAgIDIsCiAgICAgICAgMCwKICAgICAgICBzdHJ1Y3QucGFjaygiPEkiLCBnbG9bInp3cF92aXJ0dWFsX2tleWJvYXJkX21hbmFnZXJfdjEiXSkKICAgICAgICArIHN0cmkoInp3cF92aXJ0dWFsX2tleWJvYXJkX21hbmFnZXJfdjEiKQogICAgICAgICsgc3RydWN0LnBhY2soIjxJSSIsIDEsIDQpLAogICAgKQogICAgc2VuZCg0LCAwLCBzdHJ1Y3QucGFjaygiPElJIiwgMywgNSkpCiAgICBmZCA9IG9zLm1lbWZkX2NyZWF0ZSgidmttYXAiKQogICAgd2l0aCBvcGVuKG9zLmVudmlyb24uZ2V0KCJWS19LRVlNQVAiLCAiL3RtcC9jaS13b3JrL2tleW1hcC54a2IiKSwgInJiIikgYXMga2Y6CiAgICAgICAga2IgPSBrZi5yZWFkKCkKICAgIG9zLndyaXRlKGZkLCBrYikKICAgIHNlbmQoNSwgMCwgc3RydWN0LnBhY2soIjxJSSIsIDEsIGxlbihrYikpLCBmZHM9W2ZkXSkKICAgIG9zLmNsb3NlKGZkKQogICAgcmVjdl9tc2dzKCkKCiAgICBkZWYga2V5KGssIHN0KToKICAgICAgICBub3cgPSBpbnQodGltZS50aW1lKCkgKiAxMDAwKSAmIDB4RkZGRkZGRkYKICAgICAgICBzZW5kKDUsIDEsIHN0cnVjdC5wYWNrKCI8SUlJIiwgbm93LCBrLCBzdCkpCgogICAgZGVmIHJ1bl90b2tlbnModG9rcyk6CiAgICAgICAgZm9yIHRvayBpbiB0b2tzOgogICAgICAgICAgICBpZiB0b2sgPT0gIldBSVQiOgogICAgICAgICAgICAgICAgc3lzLnN0ZG91dC53cml0ZSgicmVhZHlcbiIpCiAgICAgICAgICAgICAgICBzeXMuc3Rkb3V0LmZsdXNoKCkKICAgICAgICAgICAgICAgIHN5cy5zdGRpbi5yZWFkbGluZSgpCiAgICAgICAgICAgIGVsaWYgdG9rWzBdID09ICJzIjoKICAgICAgICAgICAgICAgIHRpbWUuc2xlZXAoaW50KHRva1sxOl0pIC8gMTAwMC4wKQogICAgICAgICAgICBlbGlmIHRva1swXSA9PSAiZCI6CiAgICAgICAgICAgICAgICBrZXkoaW50KHRva1sxOl0pLCAxKQogICAgICAgICAgICBlbGlmIHRva1swXSA9PSAidSI6CiAgICAgICAgICAgICAgICBrZXkoaW50KHRva1sxOl0pLCAwKQoKICAgIGlmIHN5cy5hcmd2WzE6XToKICAgICAgICBydW5fdG9rZW5zKHN5cy5hcmd2WzE6XSkKICAgICAgICB0aW1lLnNsZWVwKDAuMDUpCiAgICAgICAgcy5jbG9zZSgpCiAgICAgICAgcmV0dXJuCiAgICBzeXMuc3Rkb3V0LndyaXRlKCJib290XG4iKQogICAgc3lzLnN0ZG91dC5mbHVzaCgpCiAgICBmb3IgbGluZSBpbiBzeXMuc3RkaW46CiAgICAgICAgcnVuX3Rva2VucyhsaW5lLnNwbGl0KCkpCiAgICAgICAgc3lzLnN0ZG91dC53cml0ZSgib2tcbiIpCiAgICAgICAgc3lzLnN0ZG91dC5mbHVzaCgpCiAgICB0aW1lLnNsZWVwKDAuMDUpCiAgICBzLmNsb3NlKCkKCgptYWluKCkK"))
-
-          out_path = "/tmp/ci-work/remaster_stdout.bin"
-          err_path = "/tmp/ci-work/remaster_stderr.bin"
-          out_f = open(out_path, "wb")
-          err_f = open(err_path, "wb")
-
-          app = subprocess.Popen(
-            ["/tmp/ci-work/isolated-run/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"],
-            cwd="/tmp/ci-work/isolated-run",
-            env=env,
-            stdout=out_f,
-            stderr=err_f,
-          )
-
-          def app_focused():
-            tree = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True))
-            node = find_app_node(tree)
-            return bool(node and node.get("focused"))
-
-          def find_app_node(node):
-            if node.get("app_id") == "Subsystem-for-Arxumbra" or "Subsystem-for-Arxumbra" in (node.get("name") or ""):
-              return node
-            for k in ("nodes", "floating_nodes"):
-              for ch in node.get(k, []):
-                r = find_app_node(ch)
-                if r:
-                  return r
-            return None
-
-          app_node = None
-          for _ in range(300):
-            time.sleep(0.1)
-            tree = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True))
-            app_node = find_app_node(tree)
-            if app_node and app_node.get("focused"):
-              break
-
-          time.sleep(0.8)
-          tree = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True))
-          app_node = find_app_node(tree) or app_node
-
-          def grab(name):
-            p = os.path.join(ev, name)
-            subprocess.run(["grim", p], env=env, check=True)
-            return Image.open(p).convert("RGB")
-
-          def _scan(px, w, h, ys, xs):
-            for y in ys:
-              for x in xs:
-                c = px[x, y]
-                if c[0] < 250 or c[1] < 250 or c[2] < 250:
-                  continue
-                x0 = x
-                while x0 - 1 >= 0 and px[x0 - 1, y][0] >= 250:
-                  x0 -= 1
-                x1 = x
-                while x1 + 1 < w and px[x1 + 1, y][0] >= 250:
-                  x1 += 1
-                if not (7 <= x1 - x0 + 1 <= 11):
-                  continue
-                y0 = y
-                while y0 - 1 >= 0 and px[x, y0 - 1][0] >= 250:
-                  y0 -= 1
-                y1 = y
-                while y1 + 1 < h and px[x, y1 + 1][0] >= 250:
-                  y1 += 1
-                if not (7 <= y1 - y0 + 1 <= 11):
-                  continue
-                cx = (x0 + x1) // 2
-                cy = (y0 + y1) // 2
-                chord = sum(1 for dx in range(-8, 9) if 0 <= cx + dx < w and px[cx + dx, cy - 3][0] >= 250)
-                if not (4 <= chord <= 14):
-                  continue
-                if px[cx - 7, cy][0] >= 250 or (cx + 7 < w and px[cx + 7, cy][0] >= 250):
-                  continue
-                if px[cx, cy - 7][0] >= 250 or (cy + 7 < h and px[cx, cy + 7][0] >= 250):
-                  continue
-                if px[cx - 5, cy - 5][0] >= 250 or (cx + 5 < w and px[cx + 5, cy - 5][0] >= 250):
-                  continue
-                if px[cx - 5, cy + 5][0] >= 250 or (cx + 5 < w and cy + 5 < h and px[cx + 5, cy + 5][0] >= 250):
-                  continue
-                return (cx, cy)
-            return None
-
-          LAST = [None]
-
-          def find_dot_center(img):
-            w, h = img.size
-            px = img.load()
-            if LAST[0]:
-              hx, hy = LAST[0]
-              r = _scan(px, w, h, range(max(0, hy - 260), min(h, hy + 260)), range(max(0, hx - 260), min(w, hx + 260)))
-              if r:
-                LAST[0] = r
-                return r
-            r = _scan(px, w, h, range(0, h), range(0, w))
-            LAST[0] = r
-            return r
-
-          def dot_debug(img):
-            w, h = img.size
-            px = img.load()
-            xs = []
-            ys = []
-            for y in range(0, h, 2):
-              for x in range(500, w, 2):
-                c = px[x, y]
-                if c[0] >= 250 and c[1] >= 250 and c[2] >= 250:
-                  xs.append(x)
-                  ys.append(y)
-            if not xs:
-              return [0, -1, -1, -1, -1]
-            return [len(xs), min(xs), max(xs), min(ys), max(ys)]
-
-          PPM = [0.5]
-
-          def calibrate_ppm():
-            a = find_dot_center(grab("_cal1.png"))
-            if not a:
-              return
-            yhold(["ctrl", "d"], 200)
-            time.sleep(0.06)
-            b = find_dot_center(grab("_cal2.png"))
-            if a and b and b[0] > a[0] + 20:
-              PPM[0] = min(3.0, max(0.2, (b[0] - a[0]) / 200.0))
-              yhold(["ctrl", "a"], 200)
-              time.sleep(0.06)
-            for _ in range(4):
-              c = find_dot_center(grab("_cal3.png"))
-              if not c or (abs(c[0] - a[0]) <= 3 and abs(c[1] - a[1]) <= 3):
-                break
-              dx = a[0] - c[0]
-              dy = a[1] - c[1]
-              if abs(dx) > 3:
-                yhold(["ctrl", "d" if dx > 0 else "a"], max(16, int(abs(dx) / PPM[0] * 0.7)))
-              if abs(dy) > 3:
-                yhold(["ctrl", "s" if dy > 0 else "w"], max(16, int(abs(dy) / PPM[0] * 0.7)))
-              time.sleep(0.06)
-
-          def move_dot_to(tx, ty):
-            v = PPM[0] if PPM[0] else 1.5
-            c = None
-            for _ in range(24):
-              im = grab("_probe.png")
-              c = find_dot_center(im)
-              if not c:
-                break
-              dx = tx - c[0]
-              dy = ty - c[1]
-              if abs(dx) <= 5 and abs(dy) <= 5:
-                return c
-              if abs(dx) > 5:
-                ms = max(8, min(1400, int(abs(dx) / v * 0.9)))
-                c0 = c[0]
-                yhold(["ctrl", "d" if dx > 0 else "a"], ms)
-                time.sleep(0.05)
-                c2 = find_dot_center(grab("_probe.png"))
-                if c2 and abs(c2[0] - c0) > 4:
-                  v = max(0.6, min(3.0, abs(c2[0] - c0) / ms))
-                c = c2 if c2 else c
-                dy = ty - c[1]
-              if abs(dy) > 5:
-                ms = max(8, min(1400, int(abs(dy) / v * 0.9)))
-                c0 = c[1]
-                yhold(["ctrl", "s" if dy > 0 else "w"], ms)
-                time.sleep(0.05)
-                c2 = find_dot_center(grab("_probe.png"))
-                if c2 and abs(c2[1] - c0) > 4:
-                  v = max(0.6, min(3.0, abs(c2[1] - c0) / ms))
-                c = c2 if c2 else c
-            return c if c else find_dot_center(grab("_probe.png"))
-
-          def goto(tx, ty):
-            c = None
-            for _ in range(3):
-              c = move_dot_to(tx, ty)
-              if c and abs(c[0] - tx) <= 6 and abs(c[1] - ty) <= 6:
-                return c
-            return c
-
-          YD = {"ctrl": 29, "shift": 42, "alt": 56, "w": 17, "a": 30, "s": 31, "d": 32, "e": 18, "F1": 59, "Escape": 1, "Tab": 15, "Return": 28, "space": 57, "Right": 106}
-
-          def inj_start():
-            p = subprocess.Popen(
-              ["python3", "/tmp/ci-work/vkinj.py"],
-              env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
-            )
-            p.stdout.readline()
-            return p
-
-          INJ1 = inj_start()
-
-          def ykey(*codes):
-            toks = []
-            for c in codes:
-              n, st = c.split(":")
-              toks.append(("d" if st == "d" else "u") + n)
-            INJ1.stdin.write(" ".join(toks) + chr(10))
-            INJ1.stdin.flush()
-            INJ1.stdout.readline()
-
-          def yhold(keys, ms):
-            toks = ["d" + str(YD[k]) for k in keys] + ["s" + str(ms)] + ["u" + str(YD[k]) for k in reversed(keys)]
-            INJ1.stdin.write(" ".join(toks) + chr(10))
-            INJ1.stdin.flush()
-            INJ1.stdout.readline()
-
-          def yhold_bg_down(keys):
-            INJ1.stdin.write(" ".join(["d" + str(YD[k]) for k in keys] + ["WAIT"] + ["u" + str(YD[k]) for k in reversed(keys)]) + chr(10))
-            INJ1.stdin.flush()
-            INJ1.stdout.readline()
-            return INJ1
-
-          def yup(keys):
-            INJ1.stdin.write(chr(10))
-            INJ1.stdin.flush()
-            INJ1.stdout.readline()
-
-          def ctrl_e():
-            ykey("29:d")
-            time.sleep(0.04)
-            ykey("18:d")
-            time.sleep(0.05)
-            ykey("18:u")
-            time.sleep(0.04)
-            ykey("29:u")
-            time.sleep(0.32)
-            time.sleep(0.32)
-
-          tests = {"elf_dt_needed": needed_libs, "zero_x11_dt_needed": all("X11" not in l and "xcb" not in l for l in needed_libs)}
-
-          def emit_debug_shots():
-            import base64
-            for shot in ["after_home.png", "_probe.png", "_seq.png", "_stop2.png", "_redraw.png", "_diag.png", "_clamp_br.png", "_opp.png"]:
-              p = os.path.join(ev, shot)
-              if os.path.exists(p):
-                im = Image.open(p).resize((960, 540), Image.Resampling.LANCZOS).convert("L")
-                op = os.path.join(ev, "dbg_" + shot)
-                im.save(op, format="PNG", optimize=True, compress_level=9)
-                base64.b64encode(open(op, "rb").read()).decode("ascii")
-
-          tree = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True))
-          app_node = find_app_node(tree)
-          tests["wayland_native_xdg_shell"] = (
-            app_node is not None
-            and app_node.get("shell") == "xdg_shell"
-            and app_node.get("fullscreen_mode") == 1
-            and app_node.get("rect", {}).get("width") == 1920
-            and app_node.get("rect", {}).get("height") == 1080
-            and app_node.get("deco_rect", {}).get("height", 0) == 0
-          )
-          tests["window_title"] = app_node.get("name") if app_node else None
-
-          def cpu_ticks(pid):
-            st = open(f"/proc/{pid}/stat").read().split(")")[1].split()
-            return int(st[11]) + int(st[12])
-          time.sleep(0.4)
-          t_cpu0 = cpu_ticks(app.pid)
-          time.sleep(2.0)
-          t_cpu1 = cpu_ticks(app.pid)
-          tests["settled_idle_2s_cpu_ticks_delta"] = t_cpu1 - t_cpu0
-          tests["settled_idle_zero_spin"] = (t_cpu1 - t_cpu0) <= 2
-
-          tests["focus_at_start"] = app_focused()
-          tests["focus_samples_idle"] = [app_focused() for _ in range(12)]
-          tests["dot_blink_idle"] = [find_dot_center(grab("_blink.png")) for _ in range(6)]
-          home_img = grab("after_home.png")
-          init_dot = find_dot_center(home_img)
-          tests["initial_dot_center"] = init_dot
-          tests["initial_dot_centered"] = (init_dot is not None and abs(init_dot[0] - 960) <= 2 and abs(init_dot[1] - 540) <= 2)
-
-          bg_rgb = home_img.getpixel((1500, 540))
-          sidebar_right_x = max((x for x in range(600) if home_img.getpixel((x, 540))[0] > bg_rgb[0] + 4), default=-1)
-          tl_rgb = home_img.getpixel((0, 0))
-          bl_rgb = home_img.getpixel((0, 1079))
-          tr_outer_rgb = home_img.getpixel((sidebar_right_x, 0))
-          br_outer_rgb = home_img.getpixel((sidebar_right_x, 1079))
-          tr_inner_rgb = home_img.getpixel((sidebar_right_x - 16, 16))
-          tests["sidebar_width_px"] = sidebar_right_x + 1
-          tests["sidebar_left_corners_flush"] = (tl_rgb[0] > bg_rgb[0] + 5 and bl_rgb[0] > bg_rgb[0] + 5)
-          tests["sidebar_right_corners_rounded"] = (tr_outer_rgb == bg_rgb and br_outer_rgb == bg_rgb and tr_inner_rgb[0] > bg_rgb[0] + 5)
-
-          calibrate_ppm()
-          base_dot = find_dot_center(grab("_base.png"))
-          yhold(["d"], 150)
-          ykey("18:d")
-          time.sleep(0.05)
-          ykey("18:u")
-          ykey("15:d")
-          time.sleep(0.05)
-          ykey("15:u")
-          ykey("28:d")
-          time.sleep(0.05)
-          ykey("28:u")
-          ykey("57:d")
-          time.sleep(0.05)
-          ykey("57:u")
-          ykey("106:d")
-          time.sleep(0.05)
-          ykey("106:u")
-          yhold(["ctrl", "shift", "d"], 180)
-          yhold(["ctrl", "alt", "s"], 180)
-          subprocess.run(["swaymsg", "seat", "seat0", "cursor", "move", "190", "172"], env=env, check=True)
-          subprocess.run(["swaymsg", "seat", "seat0", "cursor", "press", "button1"], env=env, check=True)
-          subprocess.run(["swaymsg", "seat", "seat0", "cursor", "release", "button1"], env=env, check=True)
-          time.sleep(0.15)
-          after_forbidden = grab("_after_forbidden.png")
-          tests["dbg_bbox_forbidden"] = dot_debug(after_forbidden)
-          tests["forbidden_inputs_ignored"] = (find_dot_center(after_forbidden) == base_dot and after_forbidden.getpixel((900, 60)) == bg_rgb)
-
-          pos_before_opp = find_dot_center(grab("_preopp.png"))
-          yhold(["ctrl", "a", "d"], 220)
-          time.sleep(0.08)
-          opp_img = grab("_opp.png")
-          pos_opp = find_dot_center(opp_img)
-          tests["dbg_bbox_opp"] = dot_debug(opp_img)
-          tests["opposing_keys_cancel"] = (pos_opp == pos_before_opp and pos_before_opp == base_dot)
-
-          yhold_bg_down(["ctrl", "d"])
-          seq_x = []
-          for _ in range(4):
-            time.sleep(0.075)
-            c = find_dot_center(grab("_seq.png"))
-            if c:
-              seq_x.append(c[0])
-          yup(["ctrl", "d"])
-          time.sleep(0.04)
-          s1_img = grab("_stop1.png")
-          stop_1 = find_dot_center(s1_img)
-          tests["dbg_bbox_stop1"] = dot_debug(s1_img)
-          time.sleep(0.18)
-          s2_img = grab("_stop2.png")
-          stop_2 = find_dot_center(s2_img)
-          tests["dbg_bbox_stop2"] = dot_debug(s2_img)
-          ykey("106:d")
-          time.sleep(0.05)
-          ykey("106:u")
-          time.sleep(0.35)
-          rd_img = grab("_redraw.png")
-          tests["dbg_bbox_redraw"] = dot_debug(rd_img)
-          time.sleep(0.5)
-          rd2_img = grab("_redraw2.png")
-          tests["dbg_bbox_redraw2"] = dot_debug(rd2_img)
-          tests["smooth_cardinal_positions"] = seq_x
-          tests["smooth_monotonic_motion"] = (len(seq_x) >= 3 and all(seq_x[i] < seq_x[i+1] for i in range(len(seq_x)-1)))
-          tests["immediate_stop_zero_drift"] = (stop_1 is not None and stop_1 == stop_2)
-
-          diag_start = stop_2
-          yhold(["ctrl", "w", "d"], 260)
-          time.sleep(0.06)
-          dg_img = grab("_diag.png")
-          diag_end = find_dot_center(dg_img)
-          tests["dbg_bbox_diag"] = dot_debug(dg_img)
-          ddx = diag_end[0] - diag_start[0] if diag_end and diag_start else -999
-          ddy = diag_start[1] - diag_end[1] if diag_end and diag_start else -999
-          tests["diagonal_displacement"] = [ddx, ddy]
-          tests["diagonal_normalized"] = (ddx > 40 and ddy > 40 and abs(ddx - ddy) <= 14)
-          hold_xs = []
-          yhold_bg_down(["ctrl", "d"])
-          for _ in range(11):
-            time.sleep(0.3)
-            c = find_dot_center(grab("_hold3s.png"))
-            if c:
-              hold_xs.append(c[0])
-          yup(["ctrl", "d"])
-          tests["hold3s_ctrl_d_updates"] = sum(1 for i in range(1, len(hold_xs)) if hold_xs[i] > hold_xs[i - 1] + 2)
-          tests["hold3s_first_last"] = [hold_xs[0] if hold_xs else None, hold_xs[-1] if hold_xs else None]
-
-          yhold(["ctrl", "d", "s"], 1900)
-          time.sleep(0.08)
-          cb_img = grab("_clamp_br.png")
-          clamp_br = find_dot_center(cb_img)
-          tests["dbg_bbox_clamp"] = dot_debug(cb_img)
-          tests["clamped_bottom_right_center"] = clamp_br
-          tests["dot_fully_inside_viewport"] = (clamp_br is not None and 1912 <= clamp_br[0] <= 1916 and 1072 <= clamp_br[1] <= 1076)
-
-          goto(190, 172)
-          ykey("18:d")
-          time.sleep(0.09)
-          ykey("29:d")
-          time.sleep(0.09)
-          ykey("29:u")
-          time.sleep(0.03)
-          ykey("18:u")
-          time.sleep(0.3)
-          preheld_img = grab("_preheld_e.png")
-          tests["preheld_e_then_ctrl_rejected"] = (preheld_img.getpixel((900, 60)) == bg_rgb)
-
-          ctrl_e()
-          tests["focus_mid"] = app_focused()
-          tests["dot_at_registry_attempt"] = find_dot_center(grab("_probe.png"))
-          reg_img = grab("after_registry.png")
-          tests["registry_panel_visible"] = (reg_img.getpixel((600, 60))[0] > bg_rgb[0] + 3)
-
-          f1_pre = grab("_f1_pre.png")
-          ykey("59:d")
-          time.sleep(0.05)
-          ykey("59:u")
-          time.sleep(0.32)
-          reg_hidden_img = grab("after_registry_menu_hidden.png")
-          tests["f1_tap_diff_px"] = sum(1 for a, b in zip(f1_pre.getdata(), reg_hidden_img.getdata()) if a != b)
-          f1_pre2 = grab("_f1_pre2.png")
-          ykey("59:d")
-          time.sleep(0.42)
-          ykey("59:u")
-          time.sleep(0.32)
-          f1_post2 = grab("_f1_hold.png")
-          tests["f1_hold_diff_px"] = sum(1 for a, b in zip(f1_pre2.getdata(), f1_post2.getdata()) if a != b)
-          ykey("59:d")
-          time.sleep(0.05)
-          ykey("59:u")
-          time.sleep(0.32)
-          f1_diff_xs = [i % 1920 for i, (a, b) in enumerate(zip(f1_pre.getdata(), reg_hidden_img.getdata())) if a != b]
-          tests["f1_hides_left_menu_keeps_right_panel_fixed"] = (
-            len(f1_diff_xs) > 50
-            and max(f1_diff_xs) <= sidebar_right_x + 1
-            and reg_hidden_img.getpixel((100, 540)) == bg_rgb
-          )
-          goto(190, 116)
-          ctrl_e()
-          still_reg_img = grab("_still_reg.png")
-          tests["hidden_menu_controls_non_interactive"] = (still_reg_img.getpixel((600, 60))[0] > bg_rgb[0] + 3)
-
-          ykey("59:d")
-          time.sleep(0.05)
-          ykey("59:u")
-          time.sleep(0.32)
-
-          sw_px = sidebar_right_x + 1
-          launch_cx = int(sw_px + 16 + 28 + 480 - 18 - 74)
-          launch_cy = 235
-          goto(launch_cx, launch_cy)
-          grab("after_registry_launch_hover.png")
-          ctrl_e()
-          ws_img = grab("after_workspace.png")
-          panel_bg = ws_img.getpixel((1100, 540))
-          tests["workspace_entered_card_removed"] = (ws_img.getpixel((launch_cx - 200, 235)) == panel_bg)
-          tests["workspace_create_project_row_present"] = (ws_img.getpixel((200, 116))[0] > ws_img.getpixel((200, 300))[0] + 5)
-          tests["workspace_second_nav_row_removed"] = (ws_img.getpixel((200, 172)) == ws_img.getpixel((200, 300)))
-
-          goto(190, 116)
-          ctrl_e()
-          modal_clean = grab("after_workspace_modal_clean.png")
-          modal_interior_rgb = modal_clean.getpixel((960, 540))
-          interior_colors = {modal_clean.getpixel((x, y)) for x in range(800, 1120, 8) for y in range(440, 640, 8)}
-          tests["modal_centered_and_completely_empty"] = (len(interior_colors) == 1 and modal_interior_rgb[0] > 18)
-
-          goto(960, 540)
-          modal_dot_inside = grab("after_modal_dot_above.png")
-          tests["dot_renders_above_modal"] = (find_dot_center(modal_dot_inside) is not None)
-          ctrl_e()
-          after_inside_click = grab("_modal_inside_click.png")
-          tests["ctrl_e_inside_modal_keeps_modal_open"] = (after_inside_click.getpixel((820, 540)) == modal_interior_rgb)
-
-          ykey("59:d")
-          time.sleep(0.05)
-          ykey("59:u")
-          time.sleep(0.32)
-          modal_f1_img = grab("after_modal_menu_hidden.png")
-          tests["f1_with_modal_keeps_modal_open"] = (modal_f1_img.getpixel((820, 540)) == modal_interior_rgb)
-          ykey("59:d")
-          time.sleep(0.05)
-          ykey("59:u")
-          time.sleep(0.32)
-
-          goto(190, 116)
-          ctrl_e()
-          dismissed_img = grab("_modal_dismissed.png")
-          tests["backdrop_ctrl_e_dismisses_without_click_through"] = (dismissed_img.getpixel((960, 540)) == panel_bg)
-
-          rss_before_cycles = int([l for l in open(f"/proc/{app.pid}/status") if l.startswith("VmRSS:")][0].split()[1])
-          for _ in range(5):
-            ctrl_e()
-            ctrl_e()
-          rss_after_cycles = int([l for l in open(f"/proc/{app.pid}/status") if l.startswith("VmRSS:")][0].split()[1])
-          tests["modal_5_cycles_rss_delta_kb"] = rss_after_cycles - rss_before_cycles
-
-          ctrl_e()
-          time.sleep(0.35)
-          reopen_img = grab("_reopen.png")
-          retries = 0
-          while reopen_img.getpixel((820, 540)) != modal_interior_rgb and retries < 2:
-            ctrl_e()
-            time.sleep(0.35)
-            reopen_img = grab("_reopen.png")
-            retries += 1
-          tests["dbg_px_reopen"] = [reopen_img.getpixel((820, 540)), modal_interior_rgb]
-          tests["cycle_reopen_retries"] = retries
-
-          yhold(["Escape"], 2200)
-          time.sleep(0.2)
-          short_esc_img = grab("_short_esc.png")
-          tests["dbg_px_short"] = short_esc_img.getpixel((820, 540))
-          tests["short_escape_cancelled_no_action"] = (short_esc_img.getpixel((820, 540)) == modal_interior_rgb)
-
-          esc_bg = yhold_bg_down(["Escape"])
-          time.sleep(1.0)
-          ec0 = cpu_ticks(app.pid)
-          time.sleep(1.0)
-          tests["escape_hold_cpu_ticks_1s"] = cpu_ticks(app.pid) - ec0
-          time.sleep(0.5)
-          pre_unfocus_dot = find_dot_center(grab("_prefocus_dot.png"))
-          subprocess.run(["swaymsg", "workspace", "2"], env=env, check=True)
-          time.sleep(1.0)
-          unf_dot = find_dot_center(grab("_unfocused_dot.png"))
-          tests["dot_hidden_while_unfocused"] = unf_dot is None
-          subprocess.run(["swaymsg", "workspace", "1"], env=env, check=True)
-          time.sleep(0.5)
-          ref_dot = find_dot_center(grab("_refocus_dot.png"))
-          tests["dot_restored_same_position_after_refocus"] = bool(ref_dot and pre_unfocus_dot and abs(ref_dot[0] - pre_unfocus_dot[0]) <= 2 and abs(ref_dot[1] - pre_unfocus_dot[1]) <= 2)
-          yup(["Escape"])
-          time.sleep(0.25)
-          unfocus_esc_img = grab("_unfocus_esc.png")
-          tests["dbg_px_unfocus"] = unfocus_esc_img.getpixel((820, 540))
-          tests["focus_loss_cancels_escape_hold_and_suppresses_stale"] = (unfocus_esc_img.getpixel((820, 540)) == modal_interior_rgb)
-
-          esc_long = yhold_bg_down(["Escape"])
-          time.sleep(2.5)
-          mid_hold_img = grab("_mid_5s_hold.png")
-          mid_diff = sum(1 for a, b in zip(unfocus_esc_img.getdata(), mid_hold_img.getdata()) if a != b)
-          tests["escape_hold_zero_visual_indicator_diff_px"] = mid_diff
-
-          time.sleep(3.2)
-          at_5_7s_img = grab("_at_5_7s.png")
-          returned_at_5s = (at_5_7s_img.getpixel((820, 540)) != modal_interior_rgb and at_5_7s_img.getpixel((launch_cx - 200, 200))[0] > panel_bg[0] + 4)
-
-          time.sleep(2.5)
-          still_alive_at_8_2s = (app.poll() is None)
-          yup(["Escape"])
-          time.sleep(0.25)
-          tests["workspace_5s_escape_returns_to_registry_closes_modal"] = returned_at_5s
-          tests["workspace_escape_held_past_8s_never_exits"] = (still_alive_at_8_2s and app.poll() is None)
-
-          subprocess.run(["swaymsg", "output", "HEADLESS-1", "scale", "2"], env=env, check=True)
-          time.sleep(0.4)
-          hidpi_img = grab("after_hidpi_scale2.png")
-          tests["hidpi_scale2_renders_cleanly"] = (hidpi_img.size in [(1920, 1080), (3840, 2160)] and hidpi_img.getpixel((0, 0))[0] > bg_rgb[0] + 5)
-          subprocess.run(["swaymsg", "output", "HEADLESS-1", "scale", "1"], env=env, check=True)
-          time.sleep(0.3)
-
-          for _focus_try in range(3):
-            subprocess.run(["swaymsg", '[app_id="Subsystem-for-Arxumbra"]', "focus"], env=env, check=False)
-            time.sleep(0.3)
-            if app_focused():
-              break
-          if not app_focused():
-            _tr = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True))
-            _cid = [None]
-            def _find_cid(n):
-              if n.get("app_id") == "Subsystem-for-Arxumbra":
-                _cid[0] = n.get("id")
-                return
-              for k in ("nodes", "floating_nodes"):
-                for ch in n.get(k, []):
-                  _find_cid(ch)
-            _find_cid(_tr)
-            if _cid[0]:
-              subprocess.run(["swaymsg", "[con_id=%s] focus" % _cid[0]], env=env, check=False)
-              time.sleep(0.3)
-          tests["focus_end"] = app_focused()
-          if not tests["focus_end"]:
-            _ftree = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"], env=env, text=True))
-            def _fnode(n):
-              if n.get("focused"):
-                return (n.get("app_id"), n.get("name"), n.get("type"))
-              for k in ("nodes", "floating_nodes"):
-                for ch in n.get(k, []):
-                  r = _fnode(ch)
-                  if r:
-                    return r
-              return None
-            tests["dbg_focus_tree"] = _fnode(_ftree)
-          ykey("59:d")
-          time.sleep(0.05)
-          ykey("59:u")
-          time.sleep(0.2)
-          exit_hold = yhold_bg_down(["Escape"])
-          try:
-            exit_code = app.wait(timeout=11)
-          except subprocess.TimeoutExpired:
-            exit_code = -999
-            app.terminate()
-          yup(["Escape"])
-          out_f.close()
-          err_f.close()
-          sway.terminate()
-          INJ1.terminate()
-
-          dbg_log = "/tmp/arxumbra-debug/state.log"
-          if os.path.exists(dbg_log):
-            tail = open(dbg_log, errors="replace").read()
-            tests["dbg_log_lines"] = tail.count("\n")
-            msgd = tail[-3400:].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-            print(f"::notice title=DBG_TAIL::{msgd}")
-            msgh = tail[:3400].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-            print(f"::notice title=DBG_HEAD::{msgh}")
-          tests["registry_7s_escape_clean_exit_code"] = exit_code
-          tests["external_stdout_bytes"] = os.path.getsize(out_path)
-          tests["external_stderr_bytes"] = os.path.getsize(err_path)
-          tests["silent_stdout_stderr"] = (os.path.getsize(out_path) == 0 and os.path.getsize(err_path) == 0)
-
-          open("/tmp/ci-work/wayland_tests.json", "w").write(json.dumps(tests, indent=2))
-          emit_debug_shots()
-          msg = json.dumps(tests).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-          for ci in range(0, len(msg), 3300):
-            print(f"::notice title=WAYLAND_ACCEPTANCE_{ci//3300}::{msg[ci:ci+3300]}")
-          PY
-      - name: Stage 4
-        run: |
-          set -e
-          GW="${RUNNER_TEMP}/ci-work"
-          mkdir -p "${GW}/gate-stage" "${GW}/gate-dist"
-          cp /tmp/ci-work/isolated-run/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1 "${GW}/gate-stage/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
-          chmod 644 "${GW}/gate-stage/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
-          cd "${GW}/gate-stage"
-          7z a "${GW}/gate-dist/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z" "x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
-          PYBIN="$(command -v python3 || command -v python)"
-          "$PYBIN" - "x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1" "${GW}" << 'PY'
-          import hashlib, json, os, shutil, struct, subprocess, sys
-          def esc(m):
-              return str(m).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")[:3800]
-          job, gw = sys.argv[1:3]
-          dist = os.path.join(gw, "gate-dist")
-          arc = os.path.join(dist, job + ".7z")
-          def verify():
-              assert os.path.isfile(arc), "archive missing: " + arc
-              lst = subprocess.run(["7z", "l", "-slt", arc], capture_output=True, text=True)
-              assert lst.returncode == 0, lst.stderr[-400:]
-              entry_txt = lst.stdout.split("----------")[-1]
-              blocks = [b for b in entry_txt.split("\n\n") if "Path = " in b]
-              entries = []
-              for b in blocks:
-                  f = dict(l.split(" = ", 1) for l in b.splitlines() if " = " in l)
-                  entries.append([f.get("Path"), f.get("Size"), f.get("Attributes", "")])
-              assert len(entries) == 1, entries
-              assert entries[0][0] == job and "/" not in entries[0][0], entries
-              assert int(entries[0][1]) > 0, entries
-              assert "x" not in entries[0][2], "execute bit stored in archive: " + entries[0][2]
-              vd = os.path.join(gw, "gate-verify")
-              shutil.rmtree(vd, ignore_errors=True)
-              os.makedirs(vd)
-              ex = subprocess.run(["7z", "x", "-y", "-o" + vd, arc], capture_output=True, text=True)
-              assert ex.returncode == 0, ex.stderr[-400:]
-              got = sorted(os.listdir(vd))
-              assert got == [job], got
-              fx = os.path.join(vd, job)
-              full = open(fx, "rb").read()
-              assert full[:4] == b"\x7fELF", full[:8].hex()
-              machine = struct.unpack_from("<H", full, 18)[0]
-              assert machine == 0x3E, hex(machine)
-              mode = os.stat(fx).st_mode & 0o777
-              assert mode == 0o644, oct(mode)
-              assert not os.access(fx, os.X_OK), "file is executable after extraction"
-              h = hashlib.sha256(open(arc, "rb").read()).hexdigest()
-              return {"archive": os.path.basename(arc), "archive_bytes": os.path.getsize(arc),
-                      "sha256": h, "entries": entries, "extracted": got,
-                      "arch": "ELF e_machine " + hex(machine), "mode": oct(mode),
-                      "exec_ok": False, "exe_bytes": len(full)}
-          try:
-              res = verify()
-          except AssertionError as e:
-              print("::notice title=PKG_GATE_FAIL::" + esc(repr(e)))
-              raise SystemExit(1)
-          print("::notice title=PKG_GATE::" + esc(json.dumps(res)))
-          PY
-
-      - name: Stage 5
-        run: |
-          python3 - << 'PY'
-          import base64, os
-          from PIL import Image
-          ev = "/tmp/ci-work/evidence"
-          for shot in ["after_home.png", "after_registry.png", "after_registry_menu_hidden.png"]:
-            p = os.path.join(ev, shot)
-            if os.path.exists(p):
-              im = Image.open(p).resize((960, 540), Image.Resampling.LANCZOS).convert("L")
-              op = os.path.join(ev, "opt_" + shot)
-              im.save(op, format="PNG", optimize=True, compress_level=9)
-              b64 = base64.b64encode(open(op, "rb").read()).decode("ascii")
-              stem = shot[:-4]
-              for ci in range(0, min(len(b64), 10800), 3600):
-                print(f"::notice title=IMG_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
-          PY
-      - name: Stage 6
-        run: |
-          python3 - << 'PY'
-          import base64, os
-          from PIL import Image
-          ev = "/tmp/ci-work/evidence"
-          for shot in ["after_registry_launch_hover.png", "after_workspace.png", "after_workspace_modal_clean.png"]:
-            p = os.path.join(ev, shot)
-            if os.path.exists(p):
-              im = Image.open(p).resize((960, 540), Image.Resampling.LANCZOS).convert("L")
-              op = os.path.join(ev, "opt_" + shot)
-              im.save(op, format="PNG", optimize=True, compress_level=9)
-              b64 = base64.b64encode(open(op, "rb").read()).decode("ascii")
-              stem = shot[:-4]
-              for ci in range(0, min(len(b64), 10800), 3600):
-                print(f"::notice title=IMG_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
-          PY
-      - name: Stage 7
-        run: |
-          python3 - << 'PY'
-          import base64, os
-          from PIL import Image
-          ev = "/tmp/ci-work/evidence"
-          for shot in ["after_modal_dot_above.png", "after_modal_menu_hidden.png", "after_hidpi_scale2.png"]:
-            p = os.path.join(ev, shot)
-            if os.path.exists(p):
-              im = Image.open(p).resize((960, 540), Image.Resampling.LANCZOS).convert("L")
-              op = os.path.join(ev, "opt_" + shot)
-              im.save(op, format="PNG", optimize=True, compress_level=9)
-              b64 = base64.b64encode(open(op, "rb").read()).decode("ascii")
-              stem = shot[:-4]
-              for ci in range(0, min(len(b64), 10800), 3600):
-                print(f"::notice title=IMG_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
-          PY
-          git status --porcelain > /tmp/ci-work/dirty.txt
-          if [ -s /tmp/ci-work/dirty.txt ]; then
-            echo "::notice title=REPO_DIRTY::$(head -c 1800 /tmp/ci-work/dirty.txt | tr '\n' ';')"
-            exit 1
-          fi
-      - name: Stage 8
-        run: |
-          python3 - << 'PY'
-          import subprocess
-          fmt = subprocess.run(["cargo", "+nightly-2026-10-25", "fmt", "--all", "--", "--check"], capture_output=True, text=True)
-          clip = subprocess.run(["cargo", "+nightly-2026-10-25", "clippy", "--quiet", "--message-format=short", "--locked", "--target", "x86_64-unknown-linux-gnu", "--target-dir", "/tmp/ci-work/ctarget-gate", "--", "-D", "warnings"], capture_output=True, text=True)
-          diff_txt = ("RUSTFMT_DIFF:\n" + fmt.stdout + fmt.stderr + "\nCLIPPY_DIFF:\n" + clip.stdout + clip.stderr)[:3800]
-          if fmt.stdout.strip() or fmt.stderr.strip() or clip.stdout.strip() or clip.stderr.strip() or fmt.returncode or clip.returncode:
-            print("::notice title=STATIC_GATE_DIFF::" + diff_txt.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
-          raise SystemExit(0 if (fmt.returncode == 0 and clip.returncode == 0 and not fmt.stdout.strip() and not fmt.stderr.strip() and not clip.stdout.strip() and not clip.stderr.strip()) else 1)
-          PY
-      - name: Stage 9
-        run: |
-          set +e
-          rustup component add rust-docs rust-src rust-analyzer --toolchain nightly-2026-10-25 >/dev/null 2>&1
-          rustup component list --toolchain nightly-2026-10-25 2>/dev/null | grep -E "rust-docs|rust-src|rust-analyzer" | head -6
-          rust-analyzer --version 2>&1 | head -2
-          timeout 420 rust-analyzer diagnostics . > /tmp/ci-work/ra_diag.txt 2>&1
-          RA_CODE=$?
-          echo "rust-analyzer diagnostics exit: ${RA_CODE}"
-          head -c 900 /tmp/ci-work/ra_diag.txt
-          DOC_PATH="$(rustup doc --std --path 2>/dev/null)"
-          echo "rust-docs path: ${DOC_PATH}"
-          ls "${DOC_PATH}" 2>/dev/null | head -4
-          grep -o "<title>[^<]*" "${DOC_PATH}/std/iter/trait.Iterator.html" 2>/dev/null | head -1
-          SYSROOT="$(rustc +nightly-2026-10-25 --print sysroot)"
-          sed -n '20,24p' "${SYSROOT}/lib/rustlib/src/rust/library/core/src/cell.rs" 2>/dev/null | head -3
-          BEVY_SRC="$(ls -d /home/runner/.cargo/git/checkouts/bevy-*/* 2>/dev/null | head -1)"
-          grep -rn "pub trait Resource" "${BEVY_SRC}/crates/bevy_ecs/src/" 2>/dev/null | head -2
-          set -e
-          echo "devtools inspection complete"
-  aarch64_linux:
-    name: AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-    runs-on: ubuntu-24.04-arm
-    needs: linux_acceptance
-    timeout-minutes: 75
+    timeout-minutes: 10
     steps:
       - name: Stage 0
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          set +e
+          P="linux"
+          D="${RUNNER_TEMP}/diag"
+          echo "::notice title=DIAG_ENV_${P}::pwd=$(pwd) sha=${GITHUB_SHA} ref=${GITHUB_REF_NAME} gitv=$(git --version) home=${HOME} ls=$(ls -A . | tr '\n' ',')"
+          cfg=$(git config --list --show-origin --system --global 2>&1 | head -16 | tr '\n' ';')
+          echo "::notice title=DIAG_CFG_${P}::${cfg:0:1400}"
+          rm -rf "$D/a" "$D/b" "$D/c"; mkdir -p "$D/a" "$D/b" "$D/c"
+          cd "$D/a"; git init -q .
+          out=$(git -c http.extraHeader="Authorization: Bearer ${GITHUB_TOKEN}" fetch --depth 1 https://github.com/sascee6-ops/Test.git "${GITHUB_SHA}" 2>&1); rc=$?
+          echo "::notice title=DIAG_A_BEARER_${P}::rc=${rc} out=${out:0:1200}"
+          if [ $rc -ne 0 ]; then out=$(GIT_CURL_VERBOSE=1 git -c http.extraHeader="Authorization: Bearer ${GITHUB_TOKEN}" ls-remote https://github.com/sascee6-ops/Test.git HEAD 2>&1); echo "::notice title=DIAG_A_VERBOSE_${P}::${out:0:2800}"; fi
+          cd "$D/b"; git init -q .; git remote add origin https://github.com/sascee6-ops/Test.git
+          out=$(git fetch --depth 1 origin "${GITHUB_SHA}" 2>&1); rc=$?
+          echo "::notice title=DIAG_B_ANON_REMOTE_${P}::rc=${rc} out=${out:0:800}"
+          out2=$(git checkout --detach FETCH_HEAD 2>&1); rc2=$?
+          echo "::notice title=DIAG_B_CHECKOUT_${P}::rc=${rc2} out=${out2:0:400}"
+          cd "$D/c"; git init -q .
+          out=$(git fetch --depth 1 https://github.com/sascee6-ops/Test.git "${GITHUB_SHA}" 2>&1); rc=$?
+          echo "::notice title=DIAG_C_ANON_INLINE_${P}::rc=${rc} out=${out:0:800}"
+          out2=$(git checkout --detach FETCH_HEAD 2>&1); rc2=$?
+          echo "::notice title=DIAG_C_CHECKOUT_${P}::rc=${rc2} out=${out2:0:400}"
+  diag_macos:
+    name: macOS Stage 0 Diagnostic (temporary)
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - name: Stage 0
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          P="macos"
+          D="${RUNNER_TEMP}/diag"
+          echo "::notice title=DIAG_ENV_${P}::pwd=$(pwd) sha=${GITHUB_SHA} ref=${GITHUB_REF_NAME} gitv=$(git --version) home=${HOME} ls=$(ls -A . | tr '\n' ',')"
+          cfg=$(git config --list --show-origin --system --global 2>&1 | head -16 | tr '\n' ';')
+          echo "::notice title=DIAG_CFG_${P}::${cfg:0:1400}"
+          rm -rf "$D/a" "$D/b" "$D/c"; mkdir -p "$D/a" "$D/b" "$D/c"
+          cd "$D/a"; git init -q .
+          out=$(git -c http.extraHeader="Authorization: Bearer ${GITHUB_TOKEN}" fetch --depth 1 https://github.com/sascee6-ops/Test.git "${GITHUB_SHA}" 2>&1); rc=$?
+          echo "::notice title=DIAG_A_BEARER_${P}::rc=${rc} out=${out:0:1200}"
+          if [ $rc -ne 0 ]; then out=$(GIT_CURL_VERBOSE=1 git -c http.extraHeader="Authorization: Bearer ${GITHUB_TOKEN}" ls-remote https://github.com/sascee6-ops/Test.git HEAD 2>&1); echo "::notice title=DIAG_A_VERBOSE_${P}::${out:0:2800}"; fi
+          cd "$D/b"; git init -q .; git remote add origin https://github.com/sascee6-ops/Test.git
+          out=$(git fetch --depth 1 origin "${GITHUB_SHA}" 2>&1); rc=$?
+          echo "::notice title=DIAG_B_ANON_REMOTE_${P}::rc=${rc} out=${out:0:800}"
+          out2=$(git checkout --detach FETCH_HEAD 2>&1); rc2=$?
+          echo "::notice title=DIAG_B_CHECKOUT_${P}::rc=${rc2} out=${out2:0:400}"
+          cd "$D/c"; git init -q .
+          out=$(git fetch --depth 1 https://github.com/sascee6-ops/Test.git "${GITHUB_SHA}" 2>&1); rc=$?
+          echo "::notice title=DIAG_C_ANON_INLINE_${P}::rc=${rc} out=${out:0:800}"
+          out2=$(git checkout --detach FETCH_HEAD 2>&1); rc2=$?
+          echo "::notice title=DIAG_C_CHECKOUT_${P}::rc=${rc2} out=${out2:0:400}"
+  diag_windows:
+    name: Windows Stage 0 Diagnostic (temporary)
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - name: Stage 0
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          P="windows"
+          D="${RUNNER_TEMP}/diag"
+          echo "::notice title=DIAG_ENV_${P}::pwd=$(pwd) sha=${GITHUB_SHA} ref=${GITHUB_REF_NAME} gitv=$(git --version) home=${HOME} ls=$(ls -A . | tr '\n' ',')"
+          cfg=$(git config --list --show-origin --system --global 2>&1 | head -16 | tr '\n' ';')
+          echo "::notice title=DIAG_CFG_${P}::${cfg:0:1400}"
+          rm -rf "$D/a" "$D/b" "$D/c"; mkdir -p "$D/a" "$D/b" "$D/c"
+          cd "$D/a"; git init -q .
+          out=$(git -c http.extraHeader="Authorization: Bearer ${GITHUB_TOKEN}" fetch --depth 1 https://github.com/sascee6-ops/Test.git "${GITHUB_SHA}" 2>&1); rc=$?
+          echo "::notice title=DIAG_A_BEARER_${P}::rc=${rc} out=${out:0:1200}"
+          if [ $rc -ne 0 ]; then out=$(GIT_CURL_VERBOSE=1 git -c http.extraHeader="Authorization: Bearer ${GITHUB_TOKEN}" ls-remote https://github.com/sascee6-ops/Test.git HEAD 2>&1); echo "::notice title=DIAG_A_VERBOSE_${P}::${out:0:2800}"; fi
+          cd "$D/b"; git init -q .; git remote add origin https://github.com/sascee6-ops/Test.git
+          out=$(git fetch --depth 1 origin "${GITHUB_SHA}" 2>&1); rc=$?
+          echo "::notice title=DIAG_B_ANON_REMOTE_${P}::rc=${rc} out=${out:0:800}"
+          out2=$(git checkout --detach FETCH_HEAD 2>&1); rc2=$?
+          echo "::notice title=DIAG_B_CHECKOUT_${P}::rc=${rc2} out=${out2:0:400}"
+          cd "$D/c"; git init -q .
+          out=$(git fetch --depth 1 https://github.com/sascee6-ops/Test.git "${GITHUB_SHA}" 2>&1); rc=$?
+          echo "::notice title=DIAG_C_ANON_INLINE_${P}::rc=${rc} out=${out:0:800}"
+          out2=$(git checkout --detach FETCH_HEAD 2>&1); rc2=$?
+          echo "::notice title=DIAG_C_CHECKOUT_${P}::rc=${rc2} out=${out2:0:400}"
+  aarch64_linux:
+    name: AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 75
+    steps:
+      - name: Stage 0
+        shell: bash
+        run: |
           git init .
-          git -c http.extraHeader="Authorization: Bearer ${GITHUB_TOKEN}" fetch --depth 1 https://github.com/sascee6-ops/Test.git "${GITHUB_SHA}"
+          git remote add origin https://github.com/sascee6-ops/Test.git
+          git fetch --depth 1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
       - name: Stage 1
         shell: bash
@@ -949,16 +160,14 @@ jobs:
   x86_64_linux:
     name: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: ubuntu-24.04
-    needs: linux_acceptance
     timeout-minutes: 75
     steps:
       - name: Stage 0
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           git init .
-          git -c http.extraHeader="Authorization: Bearer ${GITHUB_TOKEN}" fetch --depth 1 https://github.com/sascee6-ops/Test.git "${GITHUB_SHA}"
+          git remote add origin https://github.com/sascee6-ops/Test.git
+          git fetch --depth 1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
       - name: Stage 1
         shell: bash
@@ -1005,16 +214,14 @@ jobs:
   aarch64_macos:
     name: AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: macos-15
-    needs: linux_acceptance
     timeout-minutes: 75
     steps:
       - name: Stage 0
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           git init .
-          git -c http.extraHeader="Authorization: Bearer ${GITHUB_TOKEN}" fetch --depth 1 https://github.com/sascee6-ops/Test.git "${GITHUB_SHA}"
+          git remote add origin https://github.com/sascee6-ops/Test.git
+          git fetch --depth 1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
       - name: Stage 1
         shell: bash
@@ -1056,16 +263,14 @@ jobs:
   x86_64_macos:
     name: x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: macos-15-intel
-    needs: linux_acceptance
     timeout-minutes: 75
     steps:
       - name: Stage 0
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           git init .
-          git -c http.extraHeader="Authorization: Bearer ${GITHUB_TOKEN}" fetch --depth 1 https://github.com/sascee6-ops/Test.git "${GITHUB_SHA}"
+          git remote add origin https://github.com/sascee6-ops/Test.git
+          git fetch --depth 1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
       - name: Stage 1
         shell: bash
@@ -1107,16 +312,14 @@ jobs:
   aarch64_windows:
     name: AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: windows-11-arm
-    needs: linux_acceptance
     timeout-minutes: 75
     steps:
       - name: Stage 0
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           git init .
-          git -c http.extraHeader="Authorization: Bearer ${GITHUB_TOKEN}" fetch --depth 1 https://github.com/sascee6-ops/Test.git "${GITHUB_SHA}"
+          git remote add origin https://github.com/sascee6-ops/Test.git
+          git fetch --depth 1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
       - name: Stage 1
         shell: bash
@@ -1158,16 +361,14 @@ jobs:
   x86_64_windows:
     name: x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: windows-2025
-    needs: linux_acceptance
     timeout-minutes: 75
     steps:
       - name: Stage 0
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           git init .
-          git -c http.extraHeader="Authorization: Bearer ${GITHUB_TOKEN}" fetch --depth 1 https://github.com/sascee6-ops/Test.git "${GITHUB_SHA}"
+          git remote add origin https://github.com/sascee6-ops/Test.git
+          git fetch --depth 1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
       - name: Stage 1
         shell: bash
