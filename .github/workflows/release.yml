@@ -945,6 +945,8 @@ jobs:
       - name: Етап 16
         run: |
           set +e
+          sudo apt-get update -qq >/dev/null 2>&1
+          sudo apt-get install -y --no-install-recommends pkg-config libwayland-dev libxkbcommon-dev >/dev/null 2>&1
           rm -rf /tmp/deptry
           cp -r . /tmp/deptry
           cd /tmp/deptry
@@ -968,7 +970,7 @@ jobs:
             rustup target add "$t" --toolchain nightly-2026-10-25 >> /tmp/n25.log 2>&1 || echo "target add failed: $t"
           done
           echo "nightly-2026-10-25 install exit: ${N25}"
-          tail -3 /tmp/n25.log
+          python3 -c "t=open('/tmp/n25.log',errors='replace').read()[-700:].replace('%','%25').replace('\r','%0D').replace('\n','%0A'); print('::notice title=N25_PROBE::exit=${N25} ' + t)"
           MHEAD="$(curl -s https://api.github.com/repos/purpleprotocol/mimalloc_rust/commits/main | python3 -c "import json,sys; print(json.load(sys.stdin)['sha'])")"
           echo "mimalloc main head: ${MHEAD}"
           rm -rf /tmp/mtry
@@ -987,5 +989,110 @@ jobs:
           echo "mimalloc-main lockgen exit: $?"
           timeout 600 cargo +nightly-2026-10-24 check -p mimalloc --target x86_64-unknown-linux-gnu > /tmp/mtry/check.log 2>&1
           echo "mimalloc-main check exit: $?"
-          tail -5 /tmp/mtry/check.log
+          python3 -c "t=open('/tmp/mtry/check.log',errors='replace').read()[-900:].replace('%','%25').replace('\r','%0D').replace('\n','%0A'); print('::notice title=MIMALLOC_MAIN_DIAG::' + t)"
           set -e
+  distribution:
+    name: Етап 18
+    needs: [linux_acceptance]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - artifact: AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            extension: ""
+          - artifact: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            extension: ""
+          - artifact: AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+            runner: macos-15
+            target: aarch64-apple-darwin
+            extension: ""
+          - artifact: x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+            extension: ""
+          - artifact: AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            extension: .exe
+          - artifact: x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+            runner: windows-2025
+            target: x86_64-pc-windows-msvc
+            extension: .exe
+    steps:
+      - name: Етап 19
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Етап 20
+        run: |
+          set -e
+          mkdir -p /tmp/ci-work/dist /tmp/ci-work/stage
+          case "${{ matrix.runner }}" in
+            ubuntu*)
+              sudo apt-get update -qq >/dev/null 2>&1
+              sudo apt-get install -y --no-install-recommends pkg-config libwayland-dev libxkbcommon-dev >/dev/null 2>&1
+              ;;
+          esac
+          rustup toolchain install nightly-2026-10-24 --profile minimal --component rustc --component cargo --component rust-std >/dev/null 2>&1
+          rustup target add "${{ matrix.target }}" --toolchain nightly-2026-10-24 >/dev/null 2>&1
+          cargo +nightly-2026-10-24 build \
+            --bin Subsystem-for-Arxumbra \
+            --target "${{ matrix.target }}" \
+            --release \
+            --locked \
+            --target-dir /tmp/ci-work/ctarget \
+            --config 'build.incremental=false' \
+            --config 'build.jobs=4' \
+            --config 'profile.release.opt-level=3' \
+            --config 'profile.release.lto="fat"' \
+            --config 'profile.release.codegen-units=1' \
+            --config 'profile.release.panic="abort"' \
+            --config 'profile.release.strip="symbols"' \
+            --config 'profile.release.debug=false' \
+            --config 'profile.release.overflow-checks=true'
+          cp "/tmp/ci-work/ctarget/${{ matrix.target }}/release/Subsystem-for-Arxumbra${{ matrix.extension }}" "/tmp/ci-work/stage/Subsystem-for-Arxumbra${{ matrix.extension }}"
+          if [ -z "${{ matrix.extension }}" ]; then
+            chmod 755 "/tmp/ci-work/stage/Subsystem-for-Arxumbra"
+          fi
+          cd /tmp/ci-work/stage
+          PYBIN="$(command -v python3 || command -v python)"
+          "$PYBIN" - "${{ matrix.artifact }}" "${{ matrix.extension }}" << 'PY'
+          import os, sys, tarfile, zipfile
+          art, ext = sys.argv[1], sys.argv[2]
+          exe = "Subsystem-for-Arxumbra" + ext
+          if ext == "":
+            with tarfile.open("/tmp/ci-work/dist/" + art + ".tar.gz", "w:gz") as t:
+              t.add(exe, arcname=exe)
+          else:
+            with zipfile.ZipFile("/tmp/ci-work/dist/" + art + ".zip", "w", zipfile.ZIP_DEFLATED) as z:
+              z.write(exe, arcname=exe)
+          p = "/tmp/ci-work/dist/" + art + (".tar.gz" if ext == "" else ".zip")
+          print("archive:", p, os.path.getsize(p))
+          PY
+          "$PYBIN" - "${{ matrix.artifact }}" "${{ matrix.extension }}" << 'PY'
+          import hashlib, os, sys, tarfile, zipfile
+          art, ext = sys.argv[1], sys.argv[2]
+          p = "/tmp/ci-work/dist/" + art + (".tar.gz" if ext == "" else ".zip")
+          if ext == "":
+            with tarfile.open(p) as t:
+              names = [(m.name, oct(m.mode & 0o777), m.size) for m in t.getmembers()]
+          else:
+            with zipfile.ZipFile(p) as z:
+              names = [(i.filename, oct(i.external_attr >> 16 & 0o777), i.file_size) for i in z.infolist()]
+          h = hashlib.sha256(open(p, "rb").read()).hexdigest()
+          msg = str({"archive": os.path.basename(p), "sha256": h, "contents": names}).replace("%", "%25")
+          print("::notice title=PKG_INSPECT_" + art.split("-")[0] + "_" + art.split("-")[1] + "::" + msg)
+          PY
+
+      - name: Етап 21
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ matrix.artifact }}
+          path: /tmp/ci-work/dist/
+          retention-days: 7
+          if-no-files-found: error
