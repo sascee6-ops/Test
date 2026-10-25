@@ -1,4 +1,4 @@
-name: Етап 0
+name: release
 
 on:
   push:
@@ -10,136 +10,172 @@ permissions:
   contents: read
 
 jobs:
-  distribution:
-    name: Етап 1
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 75
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - artifact: AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-            runner: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
-            extension: ""
-          - artifact: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-            runner: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
-            extension: ""
-          - artifact: AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-            runner: macos-15
-            target: aarch64-apple-darwin
-            extension: ""
-          - artifact: x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-            runner: macos-15-intel
-            target: x86_64-apple-darwin
-            extension: ""
-          - artifact: AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-            runner: windows-11-arm
-            target: aarch64-pc-windows-msvc
-            extension: .exe
-          - artifact: x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-            runner: windows-2025
-            target: x86_64-pc-windows-msvc
-            extension: .exe
+  dep_check:
+    name: Dependency Candidate Check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
-      - name: Етап 2
+      - name: Stage 0
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-
-      - name: Етап 3
-        shell: bash
+      - name: Stage 1
         run: |
-          set -e
-          CIW="${RUNNER_TEMP}/ci-work"
-          mkdir -p "${CIW}/dist" "${CIW}/stage"
-          case "${{ matrix.runner }}" in
-            ubuntu*)
-              sudo apt-get update -qq >/dev/null 2>&1
-              sudo apt-get install -y --no-install-recommends pkg-config libwayland-dev libxkbcommon-dev >/dev/null 2>&1
-              ;;
-          esac
           set +e
-          rustup toolchain install nightly-2026-10-25 --profile minimal --component rustc --component cargo --component rust-std > "${CIW}/rustup.log" 2>&1
-          RC=$?
-          rustup target add "${{ matrix.target }}" --toolchain nightly-2026-10-25 >> "${CIW}/rustup.log" 2>&1
-          RC2=$?
-          set -e
-          if [ "${RC}" -ne 0 ] || [ "${RC2}" -ne 0 ]; then
-            PYBIN="$(command -v python3 || command -v python)"
-            "$PYBIN" - "${CIW}/rustup.log" << 'PY'
-          import sys
-          t = open(sys.argv[1], errors="replace").read()[-3500:].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-          print("::notice title=TOOLCHAIN_ERR_MATRIX::" + t)
-          PY
+          rustup toolchain install nightly-2026-10-25 --profile minimal --component rustc --component cargo --component rust-std > /tmp/n25.log 2>&1
+          N25RC=$?
+          rustup toolchain install nightly-2026-10-26 --profile minimal > /tmp/n26.log 2>&1
+          N26RC=$?
+          sudo apt-get update -qq > /dev/null 2>&1
+          sudo apt-get install -y --no-install-recommends pkg-config libwayland-dev libxkbcommon-dev > /dev/null 2>&1
+          if [ "${N25RC}" -ne 0 ]; then
+            tail -c 600 /tmp/n25.log
             exit 1
           fi
-          set +e
-          cargo +nightly-2026-10-25 build \
-            --bin Subsystem-for-Arxumbra \
-            --target "${{ matrix.target }}" \
-            --release \
-            --locked \
-            --target-dir "${CIW}/ctarget" \
-            --config 'build.incremental=false' \
-            --config 'build.jobs=4' \
-            --config 'profile.release.opt-level=3' \
-            --config 'profile.release.lto="fat"' \
-            --config 'profile.release.codegen-units=1' \
-            --config 'profile.release.panic="abort"' \
-            --config 'profile.release.strip="symbols"' \
-            --config 'profile.release.debug=false' \
-            --config 'profile.release.overflow-checks=true' \
-            > "${CIW}/build_${{ matrix.target }}.log" 2>&1
-          BC=$?
+          python3 - "${N25RC}" "${N26RC}" << 'PY'
+          import json, subprocess, sys
+          def esc(m):
+              return str(m).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")[:3800]
+          n25rc, n26rc = sys.argv[1], sys.argv[2]
+          d = json.loads(subprocess.check_output(["curl", "-s", "https://api.github.com/repos/bevyengine/bevy/commits/main"], text=True))
+          pin = "fd9e7609109758a2d9af401345f100be9442e9f6"
+          print("::notice title=BEVY_MAIN_HEAD::" + esc(json.dumps({"head": d["sha"], "date": d["commit"]["committer"]["date"], "pinned": pin, "matches_pin": d["sha"] == pin})))
+          n26tail = open("/tmp/n26.log", errors="replace").read()[-260:]
+          print("::notice title=NIGHTLY_PROBES::" + esc(json.dumps({"n25_install_exit": n25rc, "n26_install_exit": n26rc, "n26_tail": n26tail})))
+          PY
+          rm -rf /tmp/deptry
+          cp -r . /tmp/deptry
+          cd /tmp/deptry
+          python3 - << 'PY'
+          s = open("Cargo.toml").read()
+          assert 'tag = "v0.1.52"' in s, "mimalloc tag pin not found"
+          s = s.replace('tag = "v0.1.52"', 'rev = "a35cc759c071fd7bd586685048367839002b95dd"')
+          open("Cargo.toml", "w").write(s)
+          print("candidate Cargo.toml written")
+          PY
+          cargo +nightly-2026-10-25 generate-lockfile > /tmp/deptry/lock.log 2>&1
+          LG=$?
+          timeout 1500 cargo +nightly-2026-10-25 check --release --target x86_64-unknown-linux-gnu > /tmp/deptry/check.log 2>&1
+          CE=$?
+          cargo +nightly-2026-10-25 tree -e features -p mimalloc --target x86_64-unknown-linux-gnu > /tmp/deptry/tree.log 2>&1
+          TE=$?
+          python3 - "${LG}" "${CE}" "${TE}" << 'PY'
+          import json, sys
+          def esc(m):
+              return str(m).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")[:3800]
+          lg, ce, te = sys.argv[1], sys.argv[2], sys.argv[3]
+          lock = open("/tmp/deptry/Cargo.lock", errors="replace").read() if lg == "0" else ""
+          chk = open("/tmp/deptry/check.log", errors="replace").read()
+          res = {
+              "lockgen_exit": lg,
+              "check_exit": ce,
+              "tree_exit": te,
+              "lock_has_candidate_rev": "?rev=a35cc759c071fd7bd586685048367839002b95dd" in lock,
+              "lock_tag_gone": "?tag=v0.1.52" not in lock,
+              "lock_mimalloc_pkgs": lock.count('name = "mimalloc"'),
+              "lock_libmimalloc_sys_pkgs": lock.count('name = "libmimalloc-sys"'),
+              "check_tail": chk[-600:],
+          }
+          print("::notice title=MIMALLOC_CANDIDATE::" + esc(json.dumps(res)))
+          tree = open("/tmp/deptry/tree.log", errors="replace").read()[:1400]
+          print("::notice title=MIMALLOC_FEATURES::" + esc(tree))
+          if lg != "0" or ce != "0":
+              sys.exit(1)
+          PY
+          RC=$?
+          exit "${RC}"
+      - name: Stage 2
+        run: |
           set -e
-          if [ "${BC}" -ne 0 ]; then
-            PYBIN="$(command -v python3 || command -v python)"
-            "$PYBIN" - "${CIW}/build_${{ matrix.target }}.log" << 'PY'
-          import sys
-          t = open(sys.argv[1], errors="replace").read()[-3500:].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-          print("::notice title=BUILD_ERR_MATRIX::" + t)
+          test -f /tmp/deptry/Cargo.lock
+          python3 - << 'PY'
+          import base64, hashlib, lzma, sys
+          raw = open("/tmp/deptry/Cargo.lock", "rb").read()
+          comp = lzma.compress(raw, preset=9)
+          b64 = base64.b64encode(comp).decode()
+          chunks = [b64[i:i + 3800] for i in range(0, len(b64), 3800)]
+          print("::notice title=LOCK_XZ::total=%d raw_sha256=%s raw_len=%d comp_len=%d" % (len(chunks), hashlib.sha256(raw).hexdigest(), len(raw), len(comp)))
+          if len(chunks) > 18:
+              print("::notice title=LOCK_XZ_OVERFLOW::chunks=%d exceeds 18 slots" % len(chunks))
+              sys.exit(1)
+          for idx, c in enumerate(chunks[:9]):
+              print("::notice title=LOCK_XZ_%03d::%s" % (idx, c))
           PY
-            exit "${BC}"
+      - name: Stage 3
+        run: |
+          set -e
+          python3 - << 'PY'
+          import base64, lzma
+          raw = open("/tmp/deptry/Cargo.lock", "rb").read()
+          b64 = base64.b64encode(lzma.compress(raw, preset=9)).decode()
+          chunks = [b64[i:i + 3800] for i in range(0, len(b64), 3800)]
+          for idx, c in enumerate(chunks[9:18], start=9):
+              print("::notice title=LOCK_XZ_%03d::%s" % (idx, c))
+          PY
+  build_jobs:
+    name: Build Concurrency Experiment
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Stage 0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Stage 1
+        run: |
+          set +e
+          rustup toolchain install nightly-2026-10-25 --profile minimal --component rustc --component cargo --component rust-std > /dev/null 2>&1
+          N25RC=$?
+          sudo apt-get update -qq > /dev/null 2>&1
+          sudo apt-get install -y --no-install-recommends pkg-config libwayland-dev libxkbcommon-dev time > /dev/null 2>&1
+          if [ "${N25RC}" -ne 0 ]; then
+            exit 1
           fi
-          cp "${CIW}/ctarget/${{ matrix.target }}/release/Subsystem-for-Arxumbra${{ matrix.extension }}" "${CIW}/stage/Subsystem-for-Arxumbra${{ matrix.extension }}"
-          if [ -z "${{ matrix.extension }}" ]; then
-            chmod 755 "${CIW}/stage/Subsystem-for-Arxumbra"
-          fi
-          cd "${CIW}/stage"
-          PYBIN="$(command -v python3 || command -v python)"
-          "$PYBIN" - "${{ matrix.artifact }}" "${{ matrix.extension }}" "${CIW}" << 'PY'
-          import os, sys, tarfile, zipfile
-          art, ext, ciw = sys.argv[1], sys.argv[2], sys.argv[3]
-          dist = os.path.join(ciw, "dist")
-          exe = "Subsystem-for-Arxumbra" + ext
-          if ext == "":
-            with tarfile.open(os.path.join(dist, art + ".tar.gz"), "w:gz") as t:
-              t.add(exe, arcname=exe)
-          else:
-            with zipfile.ZipFile(os.path.join(dist, art + ".zip"), "w", zipfile.ZIP_DEFLATED) as z:
-              z.write(exe, arcname=exe)
-          p = os.path.join(dist, art + (".tar.gz" if ext == "" else ".zip"))
-          print("archive:", p, os.path.getsize(p))
+          python3 - << 'PY'
+          import hashlib, json, os, re, shutil, subprocess, time
+          def esc(m):
+              return str(m).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")[:3800]
+          ev = "/tmp/ci-jobs"
+          os.makedirs(ev, exist_ok=True)
+          cap = {
+              "nproc": subprocess.run(["nproc"], capture_output=True, text=True).stdout.strip(),
+              "mem_total_kb": int(re.search(r"MemTotal:\s+(\d+)", open("/proc/meminfo").read()).group(1)),
+              "runner": "ubuntu-24.04",
+          }
+          rows = []
+          def build(name, jobs_cfg, opt_cfg):
+              td = ev + "/ct_" + name
+              cmd = ["/usr/bin/time", "-v", "cargo", "+nightly-2026-10-25", "build",
+                     "--bin", "Subsystem-for-Arxumbra", "--target", "x86_64-unknown-linux-gnu",
+                     "--release", "--locked", "--target-dir", td,
+                     "--config", "build.incremental=false",
+                     "--config", "profile.release.opt-level=" + opt_cfg,
+                     "--config", 'profile.release.lto="fat"',
+                     "--config", "profile.release.codegen-units=1",
+                     "--config", 'profile.release.panic="abort"',
+                     "--config", 'profile.release.strip="symbols"',
+                     "--config", "profile.release.debug=false",
+                     "--config", "profile.release.overflow-checks=true"] + jobs_cfg
+              t0 = time.time()
+              pr = subprocess.run(cmd, capture_output=True, text=True)
+              wall = round(time.time() - t0, 1)
+              if pr.returncode != 0:
+                  rows.append({"cfg": name, "build": "FAIL", "tail": (pr.stdout[-300:] + pr.stderr[-300:])})
+                  shutil.rmtree(td, ignore_errors=True)
+                  return
+              peak = re.search(r"Maximum resident set size \(kbytes\): (\d+)", pr.stderr)
+              binp = td + "/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra"
+              b = open(binp, "rb").read()
+              rows.append({"cfg": name, "build_s": wall, "peak_kb": int(peak.group(1)) if peak else -1,
+                           "size": len(b), "sha256_16": hashlib.sha256(b).hexdigest()[:16]})
+              shutil.rmtree(td, ignore_errors=True)
+          build("J_default", [], "3")
+          build("J_4", ["--config", "build.jobs=4"], "3")
+          build("J_2", ["--config", "build.jobs=2"], "3")
+          build("S_opt_s", [], '"s"')
+          shas = [r["sha256_16"] for r in rows if r["cfg"].startswith("J_") and "sha256_16" in r]
+          summary = {"capacity": cap, "toolchain": "nightly-2026-10-25",
+                     "opt3_binaries_identical": len(shas) == 3 and len(set(shas)) == 1,
+                     "rows": rows}
+          print("::notice title=JOBS_EXP::" + esc(json.dumps(summary)))
+          bad = [r for r in rows if r.get("build") == "FAIL"]
+          raise SystemExit(1 if bad else 0)
           PY
-          "$PYBIN" - "${{ matrix.artifact }}" "${{ matrix.extension }}" "${CIW}" << 'PY'
-          import hashlib, os, sys, tarfile, zipfile
-          art, ext, ciw = sys.argv[1], sys.argv[2], sys.argv[3]
-          p = os.path.join(ciw, "dist", art + (".tar.gz" if ext == "" else ".zip"))
-          if ext == "":
-            with tarfile.open(p) as t:
-              names = [(m.name, oct(m.mode & 0o777), m.size) for m in t.getmembers()]
-          else:
-            with zipfile.ZipFile(p) as z:
-              names = [(i.filename, oct(i.external_attr >> 16 & 0o777), i.file_size) for i in z.infolist()]
-          h = hashlib.sha256(open(p, "rb").read()).hexdigest()
-          msg = str({"archive": os.path.basename(p), "sha256": h, "contents": names}).replace("%", "%25")
-          print("::notice title=PKG_INSPECT_" + art.split("-")[0] + "_" + art.split("-")[1] + "::" + msg)
-          PY
-
-      - name: Етап 4
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: ${{ matrix.artifact }}
-          path: ${{ runner.temp }}/ci-work/dist/
-          retention-days: 7
-          if-no-files-found: error
+          RC=$?
+          exit "${RC}"
