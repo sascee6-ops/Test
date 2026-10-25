@@ -1040,6 +1040,7 @@ jobs:
           esac
           rustup toolchain install nightly-2026-10-24 --profile minimal --component rustc --component cargo --component rust-std >/dev/null 2>&1
           rustup target add "${{ matrix.target }}" --toolchain nightly-2026-10-24 >/dev/null 2>&1
+          set +e
           cargo +nightly-2026-10-24 build \
             --bin Subsystem-for-Arxumbra \
             --target "${{ matrix.target }}" \
@@ -1054,7 +1055,19 @@ jobs:
             --config 'profile.release.panic="abort"' \
             --config 'profile.release.strip="symbols"' \
             --config 'profile.release.debug=false' \
-            --config 'profile.release.overflow-checks=true'
+            --config 'profile.release.overflow-checks=true' \
+            > /tmp/ci-work/build_${{ matrix.target }}.log 2>&1
+          BC=$?
+          set -e
+          if [ "${BC}" -ne 0 ]; then
+            PYBIN="$(command -v python3 || command -v python)"
+            "$PYBIN" - "/tmp/ci-work/build_${{ matrix.target }}.log" << 'PY'
+          import sys
+          t = open(sys.argv[1], errors="replace").read()[-3500:].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+          print("::notice title=BUILD_ERR_MATRIX::" + t)
+          PY
+            exit "${BC}"
+          fi
           cp "/tmp/ci-work/ctarget/${{ matrix.target }}/release/Subsystem-for-Arxumbra${{ matrix.extension }}" "/tmp/ci-work/stage/Subsystem-for-Arxumbra${{ matrix.extension }}"
           if [ -z "${{ matrix.extension }}" ]; then
             chmod 755 "/tmp/ci-work/stage/Subsystem-for-Arxumbra"
