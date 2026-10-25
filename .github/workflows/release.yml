@@ -954,11 +954,15 @@ jobs:
           def sh(cmd):
               p = subprocess.run(cmd, shell=True, capture_output=True, text=True)
               return p.returncode, p.stdout, p.stderr
+          def chk(rc, stage, detail):
+              if rc != 0:
+                  notice("AUD_FAIL_" + stage, " ".join(str(detail).split())[-2200:])
+                  raise SystemExit(1)
           NT = "nightly-2026-10-25"
           rc, so, se = sh("rustup toolchain install " + NT + " --profile minimal")
-          assert rc == 0, "toolchain install failed: " + se[-800:]
+          chk(rc, "TOOLCHAIN", se)
           rc, so, se = sh("rustup target add x86_64-unknown-linux-gnu --toolchain " + NT)
-          assert rc == 0, "target add failed: " + se[-800:]
+          chk(rc, "TARGET", se)
           rc, rv, _ = sh("rustc +" + NT + " -Vv")
           rc2, cv, _ = sh("cargo +" + NT + " -V")
           notice("AUD_TOOLCHAIN", json.dumps({"rustc": rv.splitlines()[:2], "cargo": cv.strip()}))
@@ -970,17 +974,19 @@ jobs:
               sh("rustup toolchain uninstall nightly-2026-10-26")
           notice("AUD_NIGHTLY26_PROBE", json.dumps(probe))
           rc, so, se = sh("cargo +" + NT + " fetch --locked")
-          assert rc == 0, "fetch failed: " + se[-800:]
+          chk(rc, "FETCH", se)
           rc, so, se = sh("cargo +" + NT + " metadata --no-deps --format-version 1")
-          assert rc == 0, "metadata failed: " + se[-500:]
+          chk(rc, "METADATA", se)
           pk = json.loads(so)["packages"][0]
           tg = [(t["name"], t["kind"]) for t in pk["targets"]]
-          assert tg == [("Subsystem-for-Arxumbra", ["bin"])], tg
+          if tg != [("Subsystem-for-Arxumbra", ["bin"])]:
+              notice("AUD_FAIL_TARGETS", json.dumps(tg))
+              raise SystemExit(1)
           notice("AUD_METADATA", json.dumps({"package": pk["name"], "version": pk["version"], "targets": tg}))
           lock = open("Cargo.lock", "rb").read()
           notice("AUD_LOCK", json.dumps({"sha256": hashlib.sha256(lock).hexdigest(), "lock_version": re.search(rb"version = (\d+)", lock).group(1).decode()}))
           rc, so, se = sh("cargo +" + NT + " tree -e no-dev --target x86_64-unknown-linux-gnu")
-          assert rc == 0, "tree failed: " + se[-500:]
+          chk(rc, "TREE", se)
           names = set()
           for ln in so.splitlines():
               m = re.search(r"([A-Za-z0-9_\-\.]+) v\d+\.\d+", ln)
@@ -991,6 +997,9 @@ jobs:
           notice("AUD_FEATURE_GRAPH", json.dumps({"graph_packages": len(names), "logging_watchlist": watch,
               "tracing_reverse_first8": (ti.splitlines()[:8] if rc == 0 else ["absent: " + " ".join(te.split())[-140:]]),
               "total_graph_lines": len(so.splitlines())}))
+          rc, bi, be = sh("cargo +" + NT + " tree -i bevy_log -e no-dev --target x86_64-unknown-linux-gnu")
+          notice("AUD_BEVYLOG_REV", json.dumps({"present": rc == 0,
+              "first8": (bi.splitlines()[:8] if rc == 0 else ["absent: " + " ".join(be.split())[-140:]])}))
           cfgs = ["build.incremental=false", "profile.release.opt-level=3", "profile.release.lto=\"fat\"", "profile.release.codegen-units=1", "profile.release.panic=\"abort\"", "profile.release.strip=\"symbols\"", "profile.release.debug=false", "profile.release.overflow-checks=true"]
           cmd = ("cargo +" + NT + " build -v --release --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu"
                  + " --target-dir " + os.environ["RUNNER_TEMP"] + "/audit-target "
@@ -998,18 +1007,22 @@ jobs:
           t0 = time.time()
           p = subprocess.run(cmd, shell=True, capture_output=True, text=True)
           dt = round(time.time() - t0, 1)
-          assert p.returncode == 0, "verbose build failed: " + p.stderr[-1200:]
-          inv = [ln for ln in p.stderr.splitlines() if ln.startswith("Running `") and "subsystem_for_arxumbra" in ln.lower()]
-          assert inv, "no rustc invocation for app crate found"
+          combined = p.stdout + "\n" + p.stderr
+          chk(p.returncode, "BUILD", combined)
+          inv = [ln for ln in combined.splitlines() if ln.startswith("Running `") and "subsystem_for_arxumbra" in ln.lower()]
+          if not inv:
+              runl = [ln for ln in combined.splitlines() if ln.startswith("Running `")]
+              notice("AUD_FAIL_INV", json.dumps({"running_line_count": len(runl), "samples": [l[:260] for l in runl[:2]]}))
+              raise SystemExit(1)
           last = inv[-1]
-          assert "opt-level=3" in last, last[:600]
-          assert "codegen-units=1" in last, last[:600]
-          assert "panic=abort" in last, last[:600]
-          assert "strip=symbols" in last, last[:600]
+          missing = [f for f in ("opt-level=3", "codegen-units=1", "panic=abort", "strip=symbols") if f not in last]
+          if missing:
+              notice("AUD_FAIL_FLAGS", json.dumps({"missing": missing, "invocation": last[:2200]}))
+              raise SystemExit(1)
           flags = re.findall(r"-C\s+\S+", last)
           exe = os.environ["RUNNER_TEMP"] + "/audit-target/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra"
           size = os.path.getsize(exe)
-          notice("AUD_EFF_FLAGS", json.dumps({"build_s": dt, "exe_bytes": size, "crate_rustc_flags": flags[:28]}))
+          notice("AUD_EFF_FLAGS", json.dumps({"build_s": dt, "exe_bytes": size, "matches_certified_shipping_bytes": size == 35822504, "crate_rustc_flags": flags[:28]}))
           print("config audit complete")
           PY
   aarch64_linux:
