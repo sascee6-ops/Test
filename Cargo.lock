@@ -2690,7 +2690,7 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 [[package]]
 name = "libmimalloc-sys"
 version = "0.1.49"
-source = "git+https://github.com/purpleprotocol/mimalloc_rust?tag=v0.1.52#abcd2be6171e89190f8087fcaccf001d8bd5bc96"
+source = "git+https://github.com/purpleprotocol/mimalloc_rust?rev=a35cc759c071fd7bd586685048367839002b95dd#a35cc759c071fd7bd586685048367839002b95dd"
 dependencies = [
  "cc",
 ]
@@ -2811,7 +2811,7 @@ dependencies = [
 [[package]]
 name = "mimalloc"
 version = "0.1.52"
-source = "git+https://github.com/purpleprotocol/mimalloc_rust?tag=v0.1.52#abcd2be6171e89190f8087fcaccf001d8bd5bc96"
+source = "git+https://github.com/purpleprotocol/mimalloc_rust?rev=a35cc759c071fd7bd586685048367839002b95dd#a35cc759c071fd7bd586685048367839002b95dd"
 dependencies = [
  "libmimalloc-sys",
 ]
