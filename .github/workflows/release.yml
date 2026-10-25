@@ -1,4 +1,4 @@
-name: investigate-and-verify
+name: Етап 0
 
 on:
   push:
@@ -10,24 +10,23 @@ permissions:
   contents: read
 
 jobs:
-  wayland-v14-acceptance:
+  linux_acceptance:
+    name: Етап 1
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
-      - name: Checkout repository
+      - name: Етап 2
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-
-      - name: Install native Wayland & headless Vulkan packages
+      - name: Етап 3
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             pkg-config libwayland-dev libxkbcommon-dev \
-            sway wtype ydotool grim mesa-vulkan-drivers libwayland-client0 \
+            sway grim mesa-vulkan-drivers libwayland-client0 \
             python3-pil time file binutils >/dev/null
           sudo apt-get install -y --no-install-recommends libxkbcommon-utils xkb-data >/dev/null 2>&1 || true
           mkdir -p /tmp/ci-work/evidence /tmp/ci-work/isolated-run /tmp/arxumbra-debug
-
-      - name: Install verified dated nightly-2026-10-24 & build winning release binary
+      - name: Етап 4
         run: |
           rustup toolchain install nightly-2026-10-24 --profile minimal --component rustfmt --component clippy >/dev/null 2>&1
 
@@ -40,7 +39,7 @@ jobs:
             --target-dir /tmp/ci-work/ctarget \
             --config 'build.incremental=false' \
             --config 'build.jobs=4' \
-            --config 'profile.release.opt-level="s"' \
+            --config 'profile.release.opt-level=3' \
             --config 'profile.release.lto="fat"' \
             --config 'profile.release.codegen-units=1' \
             --config 'profile.release.panic="abort"' \
@@ -57,8 +56,7 @@ jobs:
 
           cp /tmp/ci-work/ctarget/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra /tmp/ci-work/isolated-run/Subsystem-for-Arxumbra
           chmod 755 /tmp/ci-work/isolated-run/Subsystem-for-Arxumbra
-
-      - name: Run full Native-Wayland V14 functional, geometry, motion, modal & Escape acceptance suite
+      - name: Етап 5
         run: |
           exec 2> >(tee /tmp/ci-work/step_wl.err >&2)
           cat > /tmp/ci-work/err_trap.py << 'TRAP'
@@ -641,9 +639,15 @@ jobs:
           time.sleep(1.0)
           tests["escape_hold_cpu_ticks_1s"] = cpu_ticks(app.pid) - ec0
           time.sleep(0.5)
+          pre_unfocus_dot = find_dot_center(grab("_prefocus_dot.png"))
           subprocess.run(["swaymsg", "workspace", "2"], env=env, check=True)
           time.sleep(1.0)
+          unf_dot = find_dot_center(grab("_unfocused_dot.png"))
+          tests["dot_hidden_while_unfocused"] = unf_dot is None
           subprocess.run(["swaymsg", "workspace", "1"], env=env, check=True)
+          time.sleep(0.5)
+          ref_dot = find_dot_center(grab("_refocus_dot.png"))
+          tests["dot_restored_same_position_after_refocus"] = bool(ref_dot and pre_unfocus_dot and abs(ref_dot[0] - pre_unfocus_dot[0]) <= 2 and abs(ref_dot[1] - pre_unfocus_dot[1]) <= 2)
           yup(["Escape"])
           time.sleep(0.25)
           unfocus_esc_img = grab("_unfocus_esc.png")
@@ -741,47 +745,7 @@ jobs:
           for ci in range(0, len(msg), 3300):
             print(f"::notice title=WAYLAND_ACCEPTANCE_{ci//3300}::{msg[ci:ci+3300]}")
           PY
-
-      - name: Emit debug frames part 1 (home, probe, seq)
-        run: |
-          python3 - << 'PY'
-          import base64, os
-          ev = "/tmp/ci-work/evidence"
-          for shot in ["after_home.png", "_probe.png", "_seq.png"]:
-            op = os.path.join(ev, "dbg_" + shot)
-            if os.path.exists(op):
-              b64 = base64.b64encode(open(op, "rb").read()).decode("ascii")
-              stem = shot[:-4].strip("_")
-              for ci in range(0, min(len(b64), 10800), 3600):
-                print(f"::notice title=IMG_dbg_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
-          PY
-      - name: Emit debug frames part 2 (stop2, redraw, diag)
-        run: |
-          python3 - << 'PY'
-          import base64, os
-          ev = "/tmp/ci-work/evidence"
-          for shot in ["_stop2.png", "_redraw.png", "_diag.png"]:
-            op = os.path.join(ev, "dbg_" + shot)
-            if os.path.exists(op):
-              b64 = base64.b64encode(open(op, "rb").read()).decode("ascii")
-              stem = shot[:-4].strip("_")
-              for ci in range(0, min(len(b64), 10800), 3600):
-                print(f"::notice title=IMG_dbg_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
-          PY
-      - name: Emit debug frames part 3 (clamp, opp)
-        run: |
-          python3 - << 'PY'
-          import base64, os
-          ev = "/tmp/ci-work/evidence"
-          for shot in ["_clamp_br.png", "_opp.png"]:
-            op = os.path.join(ev, "dbg_" + shot)
-            if os.path.exists(op):
-              b64 = base64.b64encode(open(op, "rb").read()).decode("ascii")
-              stem = shot[:-4].strip("_")
-              for ci in range(0, min(len(b64), 10800), 3600):
-                print(f"::notice title=IMG_dbg_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
-          PY
-      - name: Emit AFTER screenshots batch 1 (Home, Registry, Registry F1 hidden)
+      - name: Етап 6
         run: |
           python3 - << 'PY'
           import base64, os
@@ -798,8 +762,7 @@ jobs:
               for ci in range(0, min(len(b64), 10800), 3600):
                 print(f"::notice title=IMG_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
           PY
-
-      - name: Emit AFTER screenshots batch 2 (Launch hover, Workspace, Modal clean)
+      - name: Етап 7
         run: |
           python3 - << 'PY'
           import base64, os
@@ -816,8 +779,7 @@ jobs:
               for ci in range(0, min(len(b64), 10800), 3600):
                 print(f"::notice title=IMG_{stem}_{ci//3600}::{b64[ci:ci+3600]}")
           PY
-
-      - name: Emit AFTER screenshots batch 3 (Modal dot above, Modal F1 hidden, HiDPI scale 2)
+      - name: Етап 8
         run: |
           python3 - << 'PY'
           import base64, os
@@ -839,8 +801,7 @@ jobs:
             echo "::notice title=REPO_DIRTY::$(head -c 1800 /tmp/ci-work/dirty.txt | tr '\n' ';')"
             exit 1
           fi
-
-      - name: Static gates rustfmt & clippy with diff evidence
+      - name: Етап 9
         run: |
           python3 - << 'PY'
           import subprocess
@@ -851,3 +812,180 @@ jobs:
             print("::notice title=STATIC_GATE_DIFF::" + diff_txt.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
           raise SystemExit(0 if (fmt.returncode == 0 and clip.returncode == 0 and not fmt.stdout.strip() and not fmt.stderr.strip() and not clip.stdout.strip() and not clip.stderr.strip()) else 1)
           PY
+      - name: Етап 10
+        run: |
+          set +e
+          rustup component add rust-docs rust-src rust-analyzer --toolchain nightly-2026-10-24 >/dev/null 2>&1
+          rustup component list --toolchain nightly-2026-10-24 2>/dev/null | grep -E "rust-docs|rust-src|rust-analyzer" | head -6
+          rust-analyzer --version 2>&1 | head -2
+          timeout 420 rust-analyzer diagnostics . > /tmp/ci-work/ra_diag.txt 2>&1
+          RA_CODE=$?
+          echo "rust-analyzer diagnostics exit: ${RA_CODE}"
+          head -c 900 /tmp/ci-work/ra_diag.txt
+          DOC_PATH="$(rustup doc --std --path 2>/dev/null)"
+          echo "rust-docs path: ${DOC_PATH}"
+          ls "${DOC_PATH}" 2>/dev/null | head -4
+          grep -o "<title>[^<]*" "${DOC_PATH}/std/iter/trait.Iterator.html" 2>/dev/null | head -1
+          SYSROOT="$(rustc +nightly-2026-10-24 --print sysroot)"
+          sed -n '20,24p' "${SYSROOT}/lib/rustlib/src/rust/library/core/src/cell.rs" 2>/dev/null | head -3
+          BEVY_SRC="$(ls -d /home/runner/.cargo/git/checkouts/bevy-*/* 2>/dev/null | head -1)"
+          grep -rn "pub trait Resource" "${BEVY_SRC}/crates/bevy_ecs/src/" 2>/dev/null | head -2
+          set -e
+          echo "devtools inspection complete"
+  opt_experiments:
+    name: Етап 11
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - name: Етап 12
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Етап 13
+        run: |
+          set +e
+          rustup toolchain install nightly-2026-10-24 --profile minimal --component rustc --component cargo --component rust-std >/dev/null 2>&1
+          sudo apt-get update -qq >/dev/null 2>&1
+          sudo apt-get install -y --no-install-recommends pkg-config libwayland-dev libxkbcommon-dev sway grim mesa-vulkan-drivers libwayland-client0 time >/dev/null 2>&1
+          python3 - << 'PY'
+          import json, os, re, subprocess, time
+          ev = "/tmp/ci-work"
+          os.makedirs(ev + "/exprun", exist_ok=True)
+          common = [
+            "--config", "build.incremental=false",
+            "--config", "build.jobs=4",
+            "--config", 'profile.release.panic="abort"',
+            "--config", 'profile.release.strip="symbols"',
+            "--config", "profile.release.debug=false",
+            "--config", "profile.release.overflow-checks=true",
+            "--config", "profile.release.opt-level=3",
+          ]
+          cfgs = {
+            "A_opt3_fat_cgu1": common + ["--config", 'profile.release.lto="fat"', "--config", "profile.release.codegen-units=1"],
+            "B_opt3_thin_cgu16": common + ["--config", 'profile.release.lto="thin"', "--config", "profile.release.codegen-units=16"],
+          }
+          zh = subprocess.run(["rustc", "+nightly-2026-10-24", "-Z", "help"], capture_output=True, text=True).stdout
+          ch = subprocess.run(["cargo", "+nightly-2026-10-24", "-Z", "help"], capture_output=True, text=True).stdout + subprocess.run(["cargo", "+nightly-2026-10-24", "help", "-Z", "unstable-options"], capture_output=True, text=True).stdout
+          mir = "mir-opt-level" in zh
+          prf = "profile-rustflags" in ch
+          flags_c = []
+          if mir and prf:
+            flags_c = ["-Z", "profile-rustflags", "--config", "profile.release.rustflags=['-Z','mir-opt-level=3']"]
+          cfgs["C_opt3_fat_cgu1_nightlymir"] = cfgs["A_opt3_fat_cgu1"] + flags_c if flags_c else None
+          rows = []
+          subprocess.run(["cargo", "+nightly-2026-10-24", "build", "--bin", "Subsystem-for-Arxumbra", "--target", "x86_64-unknown-linux-gnu", "--release", "--locked", "--target-dir", ev + "/ctA", "-v"] + cfgs["A_opt3_fat_cgu1"], capture_output=True, text=True)
+          vl = subprocess.run(["sh", "-c", "cargo +nightly-2026-10-24 build --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --release --locked --target-dir " + ev + "/ctA -v " + " ".join("'" + c + "'" if " " in c or "=" in c else c for c in cfgs['A_opt3_fat_cgu1']) + " 2>&1 | grep -m1 'opt-level'"], capture_output=True, text=True).stdout.strip()
+          print("::notice title=EFF_FLAGS_A::" + vl[:300].replace("%", "%25"))
+          sway_cfg = ev + "/sway_exp.cfg"
+          open(sway_cfg, "w").write("xwayland disable\ndefault_border none\noutput * bg #000000 solid_color\n")
+          def measure(name, cfg):
+            if cfg is None:
+              rows.append({"cfg": name, "result": "unsupported-flag-combination"})
+              return
+            t0 = time.time()
+            pr = subprocess.run(["/usr/bin/time", "-v", "cargo", "+nightly-2026-10-24", "build", "--bin", "Subsystem-for-Arxumbra", "--target", "x86_64-unknown-linux-gnu", "--release", "--locked", "--target-dir", ev + "/ct_" + name] + cfg, capture_output=True, text=True)
+            wall = round(time.time() - t0, 1)
+            peak = re.search(r"Maximum resident set size \(kbytes\): (\d+)", pr.stderr)
+            if pr.returncode != 0:
+              rows.append({"cfg": name, "build": "FAIL", "tail": pr.stdout[-400:] + pr.stderr[-400:]})
+              return
+            binp = ev + "/ct_" + name + "/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra"
+            size = os.path.getsize(binp)
+            rt = os.environ.copy()
+            rd = ev + "/xdg_" + name
+            os.makedirs(rd, exist_ok=True)
+            os.chmod(rd, 0o700)
+            rt.update({"XDG_RUNTIME_DIR": rd, "WLR_BACKENDS": "headless", "WLR_LIBINPUT_NO_DEVICES": "1", "WLR_RENDERER": "pixman", "LIBGL_ALWAYS_SOFTWARE": "1"})
+            rt.pop("DISPLAY", None)
+            sw = subprocess.Popen(["sway", "-c", sway_cfg], env=rt, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            wd = ""
+            for _ in range(60):
+              time.sleep(0.1)
+              sk = [x for x in os.listdir(rd) if x.startswith("wayland-") and not x.endswith(".lock")]
+              if sk:
+                wd = sk[0]
+                break
+            rt["WAYLAND_DISPLAY"] = wd
+            subprocess.run(["swaymsg", "output", "HEADLESS-1", "resolution", "1920x1080"], env=rt, capture_output=True)
+            time.sleep(0.2)
+            ts = time.time()
+            app = subprocess.Popen([binp], cwd=ev + "/exprun", env=rt, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            start_ms = -1
+            for _ in range(120):
+              time.sleep(0.1)
+              tree = subprocess.run(["swaymsg", "-t", "get_tree"], env=rt, capture_output=True, text=True).stdout
+              if "Subsystem-for-Arxumbra" in tree:
+                start_ms = round((time.time() - ts) * 1000)
+                break
+              if app.poll() is not None:
+                break
+            time.sleep(1.0)
+            st0 = open(f"/proc/{app.pid}/stat").read().split(")")[1].split()
+            c0 = int(st0[11]) + int(st0[12])
+            time.sleep(2.0)
+            st1 = open(f"/proc/{app.pid}/stat").read().split(")")[1].split()
+            idle = int(st1[11]) + int(st1[12]) - c0
+            app.terminate()
+            app.wait(timeout=8)
+            sw.terminate()
+            sw.wait(timeout=8)
+            rows.append({"cfg": name, "build_s": wall, "peak_kb": int(peak.group(1)) if peak else -1, "size": size, "startup_ms": start_ms, "idle_ticks_2s": idle})
+          for name, cfg in cfgs.items():
+            measure(name, cfg)
+          msg = json.dumps(rows).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+          print("::notice title=EXPERIMENTS::" + msg)
+          print("mir-opt-level supported:", mir, "| profile-rustflags supported:", prf)
+          PY
+          set -e
+  dep_candidates:
+    name: Етап 14
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Етап 15
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Етап 16
+        run: |
+          set +e
+          rm -rf /tmp/deptry
+          cp -r . /tmp/deptry
+          cd /tmp/deptry
+          python3 - << 'PY'
+          s = open("Cargo.toml").read()
+          s = s.replace('tag = "v0.20.0"', 'rev = "fd9e7609109758a2d9af401345f100be9442e9f6"')
+          open("Cargo.toml", "w").write(s)
+          PY
+          cargo +nightly-2026-10-24 generate-lockfile > /tmp/deptry/lock.log 2>&1
+          echo "bevy-main lockgen exit: $?"
+          timeout 1500 cargo +nightly-2026-10-24 check --target x86_64-unknown-linux-gnu > /tmp/deptry/check.log 2>&1
+          echo "bevy-main check exit: $?"
+          python3 -c "t=(open('/tmp/deptry/lock.log',errors='replace').read()[-1200:] + open('/tmp/deptry/check.log',errors='replace').read()[-2200:]).replace('%','%25').replace('\r','%0D').replace('\n','%0A'); print('::notice title=BEVY_MAIN_DIAG::' + t)"
+          set -e
+      - name: Етап 17
+        run: |
+          set +e
+          rustup toolchain install nightly-2026-10-25 --profile minimal --component rustc --component cargo --component rust-std --component rustfmt --component clippy --component rust-docs --component rust-src --component rust-analyzer > /tmp/n25.log 2>&1
+          N25=$?
+          for t in aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin aarch64-pc-windows-msvc x86_64-pc-windows-msvc; do
+            rustup target add "$t" --toolchain nightly-2026-10-25 >> /tmp/n25.log 2>&1 || echo "target add failed: $t"
+          done
+          echo "nightly-2026-10-25 install exit: ${N25}"
+          tail -3 /tmp/n25.log
+          MHEAD="$(curl -s https://api.github.com/repos/purpleprotocol/mimalloc_rust/commits/main | python3 -c "import json,sys; print(json.load(sys.stdin)['sha'])")"
+          echo "mimalloc main head: ${MHEAD}"
+          rm -rf /tmp/mtry
+          cp -r . /tmp/mtry
+          cd /tmp/mtry
+          python3 - << 'PY'
+          import subprocess
+          mhead = subprocess.check_output(["curl", "-s", "https://api.github.com/repos/purpleprotocol/mimalloc_rust/commits/main"], text=True)
+          import json
+          sha = json.loads(mhead)["sha"]
+          s = open("Cargo.toml").read()
+          s = s.replace('tag = "v0.1.52"', 'rev = "' + sha + '"')
+          open("Cargo.toml", "w").write(s)
+          PY
+          cargo +nightly-2026-10-24 generate-lockfile > /tmp/mtry/lock.log 2>&1
+          echo "mimalloc-main lockgen exit: $?"
+          timeout 600 cargo +nightly-2026-10-24 check -p mimalloc --target x86_64-unknown-linux-gnu > /tmp/mtry/check.log 2>&1
+          echo "mimalloc-main check exit: $?"
+          tail -5 /tmp/mtry/check.log
+          set -e

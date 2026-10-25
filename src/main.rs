@@ -3620,7 +3620,7 @@ fn main() {
                                                         |(
                                                             _sprite,
                                                             transform,
-                                                            _visibility,
+                                                            visibility,
                                                         ): (
                                                             &bevy::sprite::Sprite,
                                                             &bevy::transform::components::Transform,
@@ -3639,6 +3639,18 @@ fn main() {
                                                                         vh * 0.5 - cur_dot_pos.y,
                                                                         20.0,
                                                                     ),
+                                                                );
+                                                            }
+                                                            if (*visibility
+                                                                == bevy::camera::visibility::Visibility::Inherited)
+                                                                != window.focused
+                                                            {
+                                                                commands.entity(dot_entity).insert(
+                                                                    if window.focused {
+                                                                        bevy::camera::visibility::Visibility::Inherited
+                                                                    } else {
+                                                                        bevy::camera::visibility::Visibility::Hidden
+                                                                    },
                                                                 );
                                                             }
                                                         },
