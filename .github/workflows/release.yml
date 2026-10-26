@@ -218,39 +218,55 @@ jobs:
             if [ -n "${b64}" ]; then echo "::notice title=shot-$1::${b64}"; fi
             return 0
           }
-          differs() { if cmp -s "${RT}/$1.png" "${RT}/$2.png"; then echo same; else echo DIFFER; fi; }
           wt() { timeout 10 wtype "$@" >> "${RT}/wtype.log" 2>&1 || hb "wtype rc=$? args=$*"; }
+          seed() {
+            mkdir -p "${HOME}/.local/share/Subsystem-for-Arxumbra"
+            rm -f "${CAT}" "${CAT}.lock" "${CAT}.tmp"
+            if [ "$1" = "valid" ]; then
+              printf 'arxumbra-workspace-catalog v1\n2\n1|0|4172656e61|1|0\n2|1|4755492050726f6a|3|1\n' > "${CAT}"
+            elif [ "$1" = "corrupt" ]; then
+              printf 'arxumbra-workspace-catalog v1\n9\nzz|||\n' > "${CAT}"
+            else
+              printf 'arxumbra-workspace-catalog v9\n1\n1|0|41|1|0\n' > "${CAT}"
+            fi
+            return 0
+          }
+          CAT="${HOME}/.local/share/Subsystem-for-Arxumbra/workspace-catalog"
           timeout 90 "${BIN}" > "${RT}/app1.log" 2>&1 &
           APP1=$!
-          sleep 15
-          A1=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)
-          hb "run1 alive at 15s=${A1}"
-          shot home
-          wt -P Control_L -P e -p e -p Control_L
-          sleep 4
-          shot afterctrle
-          hb "ctrl_e_effect=$(differs home afterctrle)"
-          kill ${APP1} 2>/dev/null || true
-          wait ${APP1} 2>/dev/null
-          hb "run1 exit_code=$?"
-          echo "${A1} yes" > "${RT}/verdict1"
-          grep -aE 'panicked|ERROR|error:' "${RT}/app1.log" | head -6 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 > "${RT}/panics" || true
-          tail -4 "${RT}/wtype.log" 2>/dev/null | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 > "${RT}/wtail" || true
-          timeout 60 "${BIN}" > "${RT}/app2.log" 2>&1 &
-          APP2=$!
           sleep 12
-          shot home2
+          wt -P Shift_L -p Shift_L
+          sleep 2
+          shot home
           wt -P Escape
           HOLD="alive"
-          for _i in $(seq 1 24); do
-            if ! kill -0 ${APP2} 2>/dev/null; then HOLD="exited"; break; fi
+          for _i in $(seq 1 28); do
+            if ! kill -0 ${APP1} 2>/dev/null; then HOLD="exited"; break; fi
             sleep 0.5
           done
           wt -p Escape
           sleep 1
-          FINAL=$(kill -0 ${APP2} 2>/dev/null && echo alive || echo exited)
-          wait ${APP2} 2>/dev/null
-          hb "run2 home_escape_hold while_held=${HOLD} after_release=${FINAL} exit_code=$?"
+          FINAL=$(kill -0 ${APP1} 2>/dev/null && echo alive || echo exited)
+          if [ "${FINAL}" = "alive" ]; then shot afterhold; fi
+          wait ${APP1} 2>/dev/null
+          hb "run1 home_escape_hold while_held=${HOLD} after_release=${FINAL} exit_code=$?"
+          echo "yes ${FINAL}" > "${RT}/verdict1"
+          grep -aE 'panicked|ERROR|error:' "${RT}/app1.log" | head -6 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 > "${RT}/panics" || true
+          tail -4 "${RT}/wtype.log" 2>/dev/null | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 > "${RT}/wtail" || true
+          for CASE in valid corrupt future; do
+            seed "${CASE}"
+            BEFORE=$(sha256sum "${CAT}" | cut -d' ' -f1)
+            timeout 40 "${BIN}" > "${RT}/app-${CASE}.log" 2>&1 &
+            AP=$!
+            sleep 10
+            AL=$(kill -0 ${AP} 2>/dev/null && echo yes || echo no)
+            kill ${AP} 2>/dev/null || true
+            wait ${AP} 2>/dev/null
+            AFTER=$(sha256sum "${CAT}" | cut -d' ' -f1)
+            if [ "${BEFORE}" = "${AFTER}" ]; then SAME=preserved; else SAME=CHANGED; fi
+            PAN=$(grep -ac 'panicked' "${RT}/app-${CASE}.log" || true)
+            hb "catalog ${CASE}: alive10s=${AL} file=${SAME} panics=${PAN}"
+          done
           exit 0
           PROBE
           PROBE_RC=0
