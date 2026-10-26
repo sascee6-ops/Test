@@ -1,76 +1,313 @@
-name: Release
+name: release
+
 on:
-  push:
-    branches:
-    - main
-  pull_request:
   workflow_dispatch:
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+
 permissions:
   contents: read
+
 jobs:
-  release:
-    name: ${{ matrix.artifact }}
-    runs-on: ${{ matrix.runner }}
-    defaults:
-      run:
-        shell: bash
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-        - artifact: AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-          runner: ubuntu-24.04-arm
-          target: aarch64-unknown-linux-gnu
-          extension: ""
-        - artifact: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-          runner: ubuntu-24.04
-          target: x86_64-unknown-linux-gnu
-          extension: ""
-        - artifact: AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-          runner: macos-15
-          target: aarch64-apple-darwin
-          extension: ""
-        - artifact: x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-          runner: macos-15-intel
-          target: x86_64-apple-darwin
-          extension: ""
-        - artifact: AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-          runner: windows-11-arm
-          target: aarch64-pc-windows-msvc
-          extension: .exe
-        - artifact: x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-          runner: windows-2025
-          target: x86_64-pc-windows-msvc
-          extension: .exe
+  aarch64_linux:
+    name: AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 75
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      with:
-        persist-credentials: false
-    - name: Install Wayland build dependencies
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update -q
-        sudo apt-get install -y -q --no-install-recommends pkg-config libwayland-dev libxkbcommon-dev
-    - name: Install Rust nightly
-      run: rustup toolchain install nightly-2026-10-19 --profile minimal --target "${{ matrix.target }}" --no-self-update
-    - name: Build release binary
-      run: cargo +nightly-2026-10-19 --config 'build.jobs=1' --config 'profile.release.opt-level=3' --config 'profile.release.lto="thin"' --config 'profile.release.codegen-units=1' --config 'profile.release.debug=0' --config 'profile.release.strip="symbols"' --config 'profile.release.panic="abort"' --config 'profile.release.debug-assertions=false' --config 'profile.release.overflow-checks=false' --config 'profile.release.incremental=false' build --locked --release --quiet --target "${{ matrix.target }}" --bin Subsystem-for-Arxumbra
-    - name: Stage executable
-      run: |
-        mkdir -p "dist/${{ matrix.artifact }}"
-        cp "target/${{ matrix.target }}/release/Subsystem-for-Arxumbra${{ matrix.extension }}" "dist/${{ matrix.artifact }}/${{ matrix.artifact }}${{ matrix.extension }}"
-    - name: Package archive
-      if: runner.os != 'Windows'
-      run: tar -czf "dist/${{ matrix.artifact }}.tar.gz" -C dist "${{ matrix.artifact }}"
-    - name: Package archive
-      if: runner.os == 'Windows'
-      run: pwsh -NoProfile -Command "Compress-Archive -Path 'dist/${{ matrix.artifact }}/${{ matrix.artifact }}${{ matrix.extension }}' -DestinationPath 'dist/${{ matrix.artifact }}.zip' -CompressionLevel Optimal"
-    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-      with:
-        name: ${{ matrix.artifact }}
-        path: dist/${{ matrix.artifact }}${{ matrix.extension == '.exe' && '.zip' || '.tar.gz' }}
-        if-no-files-found: error
-        retention-days: 14
+      - name: Stage 0
+        shell: bash
+        run: |
+          git init .
+          git remote add origin https://github.com/sascee6-ops/Test.git
+          git fetch --depth 1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
+      - name: Stage 1
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends pkg-config libwayland-dev libxkbcommon-dev
+      - name: Stage 2
+        shell: bash
+        run: |
+          rustup toolchain install nightly-2026-10-25 --profile minimal
+          rustup target add aarch64-unknown-linux-gnu --toolchain nightly-2026-10-25
+      - name: Stage 3
+        shell: bash
+        run: |
+          cargo +nightly-2026-10-25 build --quiet --release --locked \
+            --bin Subsystem-for-Arxumbra \
+            --target aarch64-unknown-linux-gnu \
+            --target-dir "${RUNNER_TEMP}/target" \
+            --config 'build.incremental=false' \
+            --config 'profile.release.opt-level=3' \
+            --config 'profile.release.lto="fat"' \
+            --config 'profile.release.codegen-units=1' \
+            --config 'profile.release.panic="abort"' \
+            --config 'profile.release.strip="symbols"' \
+            --config 'profile.release.debug=false' \
+            --config 'profile.release.overflow-checks=true'
+      - name: Stage 4
+        shell: bash
+        run: |
+          mkdir -p "${RUNNER_TEMP}/stage"
+          install -m 644 "${RUNNER_TEMP}/target/aarch64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+      - name: Stage 5
+        shell: bash
+        run: |
+          cd "${RUNNER_TEMP}/stage"
+          7z a "${RUNNER_TEMP}/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z" "AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+      - name: Stage 6
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+          path: ${{ runner.temp }}/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z
+          retention-days: 7
+          if-no-files-found: error
+  x86_64_linux:
+    name: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - name: Stage 0
+        shell: bash
+        run: |
+          git init .
+          git remote add origin https://github.com/sascee6-ops/Test.git
+          git fetch --depth 1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
+      - name: Stage 1
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends pkg-config libwayland-dev libxkbcommon-dev
+      - name: Stage 2
+        shell: bash
+        run: |
+          rustup toolchain install nightly-2026-10-25 --profile minimal
+          rustup target add x86_64-unknown-linux-gnu --toolchain nightly-2026-10-25
+      - name: Stage 3
+        shell: bash
+        run: |
+          cargo +nightly-2026-10-25 build --quiet --release --locked \
+            --bin Subsystem-for-Arxumbra \
+            --target x86_64-unknown-linux-gnu \
+            --target-dir "${RUNNER_TEMP}/target" \
+            --config 'build.incremental=false' \
+            --config 'profile.release.opt-level=3' \
+            --config 'profile.release.lto="fat"' \
+            --config 'profile.release.codegen-units=1' \
+            --config 'profile.release.panic="abort"' \
+            --config 'profile.release.strip="symbols"' \
+            --config 'profile.release.debug=false' \
+            --config 'profile.release.overflow-checks=true'
+      - name: Stage 4
+        shell: bash
+        run: |
+          mkdir -p "${RUNNER_TEMP}/stage"
+          install -m 644 "${RUNNER_TEMP}/target/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+      - name: Stage 5
+        shell: bash
+        run: |
+          cd "${RUNNER_TEMP}/stage"
+          7z a "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z" "x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+      - name: Stage 6
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+          path: ${{ runner.temp }}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z
+          retention-days: 7
+          if-no-files-found: error
+  aarch64_macos:
+    name: AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+    runs-on: macos-15
+    timeout-minutes: 75
+    steps:
+      - name: Stage 0
+        shell: bash
+        run: |
+          git init .
+          git remote add origin https://github.com/sascee6-ops/Test.git
+          git fetch --depth 1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
+      - name: Stage 1
+        shell: bash
+        run: |
+          rustup toolchain install nightly-2026-10-25 --profile minimal
+          rustup target add aarch64-apple-darwin --toolchain nightly-2026-10-25
+      - name: Stage 2
+        shell: bash
+        run: |
+          cargo +nightly-2026-10-25 build --quiet --release --locked \
+            --bin Subsystem-for-Arxumbra \
+            --target aarch64-apple-darwin \
+            --target-dir "${RUNNER_TEMP}/target" \
+            --config 'build.incremental=false' \
+            --config 'profile.release.opt-level=3' \
+            --config 'profile.release.lto="fat"' \
+            --config 'profile.release.codegen-units=1' \
+            --config 'profile.release.panic="abort"' \
+            --config 'profile.release.strip="symbols"' \
+            --config 'profile.release.debug=false' \
+            --config 'profile.release.overflow-checks=true'
+      - name: Stage 3
+        shell: bash
+        run: |
+          mkdir -p "${RUNNER_TEMP}/stage"
+          install -m 644 "${RUNNER_TEMP}/target/aarch64-apple-darwin/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+      - name: Stage 4
+        shell: bash
+        run: |
+          cd "${RUNNER_TEMP}/stage"
+          7z a "${RUNNER_TEMP}/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z" "AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+      - name: Stage 5
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+          path: ${{ runner.temp }}/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z
+          retention-days: 7
+          if-no-files-found: error
+  x86_64_macos:
+    name: x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+    runs-on: macos-15-intel
+    timeout-minutes: 75
+    steps:
+      - name: Stage 0
+        shell: bash
+        run: |
+          git init .
+          git remote add origin https://github.com/sascee6-ops/Test.git
+          git fetch --depth 1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
+      - name: Stage 1
+        shell: bash
+        run: |
+          rustup toolchain install nightly-2026-10-25 --profile minimal
+          rustup target add x86_64-apple-darwin --toolchain nightly-2026-10-25
+      - name: Stage 2
+        shell: bash
+        run: |
+          cargo +nightly-2026-10-25 build --quiet --release --locked \
+            --bin Subsystem-for-Arxumbra \
+            --target x86_64-apple-darwin \
+            --target-dir "${RUNNER_TEMP}/target" \
+            --config 'build.incremental=false' \
+            --config 'profile.release.opt-level=3' \
+            --config 'profile.release.lto="fat"' \
+            --config 'profile.release.codegen-units=1' \
+            --config 'profile.release.panic="abort"' \
+            --config 'profile.release.strip="symbols"' \
+            --config 'profile.release.debug=false' \
+            --config 'profile.release.overflow-checks=true'
+      - name: Stage 3
+        shell: bash
+        run: |
+          mkdir -p "${RUNNER_TEMP}/stage"
+          install -m 644 "${RUNNER_TEMP}/target/x86_64-apple-darwin/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+      - name: Stage 4
+        shell: bash
+        run: |
+          cd "${RUNNER_TEMP}/stage"
+          7z a "${RUNNER_TEMP}/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z" "x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+      - name: Stage 5
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+          path: ${{ runner.temp }}/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z
+          retention-days: 7
+          if-no-files-found: error
+  aarch64_windows:
+    name: AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+    runs-on: windows-11-arm
+    timeout-minutes: 75
+    steps:
+      - name: Stage 0
+        shell: bash
+        run: |
+          git init .
+          git remote add origin https://github.com/sascee6-ops/Test.git
+          git fetch --depth 1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
+      - name: Stage 1
+        shell: bash
+        run: |
+          rustup toolchain install nightly-2026-10-25 --profile minimal
+          rustup target add aarch64-pc-windows-msvc --toolchain nightly-2026-10-25
+      - name: Stage 2
+        shell: bash
+        run: |
+          cargo +nightly-2026-10-25 build --quiet --release --locked \
+            --bin Subsystem-for-Arxumbra \
+            --target aarch64-pc-windows-msvc \
+            --target-dir "${RUNNER_TEMP}/target" \
+            --config 'build.incremental=false' \
+            --config 'profile.release.opt-level=3' \
+            --config 'profile.release.lto="fat"' \
+            --config 'profile.release.codegen-units=1' \
+            --config 'profile.release.panic="abort"' \
+            --config 'profile.release.strip="symbols"' \
+            --config 'profile.release.debug=false' \
+            --config 'profile.release.overflow-checks=true'
+      - name: Stage 3
+        shell: bash
+        run: |
+          mkdir -p "${RUNNER_TEMP}/stage"
+          cp "${RUNNER_TEMP}/target/aarch64-pc-windows-msvc/release/Subsystem-for-Arxumbra.exe" "${RUNNER_TEMP}/stage/AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
+      - name: Stage 4
+        shell: bash
+        run: |
+          cd "${RUNNER_TEMP}/stage"
+          7z a "${RUNNER_TEMP}/AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z" "AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
+      - name: Stage 5
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+          path: ${{ runner.temp }}/AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z
+          retention-days: 7
+          if-no-files-found: error
+  x86_64_windows:
+    name: x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+    runs-on: windows-2025
+    timeout-minutes: 75
+    steps:
+      - name: Stage 0
+        shell: bash
+        run: |
+          git init .
+          git remote add origin https://github.com/sascee6-ops/Test.git
+          git fetch --depth 1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
+      - name: Stage 1
+        shell: bash
+        run: |
+          rustup toolchain install nightly-2026-10-25 --profile minimal
+          rustup target add x86_64-pc-windows-msvc --toolchain nightly-2026-10-25
+      - name: Stage 2
+        shell: bash
+        run: |
+          cargo +nightly-2026-10-25 build --quiet --release --locked \
+            --bin Subsystem-for-Arxumbra \
+            --target x86_64-pc-windows-msvc \
+            --target-dir "${RUNNER_TEMP}/target" \
+            --config 'build.incremental=false' \
+            --config 'profile.release.opt-level=3' \
+            --config 'profile.release.lto="fat"' \
+            --config 'profile.release.codegen-units=1' \
+            --config 'profile.release.panic="abort"' \
+            --config 'profile.release.strip="symbols"' \
+            --config 'profile.release.debug=false' \
+            --config 'profile.release.overflow-checks=true'
+      - name: Stage 3
+        shell: bash
+        run: |
+          mkdir -p "${RUNNER_TEMP}/stage"
+          cp "${RUNNER_TEMP}/target/x86_64-pc-windows-msvc/release/Subsystem-for-Arxumbra.exe" "${RUNNER_TEMP}/stage/x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
+      - name: Stage 4
+        shell: bash
+        run: |
+          cd "${RUNNER_TEMP}/stage"
+          7z a "${RUNNER_TEMP}/x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z" "x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
+      - name: Stage 5
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
+          path: ${{ runner.temp }}/x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z
+          retention-days: 7
+          if-no-files-found: error

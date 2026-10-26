@@ -4,8 +4,8 @@ version = "0.0.0-s1"
 edition = "2024"
 
 [dependencies]
-mimalloc = { git = "https://github.com/purpleprotocol/mimalloc_rust", tag = "v0.1.52", default-features = false, features = [] }
-bevy = { git = "https://github.com/bevyengine/bevy", tag = "v0.20.0", default-features = false, features = [
+mimalloc = { git = "https://github.com/purpleprotocol/mimalloc_rust", rev = "a35cc759c071fd7bd586685048367839002b95dd", default-features = false, features = [] }
+bevy = { git = "https://github.com/bevyengine/bevy", rev = "fd9e7609109758a2d9af401345f100be9442e9f6", default-features = false, features = [
     "std",
     "async_executor",
     "multi_threaded",
