@@ -142,7 +142,8 @@ jobs:
         if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
-          cargo +nightly-2026-10-25 build --quiet --locked \
+          set +e
+          cargo +nightly-2026-10-25 build --locked \
             --bin Subsystem-for-Arxumbra \
             --target x86_64-unknown-linux-gnu \
             --target-dir "${RUNNER_TEMP}/target-debug" \
@@ -150,7 +151,12 @@ jobs:
             --config 'profile.dev.opt-level=0' \
             --config 'profile.dev.debug="line-tables-only"' \
             --config 'profile.dev.debug-assertions=true' \
-            --config 'profile.dev.overflow-checks=true'
+            --config 'profile.dev.overflow-checks=true' > "${RUNNER_TEMP}/build-debug.log" 2>&1
+          RC=$?
+          if [ "${RC}" != "0" ]; then
+            grep -aE 'error(\[E[0-9]+\])?:|-->' "${RUNNER_TEMP}/build-debug.log" | head -14 | tr -d '\000-\010\013\014\016-\037' | cut -c1-190 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=build-errors::${msg}"; done
+          fi
+          exit ${RC}
       - name: Stage 8
         if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
