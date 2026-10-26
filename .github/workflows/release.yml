@@ -142,7 +142,8 @@ jobs:
         if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
-          cargo +nightly-2026-10-25 build --quiet --locked \
+          set -o pipefail
+          cargo +nightly-2026-10-25 build --locked \
             --bin Subsystem-for-Arxumbra \
             --target x86_64-unknown-linux-gnu \
             --target-dir "${RUNNER_TEMP}/target-debug" \
@@ -150,7 +151,8 @@ jobs:
             --config 'profile.dev.opt-level=0' \
             --config 'profile.dev.debug="line-tables-only"' \
             --config 'profile.dev.debug-assertions=true' \
-            --config 'profile.dev.overflow-checks=true'
+            --config 'profile.dev.overflow-checks=true' \
+            2>&1 | tee "${RUNNER_TEMP}/debug-build.log"
       - name: Stage 8
         if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
@@ -173,6 +175,12 @@ jobs:
           file "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           ldd "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 10
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          grep -E '^error(\[E[0-9]+\])?:' -A 4 "${RUNNER_TEMP}/debug-build.log" | grep -E '^error|--> ' | head -60 | while IFS= read -r line; do printf '::error title=cargo::%s\n' "${line//%/%25}"; done
+          grep -c '^error' "${RUNNER_TEMP}/debug-build.log" || true
+      - name: Stage 11
         if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
