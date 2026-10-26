@@ -1,15 +1,29 @@
 name: release
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
+    inputs:
+      build_mode:
+        description: release ships all six targets, debug builds the x86_64 Linux laboratory
+        required: false
+        default: release
+        type: choice
+        options:
+          - release
+          - debug
 
 permissions:
   contents: read
 
 jobs:
+
   aarch64_linux:
     name: AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: ubuntu-24.04-arm
+    if: ${{ github.event.inputs.build_mode != 'debug' }}
     timeout-minutes: 75
     steps:
       - name: Stage 0
@@ -30,9 +44,11 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add aarch64-unknown-linux-gnu --toolchain nightly-2026-10-25
       - name: Stage 3
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
-          cargo +nightly-2026-10-25 build --quiet --release --locked \
+          cargo +nightly-2026-10-25 build --quiet --locked \
+            --release \
             --bin Subsystem-for-Arxumbra \
             --target aarch64-unknown-linux-gnu \
             --target-dir "${RUNNER_TEMP}/target" \
@@ -45,20 +61,22 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 4
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
-          install -m 644 "${RUNNER_TEMP}/target/aarch64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+          install -m 755 "${RUNNER_TEMP}/target/aarch64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 5
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
-          cd "${RUNNER_TEMP}/stage"
-          7z a "${RUNNER_TEMP}/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z" "AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+          tar -czf "${RUNNER_TEMP}/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz" -C "${RUNNER_TEMP}/stage" "AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 6
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-          path: ${{ runner.temp }}/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z
+          path: ${{ runner.temp }}/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz
           retention-days: 7
           if-no-files-found: error
   x86_64_linux:
@@ -84,9 +102,11 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add x86_64-unknown-linux-gnu --toolchain nightly-2026-10-25
       - name: Stage 3
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
-          cargo +nightly-2026-10-25 build --quiet --release --locked \
+          cargo +nightly-2026-10-25 build --quiet --locked \
+            --release \
             --bin Subsystem-for-Arxumbra \
             --target x86_64-unknown-linux-gnu \
             --target-dir "${RUNNER_TEMP}/target" \
@@ -99,25 +119,70 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 4
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
-          install -m 644 "${RUNNER_TEMP}/target/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+          install -m 755 "${RUNNER_TEMP}/target/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 5
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
-          cd "${RUNNER_TEMP}/stage"
-          7z a "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z" "x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+          tar -czf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz" -C "${RUNNER_TEMP}/stage" "x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 6
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-          path: ${{ runner.temp }}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z
+          path: ${{ runner.temp }}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz
+          retention-days: 7
+          if-no-files-found: error
+      - name: Stage 7
+        if: ${{ github.event.inputs.build_mode == 'debug' }}
+        shell: bash
+        run: |
+          cargo +nightly-2026-10-25 build --quiet --locked \
+            --bin Subsystem-for-Arxumbra \
+            --target x86_64-unknown-linux-gnu \
+            --target-dir "${RUNNER_TEMP}/target-debug" \
+            --config 'build.incremental=false' \
+            --config 'profile.dev.opt-level=0' \
+            --config 'profile.dev.debug="line-tables-only"' \
+            --config 'profile.dev.debug-assertions=true' \
+            --config 'profile.dev.overflow-checks=true'
+      - name: Stage 8
+        if: ${{ github.event.inputs.build_mode == 'debug' }}
+        shell: bash
+        run: |
+          mkdir -p "${RUNNER_TEMP}/stage-debug"
+          install -m 755 "${RUNNER_TEMP}/target-debug/x86_64-unknown-linux-gnu/debug/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
+          tar -czf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz" -C "${RUNNER_TEMP}/stage-debug" "x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
+      - name: Stage 9
+        if: ${{ github.event.inputs.build_mode == 'debug' }}
+        shell: bash
+        run: |
+          tar -tzvf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz"
+          rm -rf "${RUNNER_TEMP}/verify-debug"
+          mkdir -p "${RUNNER_TEMP}/verify-debug"
+          tar -xzf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz" -C "${RUNNER_TEMP}/verify-debug"
+          test -f "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
+          test -x "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
+          test -s "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
+          test "$(find "${RUNNER_TEMP}/verify-debug" -mindepth 1 | wc -l)" -eq 1
+          file "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
+          ldd "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
+      - name: Stage 10
+        if: ${{ github.event.inputs.build_mode == 'debug' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug
+          path: ${{ runner.temp }}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz
           retention-days: 7
           if-no-files-found: error
   aarch64_macos:
     name: AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: macos-15
+    if: ${{ github.event.inputs.build_mode != 'debug' }}
     timeout-minutes: 75
     steps:
       - name: Stage 0
@@ -133,9 +198,11 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add aarch64-apple-darwin --toolchain nightly-2026-10-25
       - name: Stage 2
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
-          cargo +nightly-2026-10-25 build --quiet --release --locked \
+          cargo +nightly-2026-10-25 build --quiet --locked \
+            --release \
             --bin Subsystem-for-Arxumbra \
             --target aarch64-apple-darwin \
             --target-dir "${RUNNER_TEMP}/target" \
@@ -148,25 +215,28 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 3
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
-          install -m 644 "${RUNNER_TEMP}/target/aarch64-apple-darwin/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+          install -m 755 "${RUNNER_TEMP}/target/aarch64-apple-darwin/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 4
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
-          cd "${RUNNER_TEMP}/stage"
-          7z a "${RUNNER_TEMP}/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z" "AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+          tar -czf "${RUNNER_TEMP}/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz" -C "${RUNNER_TEMP}/stage" "AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 5
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-          path: ${{ runner.temp }}/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z
+          path: ${{ runner.temp }}/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz
           retention-days: 7
           if-no-files-found: error
   x86_64_macos:
     name: x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: macos-15-intel
+    if: ${{ github.event.inputs.build_mode != 'debug' }}
     timeout-minutes: 75
     steps:
       - name: Stage 0
@@ -182,9 +252,11 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add x86_64-apple-darwin --toolchain nightly-2026-10-25
       - name: Stage 2
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
-          cargo +nightly-2026-10-25 build --quiet --release --locked \
+          cargo +nightly-2026-10-25 build --quiet --locked \
+            --release \
             --bin Subsystem-for-Arxumbra \
             --target x86_64-apple-darwin \
             --target-dir "${RUNNER_TEMP}/target" \
@@ -197,25 +269,28 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 3
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
-          install -m 644 "${RUNNER_TEMP}/target/x86_64-apple-darwin/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+          install -m 755 "${RUNNER_TEMP}/target/x86_64-apple-darwin/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 4
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
-          cd "${RUNNER_TEMP}/stage"
-          7z a "${RUNNER_TEMP}/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z" "x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+          tar -czf "${RUNNER_TEMP}/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz" -C "${RUNNER_TEMP}/stage" "x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 5
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-          path: ${{ runner.temp }}/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z
+          path: ${{ runner.temp }}/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz
           retention-days: 7
           if-no-files-found: error
   aarch64_windows:
     name: AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: windows-11-arm
+    if: ${{ github.event.inputs.build_mode != 'debug' }}
     timeout-minutes: 75
     steps:
       - name: Stage 0
@@ -231,9 +306,11 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add aarch64-pc-windows-msvc --toolchain nightly-2026-10-25
       - name: Stage 2
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
-          cargo +nightly-2026-10-25 build --quiet --release --locked \
+          cargo +nightly-2026-10-25 build --quiet --locked \
+            --release \
             --bin Subsystem-for-Arxumbra \
             --target aarch64-pc-windows-msvc \
             --target-dir "${RUNNER_TEMP}/target" \
@@ -246,25 +323,28 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 3
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
-          cp "${RUNNER_TEMP}/target/aarch64-pc-windows-msvc/release/Subsystem-for-Arxumbra.exe" "${RUNNER_TEMP}/stage/AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
+          install -m 755 "${RUNNER_TEMP}/target/aarch64-pc-windows-msvc/release/Subsystem-for-Arxumbra.exe" "${RUNNER_TEMP}/stage/AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
       - name: Stage 4
-        shell: bash
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        shell: pwsh
         run: |
-          cd "${RUNNER_TEMP}/stage"
-          7z a "${RUNNER_TEMP}/AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z" "AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
+          Compress-Archive -Path "${env:RUNNER_TEMP}\stage\AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe" -DestinationPath "${env:RUNNER_TEMP}\AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.zip" -CompressionLevel Optimal
       - name: Stage 5
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-          path: ${{ runner.temp }}/AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z
+          path: ${{ runner.temp }}/AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.zip
           retention-days: 7
           if-no-files-found: error
   x86_64_windows:
     name: x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: windows-2025
+    if: ${{ github.event.inputs.build_mode != 'debug' }}
     timeout-minutes: 75
     steps:
       - name: Stage 0
@@ -280,9 +360,11 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add x86_64-pc-windows-msvc --toolchain nightly-2026-10-25
       - name: Stage 2
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
-          cargo +nightly-2026-10-25 build --quiet --release --locked \
+          cargo +nightly-2026-10-25 build --quiet --locked \
+            --release \
             --bin Subsystem-for-Arxumbra \
             --target x86_64-pc-windows-msvc \
             --target-dir "${RUNNER_TEMP}/target" \
@@ -295,19 +377,21 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 3
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
-          cp "${RUNNER_TEMP}/target/x86_64-pc-windows-msvc/release/Subsystem-for-Arxumbra.exe" "${RUNNER_TEMP}/stage/x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
+          install -m 755 "${RUNNER_TEMP}/target/x86_64-pc-windows-msvc/release/Subsystem-for-Arxumbra.exe" "${RUNNER_TEMP}/stage/x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
       - name: Stage 4
-        shell: bash
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        shell: pwsh
         run: |
-          cd "${RUNNER_TEMP}/stage"
-          7z a "${RUNNER_TEMP}/x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z" "x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
+          Compress-Archive -Path "${env:RUNNER_TEMP}\stage\x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe" -DestinationPath "${env:RUNNER_TEMP}\x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.zip" -CompressionLevel Optimal
       - name: Stage 5
+        if: ${{ github.event.inputs.build_mode != 'debug' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
-          path: ${{ runner.temp }}/x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.7z
+          path: ${{ runner.temp }}/x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.zip
           retention-days: 7
           if-no-files-found: error
