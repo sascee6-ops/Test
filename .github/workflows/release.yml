@@ -198,7 +198,7 @@ jobs:
             if [ -n "${b64}" ]; then echo "::notice title=shot-$1::${b64}"; fi
             return 0
           }
-          for CASE in home workspace wizard; do
+          for CASE in home workspace wizard catalog; do
             XD="${RT}/xdg-${CASE}"
             HM="${RT}/home-${CASE}"
             mkdir -p "${XD}" "${HM}/.config/sway"
@@ -210,7 +210,11 @@ jobs:
               if [ -S "${XD}/wayland-1" ]; then break; fi
               sleep 0.5
             done
-            if [ "${CASE}" = "home" ]; then unset ARXUMBRA_PROBE; else export ARXUMBRA_PROBE="${CASE}"; fi
+            if [ "${CASE}" = "home" ]; then unset ARXUMBRA_PROBE; elif [ "${CASE}" = "catalog" ]; then export ARXUMBRA_PROBE="workspace"; else export ARXUMBRA_PROBE="${CASE}"; fi
+            if [ "${CASE}" = "catalog" ]; then
+              mkdir -p "${HM}/.local/share/Subsystem-for-Arxumbra"
+              printf '%s\n' 'arxumbra-workspace-catalog v1' '3' '1|0|54656c656d6574727920526967|1|0' '2|1|556e6974792054657374|2|1' '3|0|56756c6b616e204c6f61646572|3|2' > "${HM}/.local/share/Subsystem-for-Arxumbra/workspace-catalog"
+            fi
             XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe ARXUMBRA_STATE="${RT}/state-${CASE}.txt" ARXUMBRA_APPLY="${RT}/apply-${CASE}-" timeout 60 "${BIN}" > "${RT}/app-${CASE}.log" 2>&1 &
             AP=$!
             sleep 15
