@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - arena/784e0a1e-test
   workflow_dispatch:
     inputs:
       build_mode:
@@ -23,7 +24,7 @@ jobs:
   aarch64_linux:
     name: AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: ubuntu-24.04-arm
-    if: ${{ github.event.inputs.build_mode != 'debug' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     timeout-minutes: 75
     steps:
       - name: Stage 0
@@ -44,7 +45,7 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add aarch64-unknown-linux-gnu --toolchain nightly-2026-10-25
       - name: Stage 3
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -61,18 +62,18 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 4
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
           install -m 755 "${RUNNER_TEMP}/target/aarch64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 5
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           tar -czf "${RUNNER_TEMP}/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz" -C "${RUNNER_TEMP}/stage" "AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 6
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
@@ -102,7 +103,7 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add x86_64-unknown-linux-gnu --toolchain nightly-2026-10-25
       - name: Stage 3
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -119,18 +120,18 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 4
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
           install -m 755 "${RUNNER_TEMP}/target/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 5
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           tar -czf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz" -C "${RUNNER_TEMP}/stage" "x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 6
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
@@ -138,7 +139,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
       - name: Stage 7
-        if: ${{ github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -151,14 +152,14 @@ jobs:
             --config 'profile.dev.debug-assertions=true' \
             --config 'profile.dev.overflow-checks=true'
       - name: Stage 8
-        if: ${{ github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage-debug"
           install -m 755 "${RUNNER_TEMP}/target-debug/x86_64-unknown-linux-gnu/debug/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           tar -czf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz" -C "${RUNNER_TEMP}/stage-debug" "x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 9
-        if: ${{ github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
           tar -tzvf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz"
@@ -172,7 +173,7 @@ jobs:
           file "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           ldd "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 10
-        if: ${{ github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug
@@ -182,7 +183,7 @@ jobs:
   aarch64_macos:
     name: AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: macos-15
-    if: ${{ github.event.inputs.build_mode != 'debug' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     timeout-minutes: 75
     steps:
       - name: Stage 0
@@ -198,7 +199,7 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add aarch64-apple-darwin --toolchain nightly-2026-10-25
       - name: Stage 2
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -215,18 +216,18 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 3
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
           install -m 755 "${RUNNER_TEMP}/target/aarch64-apple-darwin/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 4
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           tar -czf "${RUNNER_TEMP}/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz" -C "${RUNNER_TEMP}/stage" "AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 5
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
@@ -236,7 +237,7 @@ jobs:
   x86_64_macos:
     name: x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: macos-15-intel
-    if: ${{ github.event.inputs.build_mode != 'debug' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     timeout-minutes: 75
     steps:
       - name: Stage 0
@@ -252,7 +253,7 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add x86_64-apple-darwin --toolchain nightly-2026-10-25
       - name: Stage 2
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -269,18 +270,18 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 3
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
           install -m 755 "${RUNNER_TEMP}/target/x86_64-apple-darwin/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 4
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           tar -czf "${RUNNER_TEMP}/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz" -C "${RUNNER_TEMP}/stage" "x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 5
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
@@ -290,7 +291,7 @@ jobs:
   aarch64_windows:
     name: AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: windows-11-arm
-    if: ${{ github.event.inputs.build_mode != 'debug' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     timeout-minutes: 75
     steps:
       - name: Stage 0
@@ -306,7 +307,7 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add aarch64-pc-windows-msvc --toolchain nightly-2026-10-25
       - name: Stage 2
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -323,18 +324,18 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 3
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
           install -m 755 "${RUNNER_TEMP}/target/aarch64-pc-windows-msvc/release/Subsystem-for-Arxumbra.exe" "${RUNNER_TEMP}/stage/AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
       - name: Stage 4
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: pwsh
         run: |
           Compress-Archive -Path "${env:RUNNER_TEMP}\stage\AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe" -DestinationPath "${env:RUNNER_TEMP}\AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.zip" -CompressionLevel Optimal
       - name: Stage 5
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
@@ -344,7 +345,7 @@ jobs:
   x86_64_windows:
     name: x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: windows-2025
-    if: ${{ github.event.inputs.build_mode != 'debug' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     timeout-minutes: 75
     steps:
       - name: Stage 0
@@ -360,7 +361,7 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add x86_64-pc-windows-msvc --toolchain nightly-2026-10-25
       - name: Stage 2
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -377,18 +378,18 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 3
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
           install -m 755 "${RUNNER_TEMP}/target/x86_64-pc-windows-msvc/release/Subsystem-for-Arxumbra.exe" "${RUNNER_TEMP}/stage/x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
       - name: Stage 4
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         shell: pwsh
         run: |
           Compress-Archive -Path "${env:RUNNER_TEMP}\stage\x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe" -DestinationPath "${env:RUNNER_TEMP}\x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.zip" -CompressionLevel Optimal
       - name: Stage 5
-        if: ${{ github.event.inputs.build_mode != 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
