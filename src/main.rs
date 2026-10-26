@@ -5395,7 +5395,7 @@ fn main() {
                                                                                 sprite.custom_size.map_or(-1.0, |v: bevy::math::Vec2| v.y),
                                                                                 transform.translation.x,
                                                                                 transform.translation.y,
-                                                                                visibility.is_hidden()
+                                                                                std::matches!(visibility, bevy::camera::visibility::Visibility::Hidden)
                                                                             ),
                                                                         )
                                                                         .ok();
