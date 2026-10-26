@@ -176,10 +176,8 @@ jobs:
         if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
-          set -u
-          trap 'echo "::error title=runtime::command failed at line ${LINENO} status=$?"' ERR
-          trap 'echo "::notice title=runtime::stage exiting at line ${LINENO}"' EXIT
           hb() { echo "::notice title=hb::$1"; }
+          fail() { hb "FAIL line=$1 rc=$2"; }
           NAME="x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
           BIN="${RUNNER_TEMP}/stage-debug/${NAME}-debug"
           RT="${RUNNER_TEMP}/runtime"
@@ -189,8 +187,8 @@ jobs:
           export XDG_RUNTIME_DIR="${RT}/xdg"
           export HOME="${RT}/home"
           printf '%s\n' 'xwayland disable' 'output HEADLESS-1 resolution 1280x800' 'bar { swaybar_command /bin/true }' > "${HOME}/.config/sway/config"
-          sudo apt-get update -y > "${RT}/apt.log" 2>&1
-          sudo apt-get install -y --no-install-recommends sway wtype grim libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1
+          sudo apt-get update -y > "${RT}/apt.log" 2>&1 || fail ${LINENO} $?
+          sudo apt-get install -y --no-install-recommends sway wtype grim libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1 || fail ${LINENO} $?
           hb "apt done sway=$(command -v sway) wtype=$(command -v wtype) grim=$(command -v grim) convert=$(command -v convert)"
           WLR_BACKENDS=headless WLR_RENDERER_ALLOW_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe sway -d -c "${HOME}/.config/sway/config" > "${RT}/sway.log" 2>&1 &
           SWAY_PID=$!
@@ -211,11 +209,12 @@ jobs:
           export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
           shot() {
             local b64=""
-            timeout 20 grim -o HEADLESS-1 "${RT}/$1.png" 2>>"${RT}/grim.log"
-            hb "grim $1 rc=$?"
-            b64=$(convert "${RT}/$1.png" -resize 200x125 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
+            timeout 20 grim -o HEADLESS-1 "${RT}/$1.png" 2>>"${RT}/grim.log" || fail ${LINENO} $?
+            hb "grim $1 rc=done"
+            b64=$(convert "${RT}/$1.png" -resize 200x125 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0) || fail ${LINENO} $?
             hb "convert $1 bytes=${#b64}"
-            if [ -n "${b64}" ]; then echo "::notice title=shot-$1::${b64}"; fi
+            if [ -n "${b64}" ]; then echo "::notice title=shot-$1::${b64}" || fail ${LINENO} $?; fi
+            return 0
           }
           relay() {
             tail -30 "$1" | while IFS= read -r line; do printf "::notice title=$2::%s\n" "${line//%/%25}"; done
@@ -225,22 +224,22 @@ jobs:
           sleep 15
           hb "run1 alive=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)"
           shot home
-          timeout 10 wtype -P ctrl -P e -p e -p ctrl
-          hb "wtype ctrl+e rc=$?"
+          timeout 10 wtype -P ctrl -P e -p e -p ctrl || fail ${LINENO} $?
+          hb "wtype ctrl+e done"
           sleep 3
           shot wizard
-          timeout 10 wtype -s 40 'Arena Test'
-          hb "wtype text rc=$?"
+          timeout 10 wtype -s 40 'Arena Test' || fail ${LINENO} $?
+          hb "wtype text done"
           sleep 3
           shot typed
-          timeout 10 wtype -P escape
-          hb "wtype escape press rc=$?"
+          timeout 10 wtype -P escape || fail ${LINENO} $?
+          hb "wtype escape press done"
           sleep 7
           shot escaped
           hb "run1 alive after 7s escape in wizard=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)"
-          timeout 10 wtype -p escape
+          timeout 10 wtype -p escape || true
           sleep 1
-          kill ${APP1} 2>/dev/null
+          kill ${APP1} 2>/dev/null || true
           wait ${APP1} 2>/dev/null
           hb "run1 exit_code=$?"
           relay "${RT}/app1.log" app1
@@ -248,13 +247,13 @@ jobs:
           APP2=$!
           sleep 12
           hb "run2 alive=$(kill -0 ${APP2} 2>/dev/null && echo yes || echo no)"
-          timeout 10 wtype -P escape
+          timeout 10 wtype -P escape || fail ${LINENO} $?
           HOLD_EXIT="alive"
           for _i in $(seq 1 24); do
             if ! kill -0 ${APP2} 2>/dev/null; then HOLD_EXIT="exited"; break; fi
             sleep 0.5
           done
-          timeout 10 wtype -p escape 2>/dev/null
+          timeout 10 wtype -p escape 2>/dev/null || true
           sleep 1
           FINAL=$(kill -0 ${APP2} 2>/dev/null && echo alive || echo exited)
           wait ${APP2} 2>/dev/null
@@ -262,7 +261,7 @@ jobs:
           hb "run2 escape_while_held=${HOLD_EXIT} after_release=${FINAL} exit_code=${RC2}"
           relay "${RT}/app2.log" app2
           relay "${RT}/grim.log" grim
-          kill ${SWAY_PID} 2>/dev/null
+          kill ${SWAY_PID} 2>/dev/null || true
           if [ "${HOLD_EXIT}" != "exited" ]; then
             echo "::error title=runtime::continuing 7s Escape hold in Home did not exit the application"
           fi
