@@ -176,6 +176,7 @@ jobs:
         if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
+          set +e +o pipefail
           hb() { echo "::notice title=hb::$1"; }
           NAME="x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
           BIN="${RUNNER_TEMP}/stage-debug/${NAME}-debug"
@@ -204,7 +205,7 @@ jobs:
           fi
           export WAYLAND_DISPLAY=wayland-1
           export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
-          SWAYSOCK=$(ls "${XDG_RUNTIME_DIR}"/sway-sock.* 2>/dev/null | head -1)
+          SWAYSOCK=$(ls "${XDG_RUNTIME_DIR}"/sway-sock.* 2>/dev/null | head -1) || true
           export SWAYSOCK
           hb "swaysock=${SWAYSOCK:-none}"
           cat > "${RT}/probe.sh" <<'PROBE'
@@ -274,8 +275,9 @@ jobs:
           hb "run2 home_escape_hold while_held=${HOLD} after_release=${FINAL} exit_code=$?"
           exit 0
           PROBE
-          timeout 300 bash "${RT}/probe.sh" > "${RT}/probe.log" 2>&1
-          hb "probe rc=$?"
+          PROBE_RC=0
+          timeout 300 bash "${RT}/probe.sh" > "${RT}/probe.log" 2>&1 || PROBE_RC=$?
+          hb "probe rc=${PROBE_RC}"
           grep -aE '^::' "${RT}/probe.log" | while IFS= read -r line; do echo "${line}"; done
           {
             grep -aE '^HB ' "${RT}/probe.log" | sed 's/^HB //'
