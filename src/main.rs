@@ -291,27 +291,21 @@ fn main() {
                                             typed
                                                 .chars()
                                                 .filter(|glyph: &char| !glyph.is_control())
+                                                .collect::<std::string::String>()
                                         }),
                                 )
                                 .for_each(
-                                    |typed: std::option::Option<
-                                        std::iter::Filter<
-                                            std::str::Chars<'_>,
-                                            fn(&char) -> bool,
-                                        >,
-                                    >| {
+                                    |typed: std::option::Option<std::string::String>| {
                                         typed.into_iter().for_each(
-                                            |glyphs: std::iter::Filter<
-                                                std::str::Chars<'_>,
-                                                fn(&char) -> bool,
-                                            >| {
+                                            |cleaned: std::string::String| {
                                                 std::iter::once((
                                                     usize::from(draft_state.1),
                                                     draft_state.0.chars().count(),
                                                 ))
                                                 .for_each(|(caret, total): (usize, usize)| {
                                                     std::iter::once(
-                                                        glyphs
+                                                        cleaned
+                                                            .chars()
                                                             .take(64usize.saturating_sub(total))
                                                             .collect::<std::string::String>(),
                                                     )
@@ -3326,6 +3320,13 @@ fn main() {
                                 ))
                                 .for_each(|launch_rect: bevy::math::Rect| {
                                     std::iter::once((
+                                        app_state[0],
+                                        app_state[1] == 0u8,
+                                        app_state[2] != 0u8,
+                                    ))
+                                    .for_each(
+                                        |(cur_mode, cur_menu, cur_modal): (u8, bool, bool)| {
+                                    std::iter::once((
                                         modal_rect.min.x,
                                         modal_rect.min.y,
                                         modal_rect.max.x,
@@ -3396,44 +3397,6 @@ fn main() {
                                                 ),
                                             ],
                                             [
-                                                bevy::math::Rect::new(
-                                                    panel_rect.min.x + 28.0,
-                                                    122.0,
-                                                    panel_rect.max.x - 28.0,
-                                                    170.0,
-                                                ),
-                                                bevy::math::Rect::new(
-                                                    panel_rect.min.x + 28.0,
-                                                    178.0,
-                                                    panel_rect.max.x - 28.0,
-                                                    226.0,
-                                                ),
-                                                bevy::math::Rect::new(
-                                                    panel_rect.min.x + 28.0,
-                                                    234.0,
-                                                    panel_rect.max.x - 28.0,
-                                                    282.0,
-                                                ),
-                                                bevy::math::Rect::new(
-                                                    panel_rect.min.x + 28.0,
-                                                    290.0,
-                                                    panel_rect.max.x - 28.0,
-                                                    338.0,
-                                                ),
-                                                bevy::math::Rect::new(
-                                                    panel_rect.min.x + 28.0,
-                                                    346.0,
-                                                    panel_rect.max.x - 28.0,
-                                                    394.0,
-                                                ),
-                                                bevy::math::Rect::new(
-                                                    panel_rect.min.x + 28.0,
-                                                    402.0,
-                                                    panel_rect.max.x - 28.0,
-                                                    450.0,
-                                                ),
-                                            ],
-                                            [
                                                 bevy::math::Rect::from_center_size(
                                                     bevy::math::Vec2::new(
                                                         panel_rect.max.x - 104.0,
@@ -3458,7 +3421,6 @@ fn main() {
                                                 icon_rects,
                                                 type_rects,
                                                 dim_rects,
-                                                row_rects,
                                                 scroll_rects,
                                             ): (
                                                 bevy::math::Rect,
@@ -3467,7 +3429,6 @@ fn main() {
                                                 [bevy::math::Rect; 2],
                                                 [bevy::math::Rect; 3],
                                                 [bevy::math::Rect; 2],
-                                                [bevy::math::Rect; 6],
                                                 [bevy::math::Rect; 2],
                                             )| {
                                                 std::iter::once(
@@ -3920,6 +3881,7 @@ fn main() {
                                                 );
                                             },
                                         );
+                                    });
                                     });
                                     std::iter::once(
                                         if cfg!(target_os = "linux") {
