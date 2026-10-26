@@ -5369,14 +5369,20 @@ fn main() {
                                                                                 entity.index()
                                                                             ),
                                                                             std::format!(
-                                                                                "shown={} a={:.3} size={:.0},{:.0} pos={:.0},{:.0} got={}\n",
+                                                                                "shown={} a={:.3} size={:.0},{:.0} pos={:.0},{:.0} got={} pa={:.3} psz={:.0},{:.0} ppos={:.0},{:.0} vis={}\n",
                                                                                 shown,
                                                                                 bevy::color::Alpha::alpha(&colour),
                                                                                 size.x,
                                                                                 size.y,
                                                                                 pos.x,
                                                                                 pos.y,
-                                                                                sprites.get(entity).is_ok()
+                                                                                sprites.get(entity).is_ok(),
+                                                                                bevy::color::Alpha::alpha(&sprite.color),
+                                                                                sprite.custom_size.map_or(-1.0, |v: bevy::math::Vec2| v.x),
+                                                                                sprite.custom_size.map_or(-1.0, |v: bevy::math::Vec2| v.y),
+                                                                                transform.translation.x,
+                                                                                transform.translation.y,
+                                                                                visibility.is_hidden()
                                                                             ),
                                                                         )
                                                                         .ok();
