@@ -5355,6 +5355,19 @@ fn main() {
                                                                     bevy::color::Color,
                                                                     bool,
                                                                 )| {
+                                                                    sprites
+                                                                        .get(entity)
+                                                                        .into_iter()
+                                                                        .for_each(
+                                                                            |(
+                                                                                sprite,
+                                                                                transform,
+                                                                                visibility,
+                                                                            ): (
+                                                                                &bevy::sprite::Sprite,
+                                                                                &bevy::transform::components::Transform,
+                                                                                &bevy::camera::visibility::Visibility,
+                                                                            )| {
                                                                     if cfg!(debug_assertions)
                                                                         && (entity == e[42]
                                                                             || entity == e[43]
@@ -5387,19 +5400,6 @@ fn main() {
                                                                         )
                                                                         .ok();
                                                                     }
-                                                                    sprites
-                                                                        .get(entity)
-                                                                        .into_iter()
-                                                                        .for_each(
-                                                                            |(
-                                                                                sprite,
-                                                                                transform,
-                                                                                visibility,
-                                                                            ): (
-                                                                                &bevy::sprite::Sprite,
-                                                                                &bevy::transform::components::Transform,
-                                                                                &bevy::camera::visibility::Visibility,
-                                                                            )| {
                                                                                 if sprite.color
                                                                                     != colour
                                                                                     || sprite
