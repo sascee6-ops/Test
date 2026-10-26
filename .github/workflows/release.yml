@@ -177,21 +177,19 @@ jobs:
         shell: bash
         run: |
           hb() { echo "::notice title=hb::$1"; }
-          ck() { hb "ckpt=$1"; }
           NAME="x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
           BIN="${RUNNER_TEMP}/stage-debug/${NAME}-debug"
           RT="${RUNNER_TEMP}/runtime"
+          export RT
           rm -rf "${RT}"
           mkdir -p "${RT}/xdg" "${RT}/home/.config/sway" "${RT}/home/.local/share"
           chmod 700 "${RT}/xdg"
           export XDG_RUNTIME_DIR="${RT}/xdg"
           export HOME="${RT}/home"
-          printf '%s\n' 'xwayland disable' 'output HEADLESS-1 resolution 1280x800' 'bar { swaybar_command /bin/true }' > "${HOME}/.config/sway/config"
-          ck 1
+          printf '%s\n' 'xwayland disable' 'output HEADLESS-1 resolution 1024x640' 'bar { swaybar_command /bin/true }' > "${HOME}/.config/sway/config"
           sudo apt-get update -y > "${RT}/apt.log" 2>&1 || hb "apt update rc=$?"
-          sudo apt-get install -y --no-install-recommends sway wtype grim ydotool libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1 || hb "apt install rc=$?"
-          hb "tools sway=$(command -v sway) wtype=$(command -v wtype) grim=$(command -v grim) ydotool=$(command -v ydotool) convert=$(command -v convert)"
-          ck 2
+          sudo apt-get install -y --no-install-recommends sway grim ydotool libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1 || hb "apt install rc=$?"
+          hb "tools sway=$(command -v sway) grim=$(command -v grim) ydotool=$(command -v ydotool) convert=$(command -v convert)"
           WLR_BACKENDS=headless WLR_RENDERER_ALLOW_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe sway -d -c "${HOME}/.config/sway/config" > "${RT}/sway.log" 2>&1 &
           SWAY_PID=$!
           SOCKET=""
@@ -206,12 +204,12 @@ jobs:
           fi
           export WAYLAND_DISPLAY=wayland-1
           export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
-          sudo modprobe uinput 2>>"${RT}/ydo.log" || hb "modprobe rc=$?"
+          sudo modprobe uinput >> "${RT}/ydo.log" 2>&1 || hb "modprobe rc=$?"
           sudo ydotoold --socket-path="${RT}/ydo.sock" >> "${RT}/ydo.log" 2>&1 &
           sleep 2
           sudo chmod 666 "${RT}/ydo.sock" 2>/dev/null || true
-          ydo() { sudo ydotool --socket-path="${RT}/ydo.sock" "$@" >> "${RT}/ydo.log" 2>&1; }
-          wt() { timeout 10 wtype "$@" >> "${RT}/wtype.log" 2>&1; }
+          cat > "${RT}/probe.sh" <<'PROBE'
+          hb() { echo "HB $1"; }
           shot() {
             local b64=""
             timeout 20 grim -o HEADLESS-1 "${RT}/$1.png" 2>>"${RT}/grim.log" || hb "grim $1 rc=$?"
@@ -220,74 +218,60 @@ jobs:
             if [ -n "${b64}" ]; then echo "::notice title=shot-$1::${b64}"; fi
             return 0
           }
-          relay() {
-            tail -20 "$1" 2>/dev/null | while IFS= read -r line; do printf "::notice title=$2::%s\n" "${line//%/%25}"; done
-            return 0
-          }
-          ck 3
+          ydo() { ydotool --socket-path="${RT}/ydo.sock" "$@" >> "${RT}/ydo.log" 2>&1 || hb "ydo rc=$? args=$*"; }
+          applog() { tail -20 "$1" 2>/dev/null | while IFS= read -r l; do printf 'APPLOG %s\n' "${l}"; done; return 0; }
           timeout 90 "${BIN}" > "${RT}/app1.log" 2>&1 &
           APP1=$!
           sleep 15
           hb "run1 alive=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)"
-          swaymsg -t get_tree 2>>"${RT}/swaymsg.log" | grep -oE '"(app_id|name)":"[^"]*","pid":[0-9]+|"focused":true' | head -8 | while IFS= read -r line; do printf '::notice title=tree::%s\n' "${line//%/%25}"; done
-          ck 4
           shot home
-          ck 5
-          wt -P ctrl -P e -p e -p ctrl
-          hb "wtype ctrl+e rc=$? ydo_alt_pending"
           ydo key 29:1 18:1 18:0 29:0
-          hb "ydotool ctrl+e rc=$?"
           sleep 3
-          ck 6
           shot wizard
-          wt -s 40 'Arena Test'
-          hb "wtype text rc=$?"
           ydo type 'Arena Test'
-          hb "ydotool text rc=$?"
           sleep 3
-          ck 7
           shot typed
-          wt -P escape
           ydo key 1:1
-          hb "escape held wtype+ydo rc=$?"
           sleep 7
-          ck 8
           shot escaped
-          hb "run1 alive after 7s escape=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)"
-          wt -p escape
+          hb "run1 alive after 7s escape in wizard=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)"
           ydo key 1:0
           sleep 1
           kill ${APP1} 2>/dev/null || true
           wait ${APP1} 2>/dev/null
           hb "run1 exit_code=$?"
-          relay "${RT}/app1.log" app1
-          relay "${RT}/wtype.log" wtype
-          relay "${RT}/ydo.log" ydo
-          ck 9
+          applog "${RT}/app1.log"
           timeout 60 "${BIN}" > "${RT}/app2.log" 2>&1 &
           APP2=$!
           sleep 12
           hb "run2 alive=$(kill -0 ${APP2} 2>/dev/null && echo yes || echo no)"
-          wt -P escape
           ydo key 1:1
-          HOLD_EXIT="alive"
+          HOLD="alive"
           for _i in $(seq 1 24); do
-            if ! kill -0 ${APP2} 2>/dev/null; then HOLD_EXIT="exited"; break; fi
+            if ! kill -0 ${APP2} 2>/dev/null; then HOLD="exited"; break; fi
             sleep 0.5
           done
-          wt -p escape
           ydo key 1:0
           sleep 1
           FINAL=$(kill -0 ${APP2} 2>/dev/null && echo alive || echo exited)
           wait ${APP2} 2>/dev/null
-          RC2=$?
-          hb "run2 escape_while_held=${HOLD_EXIT} after_release=${FINAL} exit_code=${RC2}"
-          relay "${RT}/app2.log" app2
-          ck 10
-          kill ${SWAY_PID} 2>/dev/null || true
-          if [ "${HOLD_EXIT}" != "exited" ]; then
-            echo "::error title=runtime::continuing 7s Escape hold in Home did not exit the application"
+          hb "run2 escape_while_held=${HOLD} after_release=${FINAL} exit_code=$?"
+          applog "${RT}/app2.log"
+          if [ "${HOLD}" = "exited" ]; then echo "ESCAPE_HOLD_OK"; fi
+          exit 0
+          PROBE
+          timeout 300 bash "${RT}/probe.sh" > "${RT}/probe.log" 2>&1
+          hb "probe rc=$?"
+          grep -E '^::' "${RT}/probe.log" | while IFS= read -r line; do echo "${line}"; done
+          grep -E '^HB ' "${RT}/probe.log" | while IFS= read -r line; do echo "::notice title=hb::${line#HB }"; done
+          grep -E '^APPLOG ' "${RT}/probe.log" | head -30 | while IFS= read -r line; do printf '::notice title=app::%s\n' "${line#APPLOG }"; done
+          tail -6 "${RT}/probe.log" | grep -v '^::' | grep -v '^HB ' | grep -v '^APPLOG ' | while IFS= read -r line; do printf '::notice title=probe-tail::%s\n' "${line//%/%25}"; done
+          if grep -q 'ESCAPE_HOLD_OK' "${RT}/probe.log"; then
+            hb "escape hold verified: app exited during continuing 7s hold in Home"
+          else
+            echo "::error title=runtime::7s Escape hold in Home did not exit the app, or the probe died early"
           fi
+          kill ${SWAY_PID} 2>/dev/null || true
           exit 0
       - name: Stage 11
         if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
