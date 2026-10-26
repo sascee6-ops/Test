@@ -5371,7 +5371,7 @@ fn main() {
                                                                             std::format!(
                                                                                 "shown={} a={:.3} size={:.0},{:.0} pos={:.0},{:.0} got={}\n",
                                                                                 shown,
-                                                                                colour.as_srgba().alpha,
+                                                                                bevy::color::Alpha::alpha(&colour),
                                                                                 size.x,
                                                                                 size.y,
                                                                                 pos.x,
