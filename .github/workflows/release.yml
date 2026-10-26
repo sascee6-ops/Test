@@ -189,7 +189,7 @@ jobs:
           shot() {
             local b64=""
             timeout 20 grim -o HEADLESS-1 "${RT}/$1.png" 2>>"${RT}/grim.log" || hb "grim $1 rc=$?"
-            b64=$(convert "${RT}/$1.png" -resize 320x192 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
+            b64=$(convert "${RT}/$1.png" -resize 256x154 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
             hb "shot $1 bytes=${#b64}"
             if [ -n "${b64}" ]; then echo "::notice title=shot-$1::${b64}"; fi
             return 0

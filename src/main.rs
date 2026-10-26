@@ -4074,12 +4074,12 @@ fn main() {
                                             [
                                                 (
                                                     0usize,
-                                                    if final_mode == 0u8 { 0.0f32 } else { 1.0f32 },
+                                                    1.0f32,
                                                     18.0f32,
                                                 ),
                                                 (
                                                     1usize,
-                                                    if final_mode == 0u8 { 0.0f32 } else { 1.0f32 },
+                                                    1.0f32,
                                                     16.0f32,
                                                 ),
                                                 (
