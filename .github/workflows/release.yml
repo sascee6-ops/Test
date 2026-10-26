@@ -215,6 +215,8 @@ jobs:
             if [ -n "${b64}" ]; then echo "::notice title=shot-$1::${b64}"; fi
             return 0
           }
+          differs() { if cmp -s "${RT}/$1.png" "${RT}/$2.png"; then echo same; else echo DIFFER; fi; }
+          wt() { timeout 10 wtype "$@" >> "${RT}/wtype.log" 2>&1 || hb "wtype rc=$? args=$*"; }
           seed() {
             mkdir -p "${HOME}/.local/share/Subsystem-for-Arxumbra"
             rm -f "${CAT}" "${CAT}.lock" "${CAT}.tmp"
@@ -227,30 +229,48 @@ jobs:
             fi
             return 0
           }
-          timeout 60 "${BIN}" > "${RT}/app1.log" 2>&1 &
+          timeout 90 "${BIN}" > "${RT}/app1.log" 2>&1 &
           APP1=$!
           sleep 15
           A1=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)
           hb "run1 alive at 15s=${A1}"
           shot home
-          timeout 10 wtype -P ctrl -P e -p e -p ctrl >> "${RT}/wtype.log" 2>&1 || hb "wtype ctrl+e rc=$?"
+          wt -P Control_L -P e -p e -p Control_L
           sleep 4
           shot wizard2
-          if cmp -s "${RT}/home.png" "${RT}/wizard2.png"; then
-            hb "input_effect=no (frames byte-identical)"
-          else
-            hb "input_effect=yes (frames differ after ctrl+e)"
-          fi
-          sleep 8
+          hb "modal_open frames_home_vs_wizard=$(differs home wizard2)"
+          wt -s 40 'Arena Test'
+          sleep 3
+          shot typed
+          hb "text_entry frames_wizard_vs_typed=$(differs wizard2 typed)"
+          wt -P Escape
+          sleep 6
+          shot escaped
+          hb "after_6s_escape_hold frames_typed_vs_escaped=$(differs typed escaped)"
+          wt -p Escape
+          sleep 2
           A2=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)
-          hb "run1 alive at 27s=${A2}"
-          shot later
+          hb "run1 alive at end=${A2}"
           kill ${APP1} 2>/dev/null || true
           wait ${APP1} 2>/dev/null
           hb "run1 exit_code=$?"
           echo "${A1} ${A2}" > "${RT}/verdict1"
           grep -aE 'panicked|ERROR|error:' "${RT}/app1.log" | head -6 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 > "${RT}/panics" || true
           tail -4 "${RT}/wtype.log" 2>/dev/null | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 > "${RT}/wtail" || true
+          timeout 60 "${BIN}" > "${RT}/app2.log" 2>&1 &
+          APP2=$!
+          sleep 12
+          wt -P Escape
+          HOLD="alive"
+          for _i in $(seq 1 24); do
+            if ! kill -0 ${APP2} 2>/dev/null; then HOLD="exited"; break; fi
+            sleep 0.5
+          done
+          wt -p Escape
+          sleep 1
+          FINAL=$(kill -0 ${APP2} 2>/dev/null && echo alive || echo exited)
+          wait ${APP2} 2>/dev/null
+          hb "run2 home_escape_hold while_held=${HOLD} after_release=${FINAL} exit_code=$?"
           for CASE in valid corrupt future; do
             seed "${CASE}"
             BEFORE=$(sha256sum "${CAT}" | cut -d' ' -f1)
@@ -264,20 +284,17 @@ jobs:
             if [ "${BEFORE}" = "${AFTER}" ]; then SAME=preserved; else SAME=CHANGED; fi
             PAN=$(grep -ac 'panicked' "${RT}/app-${CASE}.log" || true)
             hb "catalog ${CASE}: alive10s=${AL} file=${SAME} panics=${PAN}"
-            if [ -s "${RT}/app-${CASE}.log" ]; then
-              grep -aE 'panicked' "${RT}/app-${CASE}.log" | head -3 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 | while IFS= read -r line; do printf 'HB panic %s: %s\n' "${CASE}" "${line}"; done
-            fi
           done
           exit 0
           PROBE
-          timeout 260 bash "${RT}/probe.sh" > "${RT}/probe.log" 2>&1
+          timeout 300 bash "${RT}/probe.sh" > "${RT}/probe.log" 2>&1
           hb "probe rc=$?"
           grep -aE '^::' "${RT}/probe.log" | while IFS= read -r line; do echo "${line}"; done
           {
             grep -aE '^HB ' "${RT}/probe.log" | sed 's/^HB //'
             if [ -s "${RT}/wtail" ]; then sed 's/^/wtype: /' "${RT}/wtail"; else echo "wtype: no log"; fi
             if [ -s "${RT}/panics" ]; then sed 's/^/PANIC: /' "${RT}/panics"; else echo "app stderr: no panic or error lines"; fi
-            echo "verdict alive15s/27s=$(tr ' ' '/' < "${RT}/verdict1" 2>/dev/null)"
+            echo "verdict alive15s/end=$(tr ' ' '/' < "${RT}/verdict1" 2>/dev/null)"
           } | tr -d '\000-\010\013\014\016-\037' | cut -c1-220 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=probe-report::${msg}"; done
           if [ "$(cut -d' ' -f1 "${RT}/verdict1" 2>/dev/null)" = "yes" ]; then
             hb "smoke result: application launched and kept running under headless Wayland"
