@@ -146,35 +146,63 @@ fn main() {
                 bevy::ecs::query::Without<bevy::sprite::Sprite>,
             >,
              layout_info: bevy::ecs::system::Query<'_, '_, &bevy::text::TextLayoutInfo>,
-             mut focus_state: bevy::ecs::system::Local<'_, (bool, u16, u8, bool)>,
-             mut escape_state: bevy::ecs::system::Local<
-                '_,
-                (std::option::Option<std::time::Instant>, bool, bool, bool),
-            >,
-             mut app_state: bevy::ecs::system::Local<'_, [u8; 4]>,
-             mut dot_state: bevy::ecs::system::Local<
-                '_,
-                std::option::Option<(
-                    bevy::ecs::entity::Entity,
-                    bevy::math::Vec2,
-                    bevy::math::Vec2,
-                    bevy::math::Vec2,
-                )>,
-            >,
-             mut metrics_state: bevy::ecs::system::Local<
-                '_,
-                (f32, f32, bevy::math::Vec2, f32),
-            >,
-             mut anim_state: bevy::ecs::system::Local<'_, ([f32; 4], [f32; 4], [f32; 5])>,
-             mut asset_handles: bevy::ecs::system::Local<
-                '_,
-                std::option::Option<[bevy::asset::Handle<bevy::image::Image>; 12]>,
-            >,
-             mut ui_entities: bevy::ecs::system::Local<
-                '_,
-                std::option::Option<[bevy::ecs::entity::Entity; 45]>,
-            >,
-             (mut tap_state, mut key_events): (
+             (mut focus_state, mut escape_state): (
+                bevy::ecs::system::Local<'_, (bool, u16, u8, bool)>,
+                bevy::ecs::system::Local<
+                    '_,
+                    (std::option::Option<std::time::Instant>, bool, bool, bool),
+                >,
+            ),
+             (mut app_state, mut dot_state): (
+                bevy::ecs::system::Local<'_, [u8; 4]>,
+                bevy::ecs::system::Local<
+                    '_,
+                    std::option::Option<(
+                        bevy::ecs::entity::Entity,
+                        bevy::math::Vec2,
+                        bevy::math::Vec2,
+                        bevy::math::Vec2,
+                    )>,
+                >,
+            ),
+             (mut metrics_state, mut anim_state): (
+                bevy::ecs::system::Local<'_, (f32, f32, bevy::math::Vec2, f32)>,
+                bevy::ecs::system::Local<'_, ([f32; 17], [f32; 17], [f32; 7])>,
+            ),
+             (mut asset_handles, mut ui_entities): (
+                bevy::ecs::system::Local<
+                    '_,
+                    std::option::Option<[bevy::asset::Handle<bevy::image::Image>; 14]>,
+                >,
+                bevy::ecs::system::Local<
+                    '_,
+                    std::option::Option<[bevy::ecs::entity::Entity; 110]>,
+                >,
+            ),
+             (mut wizard_state, mut draft_state): (
+                bevy::ecs::system::Local<'_, (u8, u8, u8, u8)>,
+                bevy::ecs::system::Local<'_, (std::string::String, u16, bool)>,
+            ),
+             (mut feedback_state, mut catalog_state): (
+                bevy::ecs::system::Local<'_, (u8, u8, u8)>,
+                bevy::ecs::system::Local<
+                    '_,
+                    (
+                        std::vec::Vec<(
+                            u64,
+                            u8,
+                            std::string::String,
+                            u8,
+                            u8,
+                        )>,
+                        bool,
+                        u8,
+                    ),
+                >,
+            ),
+             dynamic_texts: bevy::ecs::system::Query<'_, '_, &bevy::sprite::Text2d>,
+             (mut list_state, mut tap_state, mut key_events): (
+                bevy::ecs::system::Local<'_, (usize, u64)>,
                 bevy::ecs::system::Local<'_, (bool, bool, bool)>,
                 bevy::ecs::message::MessageReader<
                     '_,
@@ -195,11 +223,132 @@ fn main() {
                                 _ => {}
                             }
                         }
+                        if key_event.state == bevy::input::ButtonState::Pressed
+                            && draft_state.2
+                            && !keys.any_pressed([
+                                bevy::input::keyboard::KeyCode::ControlLeft,
+                                bevy::input::keyboard::KeyCode::ControlRight,
+                                bevy::input::keyboard::KeyCode::AltLeft,
+                                bevy::input::keyboard::KeyCode::AltRight,
+                                bevy::input::keyboard::KeyCode::SuperLeft,
+                                bevy::input::keyboard::KeyCode::SuperRight,
+                            ])
+                        {
+                            if key_event.key_code == bevy::input::keyboard::KeyCode::Backspace
+                                || key_event.key_code == bevy::input::keyboard::KeyCode::Delete
+                            {
+                                std::iter::once(
+                                    if key_event.key_code
+                                        == bevy::input::keyboard::KeyCode::Backspace
+                                    {
+                                        draft_state.1.saturating_sub(1)
+                                    } else {
+                                        draft_state.1
+                                    },
+                                )
+                                .for_each(|victim: u16| {
+                                    std::iter::once(
+                                        draft_state
+                                            .0
+                                            .char_indices()
+                                            .nth(usize::from(victim))
+                                            .map(|(byte_at, glyph): (usize, char)| {
+                                                (byte_at, glyph.len_utf8())
+                                            }),
+                                    )
+                                    .for_each(
+                                        |cut: std::option::Option<(usize, usize)>| {
+                                            cut.into_iter().for_each(|(byte_at, width): (usize, usize)| {
+                                                draft_state.0.replace_range(
+                                                    byte_at..byte_at + width,
+                                                    "",
+                                                );
+                                                draft_state.1 = draft_state.1.min(victim);
+                                                feedback_state.0 = 0u8;
+                                            });
+                                        },
+                                    );
+                                });
+                            } else if key_event.key_code
+                                == bevy::input::keyboard::KeyCode::ArrowLeft
+                            {
+                                draft_state.1 = draft_state.1.saturating_sub(1);
+                            } else if key_event.key_code
+                                == bevy::input::keyboard::KeyCode::ArrowRight
+                            {
+                                std::iter::once(draft_state.0.chars().count()).for_each(
+                                    |total: usize| {
+                                        draft_state.1 = (draft_state.1 + 1)
+                                            .min(u16::try_from(total).unwrap_or(u16::MAX));
+                                    },
+                                );
+                            } else {
+                                std::iter::once(
+                                    key_event
+                                        .text
+                                        .as_deref()
+                                        .map(|typed: &str| {
+                                            typed
+                                                .chars()
+                                                .filter(|glyph: &char| !glyph.is_control())
+                                        }),
+                                )
+                                .for_each(
+                                    |typed: std::option::Option<
+                                        std::iter::Filter<
+                                            std::str::Chars<'_>,
+                                            fn(&char) -> bool,
+                                        >,
+                                    >| {
+                                        typed.into_iter().for_each(
+                                            |glyphs: std::iter::Filter<
+                                                std::str::Chars<'_>,
+                                                fn(&char) -> bool,
+                                            >| {
+                                                std::iter::once((
+                                                    usize::from(draft_state.1),
+                                                    draft_state.0.chars().count(),
+                                                ))
+                                                .for_each(|(caret, total): (usize, usize)| {
+                                                    std::iter::once(
+                                                        glyphs
+                                                            .take(64usize.saturating_sub(total))
+                                                            .collect::<std::string::String>(),
+                                                    )
+                                                    .for_each(|piece: std::string::String| {
+                                                        if !piece.is_empty() {
+                                                            std::iter::once(
+                                                                draft_state
+                                                                    .0
+                                                                    .char_indices()
+                                                                    .nth(caret)
+                                                                    .map(|(byte_at, _): (usize, char)| byte_at)
+                                                                    .unwrap_or(draft_state.0.len()),
+                                                            )
+                                                            .for_each(|byte_at: usize| {
+                                                                draft_state.0.insert_str(
+                                                                    byte_at, &piece,
+                                                                );
+                                                                draft_state.1 = u16::try_from(
+                                                                    caret + piece.chars().count(),
+                                                                )
+                                                                .unwrap_or(u16::MAX);
+                                                                feedback_state.0 = 0u8;
+                                                            });
+                                                        }
+                                                    });
+                                                });
+                                            },
+                                        );
+                                    },
+                                );
+                            }
+                        }
                     },
                 );
                 windows.single().into_iter().for_each(|window: &bevy::window::Window| {
                     if focus_state.2 == 0u8 {
-                        anim_state.2 = [0.0, 0.0, 0.0, 0.0, 1.0];
+                        anim_state.2 = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0];
                     }
 
                     if asset_handles.is_none() {
@@ -587,6 +736,71 @@ fn main() {
                                 )
                                 .expect("embedded UI texture must decode"),
                             )
+                            images.add(
+                                bevy::image::Image::from_buffer(
+                                    &[
+                                        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68,
+                                        82, 0, 0, 0, 32, 0, 0, 0, 32, 8, 6, 0, 0, 0, 115,
+                                        122, 122, 244, 0, 0, 1, 30, 73, 68, 65, 84, 120, 218, 237, 151,
+                                        59, 14, 130, 64, 16, 134, 209, 198, 51, 16, 19, 34, 177, 32, 241,
+                                        2, 20, 222, 3, 26, 77, 168, 108, 41, 61, 14, 189, 87, 224, 2,
+                                        22, 16, 66, 171, 49, 158, 0, 56, 129, 15, 190, 98, 27, 162, 130,
+                                        128, 44, 65, 38, 153, 132, 204, 50, 223, 252, 251, 98, 23, 69, 25,
+                                        173, 175, 54, 203, 77, 85, 213, 185, 166, 105, 139, 38, 14, 3, 86,
+                                        229, 194, 147, 220, 76, 211, 92, 123, 158, 119, 8, 130, 224, 20, 199,
+                                        241, 181, 137, 195, 128, 5, 19, 118, 169, 0, 94, 12, 195, 240, 156,
+                                        101, 217, 163, 77, 135, 9, 187, 116, 216, 81, 219, 118, 113, 225, 176,
+                                        63, 78, 7, 243, 197, 144, 137, 132, 52, 77, 239, 190, 239, 31, 93,
+                                        215, 221, 59, 142, 179, 251, 198, 201, 33, 23, 134, 224, 193, 166, 198,
+                                        91, 1, 44, 26, 230, 77, 36, 0, 208, 117, 125, 89, 119, 33, 147,
+                                        11, 67, 240, 96, 83, 163, 178, 0, 122, 209, 116, 55, 193, 168, 45,
+                                        128, 161, 108, 42, 0, 198, 240, 4, 76, 115, 51, 12, 99, 101, 89,
+                                        214, 6, 231, 153, 88, 39, 2, 40, 100, 219, 246, 54, 138, 162, 75,
+                                        146, 36, 55, 156, 103, 98, 175, 68, 180, 46, 128, 222, 82, 176, 184,
+                                        199, 137, 209, 246, 115, 1, 12, 57, 189, 46, 10, 32, 70, 219, 240,
+                                        5, 72, 159, 2, 233, 139, 80, 250, 54, 252, 175, 47, 161, 244, 195,
+                                        168, 243, 227, 88, 250, 133, 68, 250, 149, 76, 250, 165, 180, 23, 215,
+                                        114, 233, 63, 38, 163, 117, 109, 79, 105, 71, 148, 253, 246, 81, 21,
+                                        233, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+                                    ],
+                                    bevy::image::ImageType::Extension("png"),
+                                    bevy::image::CompressedImageFormats::NONE,
+                                    true,
+                                    bevy::image::ImageSampler::Default,
+                                    bevy::asset::RenderAssetUsages::RENDER_WORLD,
+                                )
+                                .expect("embedded UI texture must decode"),
+                            )
+                            images.add(
+                                bevy::image::Image::from_buffer(
+                                    &[
+                                        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68,
+                                        82, 0, 0, 0, 32, 0, 0, 0, 32, 8, 6, 0, 0, 0, 115,
+                                        122, 122, 244, 0, 0, 0, 205, 73, 68, 65, 84, 120, 218, 99, 96,
+                                        24, 5, 163, 96, 20, 96, 1, 122, 122, 122, 134, 69, 69, 69, 85,
+                                        21, 21, 21, 13, 212, 192, 32, 179, 64, 102, 18, 101, 185, 144, 144,
+                                        144, 240, 142, 29, 59, 142, 188, 127, 255, 254, 63, 53, 49, 200, 76,
+                                        144, 217, 4, 29, 32, 39, 39, 167, 112, 241, 226, 197, 251, 212, 118,
+                                        0, 200, 76, 144, 217, 131, 223, 1, 3, 30, 5, 3, 158, 8, 7,
+                                        21, 224, 0, 130, 160, 160, 160, 240, 242, 242, 242, 122, 82, 125, 13,
+                                        210, 3, 210, 11, 50, 131, 108, 7, 184, 187, 187, 123, 63, 126, 252,
+                                        248, 19, 185, 241, 14, 210, 11, 50, 131, 108, 7, 36, 36, 36, 164,
+                                        81, 154, 248, 64, 102, 12, 93, 7, 12, 120, 20, 12, 120, 34, 28,
+                                        84, 64, 80, 80, 80, 40, 49, 49, 49, 157, 144, 207, 65, 106, 64,
+                                        106, 169, 238, 128, 188, 188, 188, 178, 87, 175, 94, 253, 34, 20, 239,
+                                        32, 53, 32, 181, 84, 119, 192, 132, 9, 19, 102, 18, 155, 248, 64,
+                                        106, 135, 159, 3, 6, 60, 10, 6, 60, 17, 142, 130, 81, 48, 108,
+                                        1, 0, 35, 126, 160, 6, 245, 13, 191, 80, 0, 0, 0, 0, 73,
+                                        69, 78, 68, 174, 66, 96, 130,
+                                    ],
+                                    bevy::image::ImageType::Extension("png"),
+                                    bevy::image::CompressedImageFormats::NONE,
+                                    true,
+                                    bevy::image::ImageSampler::Default,
+                                    bevy::asset::RenderAssetUsages::RENDER_WORLD,
+                                )
+                                .expect("embedded UI texture must decode"),
+                            )
                         ]);
                     }
 
@@ -605,7 +819,9 @@ fn main() {
                                 panel_round_solid,
                                 right_round_solid,
                                 dot_image,
-                            ]: [bevy::asset::Handle<bevy::image::Image>; 12]| {
+                                preset_icon_a,
+                                preset_icon_b,
+                            ]: [bevy::asset::Handle<bevy::image::Image>; 14]| {
                                 *ui_entities = std::option::Option::Some([
                                     commands
                                         .spawn((
@@ -1684,6 +1900,1096 @@ fn main() {
                                             ),
                                             bevy::camera::visibility::Visibility::Hidden,
                                         ))
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.133, 0.133, 0.133, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(44.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 14.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                image: plus_icon.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(24.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("Create Project")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(19.0),
+                                                weight: bevy::text::FontWeight::SEMIBOLD,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.176, 0.176, 0.176, 1.0),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(504.0, 1.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 14.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("App Icon")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(13.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.62, 0.62, 0.62, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.161, 0.161, 0.161, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(68.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(16.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 14.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                image: preset_icon_a.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(40.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.125, 0.125, 0.125, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(68.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(16.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 14.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                image: preset_icon_b.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(40.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("Application Name")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(13.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.62, 0.62, 0.62, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.125, 0.125, 0.125, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(564.0, 46.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 14.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.4, 0.4, 0.4, 0.0),
+                                                image: round_outline.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(564.0, 46.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 14.5),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(16.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(2.0, 20.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.5),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(12.5),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.7, 0.7, 0.7, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.865, 0.865, 0.865, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(120.0, 44.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 14.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("Next")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(15.0),
+                                                weight: bevy::text::FontWeight::SEMIBOLD,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.086, 0.086, 0.086, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.145, 0.145, 0.145, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(564.0, 46.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 14.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("Operating System")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(15.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.145, 0.145, 0.145, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(564.0, 46.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 14.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("Command Line Interface")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(15.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.145, 0.145, 0.145, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(564.0, 46.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 14.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("Graphical User Interface")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(15.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.125, 0.125, 0.125, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(564.0, 40.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 14.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("2D")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(14.5),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.125, 0.125, 0.125, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(564.0, 40.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 14.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("3D")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(14.5),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.215, 0.215, 0.215, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(104.0, 44.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 14.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("Back")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(15.0),
+                                                weight: bevy::text::FontWeight::SEMIBOLD,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 15.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("No saved projects yet")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(14.5),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.62, 0.62, 0.62, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(13.5),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.78, 0.78, 0.78, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.145, 0.145, 0.145, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(700.0, 48.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 2.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                image: preset_icon_a.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(26.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                image: preset_icon_b.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(26.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(15.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(12.5),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.62, 0.62, 0.62, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.145, 0.145, 0.145, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(700.0, 48.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 2.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                image: preset_icon_a.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(26.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                image: preset_icon_b.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(26.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(15.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(12.5),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.62, 0.62, 0.62, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.145, 0.145, 0.145, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(700.0, 48.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 2.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                image: preset_icon_a.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(26.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                image: preset_icon_b.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(26.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(15.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(12.5),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.62, 0.62, 0.62, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.145, 0.145, 0.145, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(700.0, 48.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 2.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                image: preset_icon_a.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(26.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                image: preset_icon_b.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(26.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(15.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(12.5),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.62, 0.62, 0.62, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.145, 0.145, 0.145, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(700.0, 48.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 2.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                image: preset_icon_a.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(26.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                image: preset_icon_b.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(26.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(15.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(12.5),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.62, 0.62, 0.62, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.145, 0.145, 0.145, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::new(700.0, 48.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(12.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 2.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                image: preset_icon_a.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(26.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0),
+                                                image: preset_icon_b.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(26.0)),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(15.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(12.5),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.62, 0.62, 0.62, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER_LEFT,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.176, 0.176, 0.176, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(32.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(10.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 2.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("^")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(14.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Sprite {
+                                                color: bevy::color::Color::srgba(0.176, 0.176, 0.176, 1.0),
+                                                image: round_solid.clone(),
+                                                custom_size: std::option::Option::Some(bevy::math::Vec2::splat(32.0)),
+                                                image_mode: bevy::sprite::SpriteImageMode::Sliced(
+                                                    bevy::sprite::TextureSlicer {
+                                                        border: bevy::sprite::BorderRect::all(10.0),
+                                                        center_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        sides_scale_mode:
+                                                            bevy::sprite::SliceScaleMode::Stretch,
+                                                        max_corner_scale: 1.0,
+                                                    },
+                                                ),
+                                                ..bevy::sprite::Sprite::default()
+                                            },
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 2.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
+                                    commands
+                                        .spawn((
+                                            bevy::sprite::Text2d(std::string::String::from("v")),
+                                            bevy::text::TextFont {
+                                                font_size: bevy::text::FontSize::Px(14.0),
+                                                weight: bevy::text::FontWeight::MEDIUM,
+                                                ..bevy::text::TextFont::default()
+                                            },
+                                            bevy::text::TextColor(bevy::color::Color::srgba(0.937, 0.937, 0.937, 1.0)),
+                                            bevy::text::TextBounds::UNBOUNDED,
+                                            bevy::text::TextLayout::no_wrap(),
+                                            bevy::sprite::Anchor::CENTER,
+                                            bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
+                                            bevy::camera::visibility::Visibility::Hidden,
+                                        ))
+                                        .id(),
                                         .id(),
                                 ]);
 
@@ -1826,6 +3132,9 @@ fn main() {
                                     anim_state.2[3] = 0.0;
                                     app_state[0] = 1u8;
                                     app_state[2] = 0u8;
+                                    *draft_state = (std::string::String::new(), 0u16, false);
+                                    feedback_state.0 = 0u8;
+                                    feedback_state.2 = 0u8;
                                 } else if !escape_state.1
                                     && started.elapsed().as_secs_f64() >= 7.0f64
                                 {
@@ -1856,7 +3165,7 @@ fn main() {
                     ui_entities
                         .as_ref()
                         .into_iter()
-                        .for_each(|entities: &[bevy::ecs::entity::Entity; 45]| {
+                        .for_each(|entities: &[bevy::ecs::entity::Entity; 110]| {
                             layout_info
                                 .get(entities[5])
                                 .into_iter()
@@ -1971,12 +3280,12 @@ fn main() {
                         bevy::math::Rect::from_center_size(
                             metrics_state.2 * 0.5,
                             bevy::math::Vec2::new(
-                                (metrics_state.2.x * 0.38)
-                                    .clamp(360.0, 560.0)
-                                    .min((metrics_state.2.x - 48.0).max(180.0)),
-                                (metrics_state.2.y * 0.36)
-                                    .clamp(240.0, 360.0)
-                                    .min((metrics_state.2.y - 48.0).max(140.0)),
+                                (metrics_state.2.x * 0.42)
+                                    .clamp(420.0, 620.0)
+                                    .min((metrics_state.2.x - 48.0).max(200.0)),
+                                (metrics_state.2.y * 0.62)
+                                    .clamp(380.0, 560.0)
+                                    .min((metrics_state.2.y - 48.0).max(200.0)),
                             ),
                         ),
                         (*dot_state)
@@ -2017,222 +3326,676 @@ fn main() {
                                 ))
                                 .for_each(|launch_rect: bevy::math::Rect| {
                                     std::iter::once((
-                                        app_state[0],
-                                        app_state[1] == 0u8,
-                                        app_state[2] != 0u8,
+                                        modal_rect.min.x,
+                                        modal_rect.min.y,
+                                        modal_rect.max.x,
+                                        modal_rect.max.y,
                                     ))
-                                    .for_each(
-                                        |(cur_mode, cur_menu, cur_modal): (u8, bool, bool)| {
-                                            std::iter::once(
-                                                match if !window.focused {
-                                                    std::option::Option::None
-                                                } else if cur_modal && cur_mode == 2u8 {
-                                                    if modal_rect.contains(dot_pos)
-                                                        && ((dot_pos.x - modal_rect.center().x)
-                                                            .abs()
-                                                            - (modal_rect.width() * 0.5 - 14.0))
-                                                            .max(0.0)
-                                                            .hypot(
-                                                                ((dot_pos.y
-                                                                    - modal_rect.center().y)
-                                                                    .abs()
-                                                                    - (modal_rect.height() * 0.5
-                                                                        - 14.0))
-                                                                    .max(0.0),
-                                                            )
-                                                            <= 14.0
-                                                    {
-                                                        std::option::Option::None
-                                                    } else {
-                                                        std::option::Option::Some(4u8)
-                                                    }
-                                                } else if cur_mode != 2u8 {
-                                                    if cur_menu
-                                                        && row_one_rect.contains(dot_pos)
-                                                        && ((dot_pos.x - row_one_rect.center().x)
-                                                            .abs()
-                                                            - (row_one_rect.width() * 0.5 - 9.0))
-                                                            .max(0.0)
-                                                            .hypot(
-                                                                ((dot_pos.y
-                                                                    - row_one_rect.center().y)
-                                                                    .abs()
-                                                                    - (row_one_rect.height() * 0.5
-                                                                        - 9.0))
-                                                                    .max(0.0),
-                                                            )
-                                                            <= 9.0
-                                                    {
-                                                        std::option::Option::Some(0u8)
-                                                    } else if cur_menu
-                                                        && row_two_rect.contains(dot_pos)
-                                                        && ((dot_pos.x - row_two_rect.center().x)
-                                                            .abs()
-                                                            - (row_two_rect.width() * 0.5 - 9.0))
-                                                            .max(0.0)
-                                                            .hypot(
-                                                                ((dot_pos.y
-                                                                    - row_two_rect.center().y)
-                                                                    .abs()
-                                                                    - (row_two_rect.height() * 0.5
-                                                                        - 9.0))
-                                                                    .max(0.0),
-                                                            )
-                                                            <= 9.0
-                                                    {
-                                                        std::option::Option::Some(1u8)
-                                                    } else if cur_mode == 1u8
-                                                        && metrics_state.0 > 0.0
-                                                        && launch_rect.contains(dot_pos)
-                                                        && ((dot_pos.x - launch_rect.center().x)
-                                                            .abs()
-                                                            - (launch_rect.width() * 0.5 - 9.0))
-                                                            .max(0.0)
-                                                            .hypot(
-                                                                ((dot_pos.y
-                                                                    - launch_rect.center().y)
-                                                                    .abs()
-                                                                    - (launch_rect.height() * 0.5
-                                                                        - 9.0))
-                                                                    .max(0.0),
-                                                            )
-                                                            <= 9.0
-                                                    {
-                                                        std::option::Option::Some(2u8)
-                                                    } else {
-                                                        std::option::Option::None
-                                                    }
-                                                } else if cur_menu
-                                                    && row_one_rect.contains(dot_pos)
-                                                    && ((dot_pos.x - row_one_rect.center().x)
-                                                        .abs()
-                                                        - (row_one_rect.width() * 0.5 - 9.0))
-                                                        .max(0.0)
-                                                        .hypot(
-                                                            ((dot_pos.y - row_one_rect.center().y)
-                                                                .abs()
-                                                                - (row_one_rect.height() * 0.5
-                                                                    - 9.0))
-                                                                .max(0.0),
-                                                        )
-                                                        <= 9.0
-                                                {
-                                                    std::option::Option::Some(3u8)
-                                                } else {
-                                                    std::option::Option::None
-                                                } {
-                                                    std::option::Option::Some(0u8 | 1u8 | 3u8)
-                                                        if !(bevy::math::Rect::new(
-                                                            0.0, 0.0, sw, vh,
-                                                        )
-                                                        .contains(dot_pos)
-                                                            && (dot_pos.x - (sw - 14.0))
-                                                                .max(0.0)
-                                                                .hypot(
-                                                                    ((dot_pos.y - vh * 0.5).abs()
-                                                                        - (vh * 0.5 - 14.0))
-                                                                        .max(0.0),
-                                                                )
-                                                                <= 14.0) =>
-                                                    {
-                                                        std::option::Option::None
-                                                    }
-                                                    other => other,
-                                                },
-                                            )
-                                            .for_each(|hit_target: std::option::Option<u8>| {
+                                    .for_each(|(ml, mt, mr, mb): (f32, f32, f32, f32)| {
+                                        std::iter::once((
+                                            bevy::math::Rect::new(
+                                                mr - 148.0,
+                                                mb - 72.0,
+                                                mr - 28.0,
+                                                mb - 28.0,
+                                            ),
+                                            bevy::math::Rect::new(
+                                                ml + 28.0,
+                                                mb - 72.0,
+                                                ml + 132.0,
+                                                mb - 28.0,
+                                            ),
+                                            bevy::math::Rect::new(
+                                                ml + 28.0,
+                                                mt + 214.0,
+                                                mr - 28.0,
+                                                mt + 260.0,
+                                            ),
+                                            [
+                                                bevy::math::Rect::from_center_size(
+                                                    bevy::math::Vec2::new(ml + 62.0, mt + 150.0),
+                                                    bevy::math::Vec2::splat(68.0),
+                                                ),
+                                                bevy::math::Rect::from_center_size(
+                                                    bevy::math::Vec2::new(ml + 146.0, mt + 150.0),
+                                                    bevy::math::Vec2::splat(68.0),
+                                                ),
+                                            ],
+                                            [
+                                                bevy::math::Rect::new(
+                                                    ml + 28.0,
+                                                    mt + 85.0,
+                                                    mr - 28.0,
+                                                    mt + 131.0,
+                                                ),
+                                                bevy::math::Rect::new(
+                                                    ml + 28.0,
+                                                    mt + 139.0,
+                                                    mr - 28.0,
+                                                    mt + 185.0,
+                                                ),
+                                                bevy::math::Rect::new(
+                                                    ml + 28.0,
+                                                    mt + 193.0,
+                                                    mr - 28.0,
+                                                    mt + 239.0,
+                                                ),
+                                            ],
+                                            [
+                                                bevy::math::Rect::new(
+                                                    ml + 46.0,
+                                                    mt + 247.0,
+                                                    mr - 46.0,
+                                                    mt + 287.0,
+                                                ),
+                                                bevy::math::Rect::new(
+                                                    ml + 46.0,
+                                                    mt + 295.0,
+                                                    mr - 46.0,
+                                                    mt + 335.0,
+                                                ),
+                                            ],
+                                            [
+                                                bevy::math::Rect::new(
+                                                    panel_rect.min.x + 28.0,
+                                                    122.0,
+                                                    panel_rect.max.x - 28.0,
+                                                    170.0,
+                                                ),
+                                                bevy::math::Rect::new(
+                                                    panel_rect.min.x + 28.0,
+                                                    178.0,
+                                                    panel_rect.max.x - 28.0,
+                                                    226.0,
+                                                ),
+                                                bevy::math::Rect::new(
+                                                    panel_rect.min.x + 28.0,
+                                                    234.0,
+                                                    panel_rect.max.x - 28.0,
+                                                    282.0,
+                                                ),
+                                                bevy::math::Rect::new(
+                                                    panel_rect.min.x + 28.0,
+                                                    290.0,
+                                                    panel_rect.max.x - 28.0,
+                                                    338.0,
+                                                ),
+                                                bevy::math::Rect::new(
+                                                    panel_rect.min.x + 28.0,
+                                                    346.0,
+                                                    panel_rect.max.x - 28.0,
+                                                    394.0,
+                                                ),
+                                                bevy::math::Rect::new(
+                                                    panel_rect.min.x + 28.0,
+                                                    402.0,
+                                                    panel_rect.max.x - 28.0,
+                                                    450.0,
+                                                ),
+                                            ],
+                                            [
+                                                bevy::math::Rect::from_center_size(
+                                                    bevy::math::Vec2::new(
+                                                        panel_rect.max.x - 104.0,
+                                                        486.0,
+                                                    ),
+                                                    bevy::math::Vec2::splat(32.0),
+                                                ),
+                                                bevy::math::Rect::from_center_size(
+                                                    bevy::math::Vec2::new(
+                                                        panel_rect.max.x - 64.0,
+                                                        486.0,
+                                                    ),
+                                                    bevy::math::Vec2::splat(32.0),
+                                                ),
+                                            ],
+                                        ))
+                                        .for_each(
+                                            |(
+                                                next_rect,
+                                                back_rect,
+                                                field_rect,
+                                                icon_rects,
+                                                type_rects,
+                                                dim_rects,
+                                                row_rects,
+                                                scroll_rects,
+                                            ): (
+                                                bevy::math::Rect,
+                                                bevy::math::Rect,
+                                                bevy::math::Rect,
+                                                [bevy::math::Rect; 2],
+                                                [bevy::math::Rect; 3],
+                                                [bevy::math::Rect; 2],
+                                                [bevy::math::Rect; 6],
+                                                [bevy::math::Rect; 2],
+                                            )| {
                                                 std::iter::once(
-                                                    if !escape_state.3
-                                                        && focus_state.3
-                                                        && tap_state.1
-                                                        && (focus_state.1 & 64u16) == 0
-                                                    {
-                                                        match hit_target {
-                                                            std::option::Option::Some(0u8) => {
-                                                                (0u8, cur_menu, false)
-                                                            }
-                                                            std::option::Option::Some(1u8) => {
-                                                                (1u8, cur_menu, false)
-                                                            }
-                                                            std::option::Option::Some(2u8)
-                                                                if cur_mode == 1u8
-                                                                    && !cur_modal =>
-                                                            {
-                                                                *escape_state = (
-                                                                    std::option::Option::None,
-                                                                    false,
-                                                                    keys.pressed(
-                                                                        bevy::input::keyboard::KeyCode::Escape,
-                                                                    ),
-                                                                    escape_state.3,
-                                                                );
-                                                                (2u8, cur_menu, false)
-                                                            }
-                                                            std::option::Option::Some(3u8)
-                                                                if cur_mode == 2u8
-                                                                    && !cur_modal =>
-                                                            {
-                                                                (2u8, cur_menu, true)
-                                                            }
-                                                            std::option::Option::Some(4u8)
-                                                                if cur_mode == 2u8
-                                                                    && cur_modal =>
-                                                            {
-                                                                (2u8, cur_menu, false)
-                                                            }
-                                                            _ => (cur_mode, cur_menu, cur_modal),
-                                                        }
+                                                    if !window.focused {
+                                                        std::option::Option::None
+                                                    } else if cur_modal {
+                                                        [
+                                                            (
+                                                                5u8,
+                                                                icon_rects[0],
+                                                                16.0f32,
+                                                                wizard_state.0 == 0u8,
+                                                            ),
+                                                            (
+                                                                6u8,
+                                                                icon_rects[1],
+                                                                16.0f32,
+                                                                wizard_state.0 == 0u8,
+                                                            ),
+                                                            (
+                                                                7u8,
+                                                                field_rect,
+                                                                12.0f32,
+                                                                wizard_state.0 == 0u8,
+                                                            ),
+                                                            (8u8, next_rect, 12.0f32, true),
+                                                            (
+                                                                14u8,
+                                                                back_rect,
+                                                                12.0f32,
+                                                                wizard_state.0 == 1u8,
+                                                            ),
+                                                            (
+                                                                9u8,
+                                                                type_rects[0],
+                                                                12.0f32,
+                                                                wizard_state.0 == 1u8,
+                                                            ),
+                                                            (
+                                                                10u8,
+                                                                type_rects[1],
+                                                                12.0f32,
+                                                                wizard_state.0 == 1u8,
+                                                            ),
+                                                            (
+                                                                11u8,
+                                                                type_rects[2],
+                                                                12.0f32,
+                                                                wizard_state.0 == 1u8,
+                                                            ),
+                                                            (
+                                                                12u8,
+                                                                dim_rects[0],
+                                                                12.0f32,
+                                                                wizard_state.0 == 1u8
+                                                                    && wizard_state.2 == 3u8,
+                                                            ),
+                                                            (
+                                                                13u8,
+                                                                dim_rects[1],
+                                                                12.0f32,
+                                                                wizard_state.0 == 1u8
+                                                                    && wizard_state.2 == 3u8,
+                                                            ),
+                                                            (
+                                                                4u8,
+                                                                modal_rect,
+                                                                14.0f32,
+                                                                !modal_rect.contains(dot_pos)
+                                                                    || ((dot_pos.x
+                                                                        - modal_rect.center().x)
+                                                                        .abs()
+                                                                        - (modal_rect.width()
+                                                                            * 0.5
+                                                                            - 14.0))
+                                                                        .max(0.0)
+                                                                        .hypot(
+                                                                            ((dot_pos.y
+                                                                                - modal_rect
+                                                                                    .center()
+                                                                                    .y)
+                                                                                .abs()
+                                                                                - (modal_rect
+                                                                                    .height()
+                                                                                    * 0.5
+                                                                                    - 14.0))
+                                                                                .max(0.0),
+                                                                        )
+                                                                        > 14.0,
+                                                            ),
+                                                        ]
+                                                        .into_iter()
+                                                        .filter(
+                                                            |(
+                                                                _code,
+                                                                rect,
+                                                                radius,
+                                                                enabled,
+                                                            ): &(
+                                                                u8,
+                                                                bevy::math::Rect,
+                                                                f32,
+                                                                bool,
+                                                            )| {
+                                                                *enabled
+                                                                    && rect.contains(dot_pos)
+                                                                    && ((dot_pos.x
+                                                                        - rect.center().x)
+                                                                        .abs()
+                                                                        - (rect.width() * 0.5
+                                                                            - radius))
+                                                                        .max(0.0)
+                                                                        .hypot(
+                                                                            ((dot_pos.y
+                                                                                - rect.center().y)
+                                                                                .abs()
+                                                                                - (rect.height()
+                                                                                    * 0.5
+                                                                                    - radius))
+                                                                                .max(0.0),
+                                                                        )
+                                                                        <= radius
+                                                            },
+                                                        )
+                                                        .map(
+                                                            |(code, _r, _rad, _e): (
+                                                                u8,
+                                                                bevy::math::Rect,
+                                                                f32,
+                                                                bool,
+                                                            )| code,
+                                                        )
+                                                        .next()
+                                                    } else if cur_mode == 2u8 {
+                                                        [
+                                                            (
+                                                                3u8,
+                                                                row_two_rect,
+                                                                9.0f32,
+                                                                cur_menu,
+                                                            ),
+                                                            (
+                                                                15u8,
+                                                                scroll_rects[0],
+                                                                10.0f32,
+                                                                catalog_state.0.len() > 6usize,
+                                                            ),
+                                                            (
+                                                                16u8,
+                                                                scroll_rects[1],
+                                                                10.0f32,
+                                                                catalog_state.0.len() > 6usize,
+                                                            ),
+                                                        ]
+                                                        .into_iter()
+                                                        .filter(
+                                                            |(
+                                                                _code,
+                                                                rect,
+                                                                radius,
+                                                                enabled,
+                                                            ): &(
+                                                                u8,
+                                                                bevy::math::Rect,
+                                                                f32,
+                                                                bool,
+                                                            )| {
+                                                                *enabled
+                                                                    && rect.contains(dot_pos)
+                                                                    && ((dot_pos.x
+                                                                        - rect.center().x)
+                                                                        .abs()
+                                                                        - (rect.width() * 0.5
+                                                                            - radius))
+                                                                        .max(0.0)
+                                                                        .hypot(
+                                                                            ((dot_pos.y
+                                                                                - rect.center().y)
+                                                                                .abs()
+                                                                                - (rect.height()
+                                                                                    * 0.5
+                                                                                    - radius))
+                                                                                .max(0.0),
+                                                                        )
+                                                                        <= radius
+                                                            },
+                                                        )
+                                                        .map(
+                                                            |(code, _r, _rad, _e): (
+                                                                u8,
+                                                                bevy::math::Rect,
+                                                                f32,
+                                                                bool,
+                                                            )| code,
+                                                        )
+                                                        .next()
                                                     } else {
-                                                        (cur_mode, cur_menu, cur_modal)
+                                                        [
+                                                            (0u8, row_one_rect, 9.0f32, cur_menu),
+                                                            (1u8, row_two_rect, 9.0f32, cur_menu),
+                                                            (
+                                                                2u8,
+                                                                launch_rect,
+                                                                9.0f32,
+                                                                cur_mode == 1u8
+                                                                    && metrics_state.0 > 0.0,
+                                                            ),
+                                                        ]
+                                                        .into_iter()
+                                                        .filter(
+                                                            |(
+                                                                _code,
+                                                                rect,
+                                                                radius,
+                                                                enabled,
+                                                            ): &(
+                                                                u8,
+                                                                bevy::math::Rect,
+                                                                f32,
+                                                                bool,
+                                                            )| {
+                                                                *enabled
+                                                                    && rect.contains(dot_pos)
+                                                                    && ((dot_pos.x
+                                                                        - rect.center().x)
+                                                                        .abs()
+                                                                        - (rect.width() * 0.5
+                                                                            - radius))
+                                                                        .max(0.0)
+                                                                        .hypot(
+                                                                            ((dot_pos.y
+                                                                                - rect.center().y)
+                                                                                .abs()
+                                                                                - (rect.height()
+                                                                                    * 0.5
+                                                                                    - radius))
+                                                                                .max(0.0),
+                                                                        )
+                                                                        <= radius
+                                                            },
+                                                        )
+                                                        .map(
+                                                            |(code, _r, _rad, _e): (
+                                                                u8,
+                                                                bevy::math::Rect,
+                                                                f32,
+                                                                bool,
+                                                            )| code,
+                                                        )
+                                                        .next()
                                                     },
                                                 )
                                                 .for_each(
-                                                    |(next_mode, next_menu, next_modal): (
-                                                        u8,
-                                                        bool,
-                                                        bool,
-                                                    )| {
-                                                        *app_state = [
-                                                            next_mode,
-                                                            u8::from(!next_menu),
-                                                            u8::from(next_modal),
-                                                            if !window.focused || next_modal {
-                                                                0u8
-                                                            } else {
-                                                                match hit_target {
-                                                                    std::option::Option::Some(0u8)
-                                                                        if next_mode != 2u8
-                                                                            && next_menu =>
+                                                    |hit_target: std::option::Option<u8>| {
+                                                        std::iter::once(match hit_target {
+                                                            std::option::Option::Some(
+                                                                0u8 | 1u8 | 3u8,
+                                                            ) if !(bevy::math::Rect::new(
+                                                                0.0, 0.0, sw, vh,
+                                                            )
+                                                            .contains(dot_pos)
+                                                                && (dot_pos.x - (sw - 14.0))
+                                                                    .max(0.0)
+                                                                    .hypot(
+                                                                        ((dot_pos.y
+                                                                            - vh * 0.5)
+                                                                            .abs()
+                                                                            - (vh * 0.5 - 14.0))
+                                                                            .max(0.0),
+                                                                    )
+                                                                    <= 14.0) =>
+                                                            {
+                                                                std::option::Option::None
+                                                            }
+                                                            other => other,
+                                                        })
+                                                        .for_each(
+                                                            |hit_target: std::option::Option<u8>| {
+                                                                std::iter::once(
+                                                                    if !escape_state.3
+                                                                        && focus_state.3
+                                                                        && tap_state.1
+                                                                        && (focus_state.1 & 64u16)
+                                                                            == 0
                                                                     {
-                                                                        1u8
-                                                                    }
-                                                                    std::option::Option::Some(1u8)
-                                                                        if next_mode != 2u8
-                                                                            && next_menu =>
-                                                                    {
-                                                                        2u8
-                                                                    }
-                                                                    std::option::Option::Some(2u8)
-                                                                        if next_mode == 1u8 =>
-                                                                    {
-                                                                        3u8
-                                                                    }
-                                                                    std::option::Option::Some(3u8)
-                                                                        if next_mode == 2u8
-                                                                            && next_menu =>
-                                                                    {
-                                                                        4u8
-                                                                    }
-                                                                    _ => 0u8,
-                                                                }
+                                                                        match hit_target {
+                                                                            std::option::Option::Some(0u8) => (0u8, cur_menu, false),
+                                                                            std::option::Option::Some(1u8) => (1u8, cur_menu, false),
+                                                                            std::option::Option::Some(2u8) if cur_mode == 1u8 && !cur_modal => {
+                                                                                *escape_state = (
+                                                                                    std::option::Option::None,
+                                                                                    false,
+                                                                                    keys.pressed(
+                                                                                        bevy::input::keyboard::KeyCode::Escape,
+                                                                                    ),
+                                                                                    escape_state.3,
+                                                                                );
+                                                                                (2u8, cur_menu, false)
+                                                                            }
+                                                                            std::option::Option::Some(3u8) if cur_mode == 2u8 && !cur_modal => {
+                                                                                *wizard_state = (0u8, 0u8, 0u8, 0u8);
+                                                                                *draft_state = (
+                                                                                    std::string::String::new(),
+                                                                                    0u16,
+                                                                                    false,
+                                                                                );
+                                                                                *feedback_state = (0u8, feedback_state.1);
+                                                                                (2u8, cur_menu, true)
+                                                                            }
+                                                                            std::option::Option::Some(4u8) if cur_modal => {
+                                                                                *draft_state = (
+                                                                                    std::string::String::new(),
+                                                                                    0u16,
+                                                                                    false,
+                                                                                );
+                                                                                *feedback_state = (0u8, feedback_state.1);
+                                                                                (2u8, cur_menu, false)
+                                                                            }
+                                                                            std::option::Option::Some(5u8) if cur_modal => {
+                                                                                wizard_state.1 = 0u8;
+                                                                                feedback_state.0 = 0u8;
+                                                                                (cur_mode, cur_menu, cur_modal)
+                                                                            }
+                                                                            std::option::Option::Some(6u8) if cur_modal => {
+                                                                                wizard_state.1 = 1u8;
+                                                                                feedback_state.0 = 0u8;
+                                                                                (cur_mode, cur_menu, cur_modal)
+                                                                            }
+                                                                            std::option::Option::Some(7u8) if cur_modal && wizard_state.0 == 0u8 => {
+                                                                                draft_state.2 = true;
+                                                                                (cur_mode, cur_menu, cur_modal)
+                                                                            }
+                                                                            std::option::Option::Some(9u8) if cur_modal && wizard_state.0 == 1u8 => {
+                                                                                wizard_state.2 = 1u8;
+                                                                                wizard_state.3 = 0u8;
+                                                                                feedback_state.0 = 0u8;
+                                                                                (cur_mode, cur_menu, cur_modal)
+                                                                            }
+                                                                            std::option::Option::Some(10u8) if cur_modal && wizard_state.0 == 1u8 => {
+                                                                                wizard_state.2 = 2u8;
+                                                                                wizard_state.3 = 0u8;
+                                                                                feedback_state.0 = 0u8;
+                                                                                (cur_mode, cur_menu, cur_modal)
+                                                                            }
+                                                                            std::option::Option::Some(11u8) if cur_modal && wizard_state.0 == 1u8 => {
+                                                                                wizard_state.2 = 3u8;
+                                                                                feedback_state.0 = 0u8;
+                                                                                (cur_mode, cur_menu, cur_modal)
+                                                                            }
+                                                                            std::option::Option::Some(12u8) if cur_modal && wizard_state.0 == 1u8 => {
+                                                                                wizard_state.3 = 1u8;
+                                                                                feedback_state.0 = 0u8;
+                                                                                (cur_mode, cur_menu, cur_modal)
+                                                                            }
+                                                                            std::option::Option::Some(13u8) if cur_modal && wizard_state.0 == 1u8 => {
+                                                                                wizard_state.3 = 2u8;
+                                                                                feedback_state.0 = 0u8;
+                                                                                (cur_mode, cur_menu, cur_modal)
+                                                                            }
+                                                                            std::option::Option::Some(14u8) if cur_modal && wizard_state.0 == 1u8 => {
+                                                                                wizard_state.0 = 0u8;
+                                                                                feedback_state.0 = 0u8;
+                                                                                (cur_mode, cur_menu, cur_modal)
+                                                                            }
+                                                                            std::option::Option::Some(15u8) if cur_mode == 2u8 && !cur_modal => {
+                                                                                list_state.0 = list_state.0.saturating_sub(1);
+                                                                                (cur_mode, cur_menu, cur_modal)
+                                                                            }
+                                                                            std::option::Option::Some(16u8) if cur_mode == 2u8 && !cur_modal => {
+                                                                                list_state.0 = (list_state.0 + 1).min(catalog_state.0.len().saturating_sub(6));
+                                                                                (cur_mode, cur_menu, cur_modal)
+                                                                            }
+                                                                            _ => (cur_mode, cur_menu, cur_modal),
+                                                                        }
+                                                                    } else {
+                                                                        (cur_mode, cur_menu, cur_modal)
+                                                                    },
+                                                                )
+                                                                .for_each(
+                                                                    |(next_mode, next_menu, next_modal): (u8, bool, bool)| {
+                                                                        if !escape_state.3
+                                                                            && focus_state.3
+                                                                            && tap_state.1
+                                                                            && (focus_state.1 & 64u16) == 0
+                                                                            && hit_target != std::option::Option::Some(7u8)
+                                                                        {
+                                                                            draft_state.2 = false;
+                                                                        }
+                                                                        *app_state = [
+                                                                            next_mode,
+                                                                            u8::from(!next_menu),
+                                                                            u8::from(next_modal),
+                                                                            if !window.focused {
+                                                                                0u8
+                                                                            } else {
+                                                                                hit_target.map_or(0u8, |code: u8| code + 1)
+                                                                            },
+                                                                        ];
+                                                                        std::iter::once(
+                                                                            if !escape_state.3
+                                                                                && focus_state.3
+                                                                                && tap_state.1
+                                                                                && (focus_state.1 & 64u16) == 0
+                                                                            {
+                                                                                match hit_target {
+                                                                                    std::option::Option::Some(8u8) if cur_modal && wizard_state.0 == 0u8 => 1u8,
+                                                                                    std::option::Option::Some(8u8) if cur_modal && wizard_state.0 == 1u8 => 2u8,
+                                                                                    _ => 0u8,
+                                                                                }
+                                                                            } else {
+                                                                                0u8
+                                                                            },
+                                                                        )
+                                                                        .for_each(|next_intent: u8| {
+                                                                            if next_intent == 1u8 {
+                                                                                std::iter::once(draft_state.0.trim())
+                                                                                    .for_each(|trimmed: &str| {
+                                                                                        feedback_state.0 = if trimmed.is_empty() {
+                                                                                            1u8
+                                                                                        } else if trimmed.chars().count() > 64usize {
+                                                                                            2u8
+                                                                                        } else if trimmed.chars().any(|glyph: char| glyph.is_control()) {
+                                                                                            3u8
+                                                                                        } else if catalog_state.0.iter().any(|(_id, _icon, name, _t, _d): &(u64, u8, std::string::String, u8, u8)| name == trimmed) {
+                                                                                            4u8
+                                                                                        } else {
+                                                                                            0u8
+                                                                                        };
+                                                                                        if feedback_state.0 == 0u8 {
+                                                                                            wizard_state.0 = 1u8;
+                                                                                        }
+                                                                                    });
+                                                                            } else if next_intent == 2u8 {
+                                                                                if wizard_state.2 == 0u8 {
+                                                                                    feedback_state.0 = 5u8;
+                                                                                } else if wizard_state.2 == 3u8 && wizard_state.3 == 0u8 {
+                                                                                    feedback_state.0 = 6u8;
+                                                                                } else if feedback_state.1 != 0u8 {
+                                                                                    feedback_state.0 = 7u8;
+                                                                                } else {
+                                                                                    feedback_state.2 = 1u8;
+                                                                                }
+                                                                            }
+                                                                        });
+                                                                    },
+                                                                );
                                                             },
-                                                        ];
+                                                        );
                                                     },
                                                 );
-                                            });
+                                            },
+                                        );
+                                    });
+                                    std::iter::once(
+                                        if cfg!(target_os = "linux") {
+                                            std::env::var("XDG_DATA_HOME").ok().filter(|root: &std::string::String| std::path::Path::new(root).is_absolute()).map(|root: std::string::String| std::path::PathBuf::from(root)).or_else(|| std::env::var("HOME").ok().map(|home: std::string::String| std::path::PathBuf::from(home).join(".local").join("share")))
+                                        } else if cfg!(target_os = "macos") {
+                                            std::env::var("HOME").ok().map(|home: std::string::String| std::path::PathBuf::from(home).join("Library").join("Application Support"))
+                                        } else {
+                                            std::env::var("APPDATA").ok().map(|root: std::string::String| std::path::PathBuf::from(root)).or_else(|| std::env::var("USERPROFILE").ok().map(|home: std::string::String| std::path::PathBuf::from(home).join("AppData").join("Roaming")))
                                         },
-                                    );
-
+                                    )
+                                    .for_each(|data_root: std::option::Option<std::path::PathBuf>| {
+                                        if app_state[0] != 2u8 {
+                                            catalog_state.1 = app_state[0];
+                                        }
+                                        if data_root.is_none() && app_state[0] == 2u8 {
+                                            feedback_state.1 = 1u8;
+                                        }
+                                        data_root.into_iter().map(|root: std::path::PathBuf| root.join("Subsystem-for-Arxumbra")).for_each(|dir: std::path::PathBuf| {
+                                            if app_state[0] == 2u8 && catalog_state.1 != 2u8 {
+                                                catalog_state.1 = 2u8;
+                                                list_state.0 = 0usize;
+                                                std::fs::remove_file(dir.join("workspace-catalog.tmp")).ok();
+                                                match std::fs::read_to_string(dir.join("workspace-catalog")) {
+                                                    std::result::Result::Ok(stored) => {
+                                                        std::iter::once(stored.lines().collect::<std::vec::Vec<&str>>()).for_each(|lines: std::vec::Vec<&str>| {
+                                                            feedback_state.1 = if lines.first() != std::option::Option::Some(&"arxumbra-workspace-catalog v1") {
+                                                                if lines.first().map_or(false, |head: &&str| head.starts_with("arxumbra-workspace-catalog v")) { 3u8 } else { 2u8 }
+                                                            } else if lines.len() < 2usize || lines[1usize].parse::<usize>().ok() != std::option::Option::Some(lines.len() - 2usize) {
+                                                                2u8
+                                                            } else {
+                                                                lines.iter().skip(2usize).map(|line: &&str| {
+                                                                    std::iter::once(line.split('|').collect::<std::vec::Vec<&str>>()).map(|fields: std::vec::Vec<&str>| {
+                                                                        if fields.len() != 5usize || fields[2usize].is_empty() || fields[2usize].len() % 2usize != 0 {
+                                                                            std::option::Option::None
+                                                                        } else {
+                                                                            fields[0usize].parse::<u64>().ok().and_then(|id: u64| fields[1usize].parse::<u8>().ok().filter(|icon: &u8| *icon <= 1u8).map(|icon: u8| (id, icon))).and_then(|(id, icon): (u64, u8)| fields[2usize].as_bytes().chunks(2usize).map(|pair: &[u8]| std::str::from_utf8(pair).ok().and_then(|hex: &str| u8::from_str_radix(hex, 16u32).ok())).collect::<std::option::Option<std::vec::Vec<u8>>>().and_then(|bytes: std::vec::Vec<u8>| std::string::String::from_utf8(bytes).ok()).filter(|name: &std::string::String| !name.is_empty() && name.chars().count() <= 64usize && !name.chars().any(|glyph: char| glyph.is_control())).map(|name: std::string::String| (id, icon, name))).and_then(|(id, icon, name): (u64, u8, std::string::String)| fields[3usize].parse::<u8>().ok().filter(|kind: &u8| (1u8..=3u8).contains(kind)).map(|kind: u8| (id, icon, name, kind))).and_then(|(id, icon, name, kind): (u64, u8, std::string::String, u8)| fields[4usize].parse::<u8>().ok().filter(|dim: &u8| if kind == 3u8 { (1u8..=2u8).contains(dim) } else { *dim == 0u8 }).map(|dim: u8| (id, icon, name, kind, dim)))
+                                                                        }
+                                                                    }).next().flatten()
+                                                                }).collect::<std::option::Option<std::vec::Vec<(u64, u8, std::string::String, u8, u8)>>>().map_or(2u8, |records: std::vec::Vec<(u64, u8, std::string::String, u8, u8)>| if records.len() > 4096usize { 2u8 } else { catalog_state.0 = records; 0u8 })
+                                                            };
+                                                        });
+                                                    }
+                                                    std::result::Result::Err(unreadable) => {
+                                                        feedback_state.1 = if unreadable.kind() == std::io::ErrorKind::NotFound { catalog_state.0.clear(); 0u8 } else { 5u8 };
+                                                    }
+                                                }
+                                            }
+                                            if feedback_state.2 == 1u8 {
+                                                feedback_state.2 = 0u8;
+                                                std::iter::once((draft_state.0.trim(), catalog_state.0.iter().map(|(id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *id).max().unwrap_or(0u64).saturating_add(1u64)))
+                                                    .map(|(trimmed, new_id): (&str, u64)| (trimmed, new_id, catalog_state.0.iter().cloned().chain(std::iter::once((new_id, wizard_state.1, std::string::String::from(trimmed), wizard_state.2, wizard_state.3))).collect::<std::vec::Vec<(u64, u8, std::string::String, u8, u8)>>()))
+                                                    .map(|(trimmed, new_id, candidate): (&str, u64, std::vec::Vec<(u64, u8, std::string::String, u8, u8)>)| (new_id, candidate, std::format!("arxumbra-workspace-catalog v1\n{}\n", candidate.len()) + &candidate.iter().map(|(id, icon, name, kind, dim): &(u64, u8, std::string::String, u8, u8)| std::format!("{}|{}|{}|{}|{}", id, icon, name.as_bytes().iter().map(|byte: &u8| std::format!("{:02x}", byte)).collect::<std::string::String>(), kind, dim)).collect::<std::vec::Vec<std::string::String>>().join("\n") + "\n"))
+                                                    .for_each(|(new_id, candidate, payload): (u64, std::vec::Vec<(u64, u8, std::string::String, u8, u8)>, std::string::String)| {
+                                                        std::iter::once(std::fs::create_dir_all(&dir).and_then(|()| std::fs::OpenOptions::new().write(true).create_new(true).open(dir.join("workspace-catalog.lock"))).and_then(|held: std::fs::File| std::fs::write(dir.join("workspace-catalog.tmp"), payload.as_bytes()).and_then(|()| std::fs::File::open(dir.join("workspace-catalog.tmp")).and_then(|flushed: std::fs::File| flushed.sync_all())).and_then(|()| std::fs::rename(dir.join("workspace-catalog.tmp"), dir.join("workspace-catalog"))).map(|()| held)))
+                                                            .for_each(|outcome: std::result::Result<std::fs::File, std::io::Error>| {
+                                                                match outcome {
+                                                                    std::result::Result::Ok(held) => {
+                                                                        std::fs::remove_file(dir.join("workspace-catalog.lock")).ok();
+                                                                        std::mem::drop(held);
+                                                                        catalog_state.0 = candidate;
+                                                                        list_state.1 = new_id;
+                                                                        app_state[2usize] = 0u8;
+                                                                        *draft_state = (std::string::String::new(), 0u16, false);
+                                                                        feedback_state.0 = 0u8;
+                                                                    }
+                                                                    std::result::Result::Err(_failure) => {
+                                                                        std::fs::remove_file(dir.join("workspace-catalog.tmp")).ok();
+                                                                        std::fs::remove_file(dir.join("workspace-catalog.lock")).ok();
+                                                                        feedback_state.0 = 8u8;
+                                                                    }
+                                                                }
+                                                            });
+                                                    });
+                                            }
+                                        });
+                                    });
                                     std::iter::once((
                                         app_state[0],
                                         app_state[1] == 0u8,
@@ -2246,7 +4009,7 @@ fn main() {
                                             bool,
                                             u8,
                                         )| {
-                                            [0u8, 1u8, 2u8, 3u8].into_iter().for_each(
+                                            [0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8, 13u8, 14u8, 15u8, 16u8].into_iter().for_each(
                                                 |idx: u8| {
                                                     std::iter::once((
                                                         usize::from(idx),
@@ -2355,6 +4118,31 @@ fn main() {
                                                     if final_menu { 1.0f32 } else { 0.0f32 },
                                                     20.0f32,
                                                 ),
+                                                (
+                                                    5usize,
+                                                    if final_mode == 2u8
+                                                        && final_modal
+                                                        && wizard_state.0 == 1u8
+                                                    {
+                                                        1.0f32
+                                                    } else {
+                                                        0.0f32
+                                                    },
+                                                    24.0f32,
+                                                ),
+                                                (
+                                                    6usize,
+                                                    if final_mode == 2u8
+                                                        && final_modal
+                                                        && wizard_state.0 == 1u8
+                                                        && wizard_state.2 == 3u8
+                                                    {
+                                                        1.0f32
+                                                    } else {
+                                                        0.0f32
+                                                    },
+                                                    24.0f32,
+                                                ),
                                             ]
                                             .into_iter()
                                             .for_each(|(idx, target, rate): (usize, f32, f32)| {
@@ -2379,7 +4167,7 @@ fn main() {
                                             });
 
                                             ui_entities.as_ref().copied().into_iter().for_each(
-                                                |e: [bevy::ecs::entity::Entity; 45]| {
+                                                |e: [bevy::ecs::entity::Entity; 110]| {
                                                     std::iter::once((
                                                         anim_state.2[0],
                                                         anim_state.2[1],
@@ -3268,6 +5056,265 @@ fn main() {
                                                                     ),
                                                                     modal_t > 0.0,
                                                                 ),
+                                                                    (
+                                                                        e[45],
+                                                                        bevy::math::Vec2::splat(44.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 50.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 34.0, 14.0),
+                                                                        bevy::color::Color::srgba(0.133, 0.133, 0.133, modal_t),
+                                                                        modal_t > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[46],
+                                                                        bevy::math::Vec2::splat(24.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 50.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 34.0, 15.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t),
+                                                                        modal_t > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[48],
+                                                                        bevy::math::Vec2::new((modal_rect.width() - 56.0).max(1.0), 1.0),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 68.0, 14.0),
+                                                                        bevy::color::Color::srgba(0.176, 0.176, 0.176, modal_t),
+                                                                        modal_t > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[50],
+                                                                        bevy::math::Vec2::splat(68.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 62.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 150.0, 14.0),
+                                                                        bevy::color::Color::srgba(0.125 + 0.135 * f32::from(wizard_state.1 == 0u8), 0.125 + 0.135 * f32::from(wizard_state.1 == 0u8), 0.125 + 0.135 * f32::from(wizard_state.1 == 0u8), modal_t * (1.0 - anim_state.2[5])),
+                                                                        modal_t > 0.0 && anim_state.2[5] < 1.0,
+                                                                    ),
+                                                                    (
+                                                                        e[51],
+                                                                        bevy::math::Vec2::splat(40.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 62.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 150.0, 15.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * (1.0 - anim_state.2[5])),
+                                                                        modal_t > 0.0 && anim_state.2[5] < 1.0,
+                                                                    ),
+                                                                    (
+                                                                        e[52],
+                                                                        bevy::math::Vec2::splat(68.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 146.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 150.0, 14.0),
+                                                                        bevy::color::Color::srgba(0.125 + 0.135 * f32::from(wizard_state.1 == 1u8), 0.125 + 0.135 * f32::from(wizard_state.1 == 1u8), 0.125 + 0.135 * f32::from(wizard_state.1 == 1u8), modal_t * (1.0 - anim_state.2[5])),
+                                                                        modal_t > 0.0 && anim_state.2[5] < 1.0,
+                                                                    ),
+                                                                    (
+                                                                        e[53],
+                                                                        bevy::math::Vec2::splat(40.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 146.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 150.0, 15.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * (1.0 - anim_state.2[5])),
+                                                                        modal_t > 0.0 && anim_state.2[5] < 1.0,
+                                                                    ),
+                                                                    (
+                                                                        e[55],
+                                                                        bevy::math::Vec2::new((modal_rect.width() - 56.0).max(1.0), 46.0),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 237.0, 14.0),
+                                                                        bevy::color::Color::srgba(0.125, 0.125, 0.125, modal_t * (1.0 - anim_state.2[5])),
+                                                                        modal_t > 0.0 && anim_state.2[5] < 1.0,
+                                                                    ),
+                                                                    (
+                                                                        e[56],
+                                                                        bevy::math::Vec2::new((modal_rect.width() - 56.0).max(1.0), 46.0),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 237.0, 14.5),
+                                                                        bevy::color::Color::srgba(0.78, 0.78, 0.78, modal_t * (1.0 - anim_state.2[5]) * f32::from(draft_state.2 || feedback_state.0 != 0u8)),
+                                                                        modal_t > 0.0 && anim_state.2[5] < 1.0,
+                                                                    ),
+                                                                    (
+                                                                        e[58],
+                                                                        bevy::math::Vec2::new(2.0, 20.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 44.0 + layout_info.get(e[57]).map(|info: &bevy::text::TextLayoutInfo| info.glyphs.get(usize::from(draft_state.1)).map(|glyph: &bevy::text::PositionedGlyph| glyph.position.x).unwrap_or(info.size.x) / info.scale_factor.max(1.0)).unwrap_or(0.0) - vw * 0.5, vh * 0.5 - modal_rect.min.y + 237.0, 15.5),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * (1.0 - anim_state.2[5])),
+                                                                        modal_t > 0.0 && anim_state.2[5] < 1.0 && draft_state.2,
+                                                                    ),
+                                                                    (
+                                                                        e[60],
+                                                                        bevy::math::Vec2::new(120.0, 44.0),
+                                                                        bevy::math::Vec3::new(modal_rect.max.x - 88.0 - vw * 0.5, vh * 0.5 - modal_rect.max.y - 50.0, 14.0),
+                                                                        bevy::color::Color::srgba(0.260 + 0.605 * f32::from(wizard_state.0 == 1u8 && wizard_state.2 != 0u8 && (wizard_state.2 != 3u8 || wizard_state.3 != 0u8) || wizard_state.0 == 0u8 && feedback_state.0 == 0u8), 0.260 + 0.605 * f32::from(wizard_state.0 == 1u8 && wizard_state.2 != 0u8 && (wizard_state.2 != 3u8 || wizard_state.3 != 0u8) || wizard_state.0 == 0u8 && feedback_state.0 == 0u8), 0.260 + 0.605 * f32::from(wizard_state.0 == 1u8 && wizard_state.2 != 0u8 && (wizard_state.2 != 3u8 || wizard_state.3 != 0u8) || wizard_state.0 == 0u8 && feedback_state.0 == 0u8), modal_t),
+                                                                        modal_t > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[62],
+                                                                        bevy::math::Vec2::new((modal_rect.width() - 56.0).max(1.0), 46.0),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 108.0, 14.0),
+                                                                        bevy::color::Color::srgba(0.145 + 0.115 * f32::from(wizard_state.2 == 1u8), 0.145 + 0.115 * f32::from(wizard_state.2 == 1u8), 0.145 + 0.115 * f32::from(wizard_state.2 == 1u8), modal_t * anim_state.2[5]),
+                                                                        modal_t > 0.0 && anim_state.2[5] > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[64],
+                                                                        bevy::math::Vec2::new((modal_rect.width() - 56.0).max(1.0), 46.0),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 162.0, 14.0),
+                                                                        bevy::color::Color::srgba(0.145 + 0.115 * f32::from(wizard_state.2 == 2u8), 0.145 + 0.115 * f32::from(wizard_state.2 == 2u8), 0.145 + 0.115 * f32::from(wizard_state.2 == 2u8), modal_t * anim_state.2[5]),
+                                                                        modal_t > 0.0 && anim_state.2[5] > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[66],
+                                                                        bevy::math::Vec2::new((modal_rect.width() - 56.0).max(1.0), 46.0),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 216.0, 14.0),
+                                                                        bevy::color::Color::srgba(0.145 + 0.115 * f32::from(wizard_state.2 == 3u8), 0.145 + 0.115 * f32::from(wizard_state.2 == 3u8), 0.145 + 0.115 * f32::from(wizard_state.2 == 3u8), modal_t * anim_state.2[5]),
+                                                                        modal_t > 0.0 && anim_state.2[5] > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[68],
+                                                                        bevy::math::Vec2::new((modal_rect.width() - 92.0).max(1.0), 40.0),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 267.0, 14.0),
+                                                                        bevy::color::Color::srgba(0.125 + 0.135 * f32::from(wizard_state.3 == 1u8), 0.125 + 0.135 * f32::from(wizard_state.3 == 1u8), 0.125 + 0.135 * f32::from(wizard_state.3 == 1u8), modal_t * anim_state.2[5] * anim_state.2[6]),
+                                                                        modal_t > 0.0 && anim_state.2[5] > 0.0 && anim_state.2[6] > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[70],
+                                                                        bevy::math::Vec2::new((modal_rect.width() - 92.0).max(1.0), 40.0),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 315.0, 14.0),
+                                                                        bevy::color::Color::srgba(0.125 + 0.135 * f32::from(wizard_state.3 == 2u8), 0.125 + 0.135 * f32::from(wizard_state.3 == 2u8), 0.125 + 0.135 * f32::from(wizard_state.3 == 2u8), modal_t * anim_state.2[5] * anim_state.2[6]),
+                                                                        modal_t > 0.0 && anim_state.2[5] > 0.0 && anim_state.2[6] > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[72],
+                                                                        bevy::math::Vec2::new(104.0, 44.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 80.0 - vw * 0.5, vh * 0.5 - modal_rect.max.y - 50.0, 14.0),
+                                                                        bevy::color::Color::srgba(0.215, 0.215, 0.215, modal_t * anim_state.2[5]),
+                                                                        modal_t > 0.0 && anim_state.2[5] > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[76],
+                                                                        bevy::math::Vec2::new((panel_rect.width() - 56.0).max(1.0), 48.0),
+                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 + 0.0, 2.0),
+                                                                        bevy::color::Color::srgba(0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 0usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 0usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 0usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 0usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[77],
+                                                                        bevy::math::Vec2::splat(26.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 0.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 0usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 0u8),
+                                                                    ),
+                                                                    (
+                                                                        e[78],
+                                                                        bevy::math::Vec2::splat(26.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 0.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 0usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 1u8),
+                                                                    ),
+                                                                    (
+                                                                        e[81],
+                                                                        bevy::math::Vec2::new((panel_rect.width() - 56.0).max(1.0), 48.0),
+                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 + 56.0, 2.0),
+                                                                        bevy::color::Color::srgba(0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 1usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 1usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 1usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 1usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[82],
+                                                                        bevy::math::Vec2::splat(26.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 56.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 1usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 0u8),
+                                                                    ),
+                                                                    (
+                                                                        e[83],
+                                                                        bevy::math::Vec2::splat(26.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 56.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 1usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 1u8),
+                                                                    ),
+                                                                    (
+                                                                        e[86],
+                                                                        bevy::math::Vec2::new((panel_rect.width() - 56.0).max(1.0), 48.0),
+                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 + 112.0, 2.0),
+                                                                        bevy::color::Color::srgba(0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 2usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 2usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 2usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 2usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[87],
+                                                                        bevy::math::Vec2::splat(26.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 112.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 2usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 0u8),
+                                                                    ),
+                                                                    (
+                                                                        e[88],
+                                                                        bevy::math::Vec2::splat(26.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 112.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 2usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 1u8),
+                                                                    ),
+                                                                    (
+                                                                        e[91],
+                                                                        bevy::math::Vec2::new((panel_rect.width() - 56.0).max(1.0), 48.0),
+                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 + 168.0, 2.0),
+                                                                        bevy::color::Color::srgba(0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 3usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 3usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 3usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 3usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[92],
+                                                                        bevy::math::Vec2::splat(26.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 168.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 3usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 0u8),
+                                                                    ),
+                                                                    (
+                                                                        e[93],
+                                                                        bevy::math::Vec2::splat(26.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 168.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 3usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 1u8),
+                                                                    ),
+                                                                    (
+                                                                        e[96],
+                                                                        bevy::math::Vec2::new((panel_rect.width() - 56.0).max(1.0), 48.0),
+                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 + 224.0, 2.0),
+                                                                        bevy::color::Color::srgba(0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 4usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 4usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 4usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 4usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[97],
+                                                                        bevy::math::Vec2::splat(26.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 224.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 4usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 0u8),
+                                                                    ),
+                                                                    (
+                                                                        e[98],
+                                                                        bevy::math::Vec2::splat(26.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 224.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 4usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 1u8),
+                                                                    ),
+                                                                    (
+                                                                        e[101],
+                                                                        bevy::math::Vec2::new((panel_rect.width() - 56.0).max(1.0), 48.0),
+                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 + 280.0, 2.0),
+                                                                        bevy::color::Color::srgba(0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 5usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 5usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 5usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 5usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[102],
+                                                                        bevy::math::Vec2::splat(26.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 280.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 5usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 0u8),
+                                                                    ),
+                                                                    (
+                                                                        e[103],
+                                                                        bevy::math::Vec2::splat(26.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 280.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 5usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 1u8),
+                                                                    ),
+                                                                    (
+                                                                        e[106],
+                                                                        bevy::math::Vec2::splat(32.0),
+                                                                        bevy::math::Vec3::new(panel_rect.max.x - 104.0 - vw * 0.5, vh * 0.5 - 486.0, 2.0),
+                                                                        bevy::color::Color::srgba(0.176, 0.176, 0.176, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.len() > 6usize,
+                                                                    ),
+                                                                    (
+                                                                        e[108],
+                                                                        bevy::math::Vec2::splat(32.0),
+                                                                        bevy::math::Vec3::new(panel_rect.max.x - 64.0 - vw * 0.5, vh * 0.5 - 486.0, 2.0),
+                                                                        bevy::color::Color::srgba(0.176, 0.176, 0.176, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.len() > 6usize,
+                                                                    ),
                                                             ]
                                                             .into_iter()
                                                             .for_each(
@@ -3534,6 +5581,174 @@ fn main() {
                                                                         && panel_t > 0.0
                                                                         && ws_t < 1.0,
                                                                 ),
+                                                                    (
+                                                                        e[47],
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 86.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 34.0, 15.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t),
+                                                                        modal_t > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[49],
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 28.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 104.0, 15.0),
+                                                                        bevy::color::Color::srgba(0.62, 0.62, 0.62, modal_t * (1.0 - anim_state.2[5])),
+                                                                        modal_t > 0.0 && anim_state.2[5] < 1.0,
+                                                                    ),
+                                                                    (
+                                                                        e[54],
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 28.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 200.0, 15.0),
+                                                                        bevy::color::Color::srgba(0.62, 0.62, 0.62, modal_t * (1.0 - anim_state.2[5])),
+                                                                        modal_t > 0.0 && anim_state.2[5] < 1.0,
+                                                                    ),
+                                                                    (
+                                                                        e[57],
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 44.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 237.0, 15.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * (1.0 - anim_state.2[5])),
+                                                                        modal_t > 0.0 && anim_state.2[5] < 1.0,
+                                                                    ),
+                                                                    (
+                                                                        e[59],
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 28.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 276.0, 15.0),
+                                                                        bevy::color::Color::srgba(0.7, 0.7, 0.7, modal_t * (1.0 - anim_state.2[5])),
+                                                                        modal_t > 0.0 && anim_state.2[5] < 1.0 && feedback_state.0 != 0u8,
+                                                                    ),
+                                                                    (
+                                                                        e[61],
+                                                                        bevy::math::Vec3::new(modal_rect.max.x - 88.0 - vw * 0.5, vh * 0.5 - modal_rect.max.y - 50.0, 15.0),
+                                                                        bevy::color::Color::srgba(0.086 + 0.534 * f32::from(!(wizard_state.0 == 1u8 && wizard_state.2 != 0u8 && (wizard_state.2 != 3u8 || wizard_state.3 != 0u8) || wizard_state.0 == 0u8 && feedback_state.0 == 0u8)), 0.086 + 0.534 * f32::from(!(wizard_state.0 == 1u8 && wizard_state.2 != 0u8 && (wizard_state.2 != 3u8 || wizard_state.3 != 0u8) || wizard_state.0 == 0u8 && feedback_state.0 == 0u8)), 0.086 + 0.534 * f32::from(!(wizard_state.0 == 1u8 && wizard_state.2 != 0u8 && (wizard_state.2 != 3u8 || wizard_state.3 != 0u8) || wizard_state.0 == 0u8 && feedback_state.0 == 0u8)), modal_t),
+                                                                        modal_t > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[63],
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 46.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 108.0, 15.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * anim_state.2[5]),
+                                                                        modal_t > 0.0 && anim_state.2[5] > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[65],
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 46.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 162.0, 15.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * anim_state.2[5]),
+                                                                        modal_t > 0.0 && anim_state.2[5] > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[67],
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 46.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 216.0, 15.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * anim_state.2[5]),
+                                                                        modal_t > 0.0 && anim_state.2[5] > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[69],
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 64.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 267.0, 15.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * anim_state.2[5] * anim_state.2[6]),
+                                                                        modal_t > 0.0 && anim_state.2[5] > 0.0 && anim_state.2[6] > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[71],
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 64.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 315.0, 15.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * anim_state.2[5] * anim_state.2[6]),
+                                                                        modal_t > 0.0 && anim_state.2[5] > 0.0 && anim_state.2[6] > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[73],
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 80.0 - vw * 0.5, vh * 0.5 - modal_rect.max.y - 50.0, 15.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * anim_state.2[5]),
+                                                                        modal_t > 0.0 && anim_state.2[5] > 0.0,
+                                                                    ),
+                                                                    (
+                                                                        e[74],
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 28.0 - vw * 0.5, vh * 0.5 - 140.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.62, 0.62, 0.62, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.is_empty() && feedback_state.1 == 0u8,
+                                                                    ),
+                                                                    (
+                                                                        e[75],
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 28.0 - vw * 0.5, vh * 0.5 - 140.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.78, 0.78, 0.78, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && feedback_state.1 != 0u8,
+                                                                    ),
+                                                                    (
+                                                                        e[79],
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 76.0 - vw * 0.5, vh * 0.5 - 138.0.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 0usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[80],
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 76.0 - vw * 0.5, vh * 0.5 - 156.0.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.62, 0.62, 0.62, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 0usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[84],
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 76.0 - vw * 0.5, vh * 0.5 - 194.0.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 1usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[85],
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 76.0 - vw * 0.5, vh * 0.5 - 212.0.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.62, 0.62, 0.62, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 1usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[89],
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 76.0 - vw * 0.5, vh * 0.5 - 250.0.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 2usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[90],
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 76.0 - vw * 0.5, vh * 0.5 - 268.0.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.62, 0.62, 0.62, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 2usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[94],
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 76.0 - vw * 0.5, vh * 0.5 - 306.0.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 3usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[95],
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 76.0 - vw * 0.5, vh * 0.5 - 324.0.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.62, 0.62, 0.62, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 3usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[99],
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 76.0 - vw * 0.5, vh * 0.5 - 362.0.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 4usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[100],
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 76.0 - vw * 0.5, vh * 0.5 - 380.0.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.62, 0.62, 0.62, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 4usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[104],
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 76.0 - vw * 0.5, vh * 0.5 - 418.0.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 5usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[105],
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 76.0 - vw * 0.5, vh * 0.5 - 436.0.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.62, 0.62, 0.62, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 5usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
+                                                                    ),
+                                                                    (
+                                                                        e[107],
+                                                                        bevy::math::Vec3::new(panel_rect.max.x - 104.0 - vw * 0.5, vh * 0.5 - 486.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.len() > 6usize,
+                                                                    ),
+                                                                    (
+                                                                        e[109],
+                                                                        bevy::math::Vec3::new(panel_rect.max.x - 64.0 - vw * 0.5, vh * 0.5 - 486.0, 3.0),
+                                                                        bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
+                                                                        metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.len() > 6usize,
+                                                                    ),
                                                             ]
                                                             .into_iter()
                                                             .for_each(
@@ -3609,6 +5824,103 @@ fn main() {
                                                 },
                                             );
 
+
+                                            [(
+                                                e[57],
+                                                draft_state.0.clone(),
+                                            ), (
+                                                e[59],
+                                                std::string::String::from(match feedback_state.0 {
+                                                    1u8 => "Enter a name",
+                                                    2u8 => "Names are limited to 64 characters",
+                                                    3u8 => "Names cannot contain control characters",
+                                                    4u8 => "That name is already in the workspace",
+                                                    5u8 => "Choose a project type",
+                                                    6u8 => "Choose 2D or 3D for a graphical project",
+                                                    7u8 => "Workspace storage is unavailable",
+                                                    8u8 => "The project could not be saved",
+                                                    _ => "",
+                                                }),
+                                            ), (
+                                                e[75],
+                                                std::string::String::from(match feedback_state.1 {
+                                                    1u8 => "Application data directory unavailable",
+                                                    2u8 => "Saved workspace data is damaged; original file kept",
+                                                    3u8 => "Workspace data uses a newer format; original file kept",
+                                                    5u8 => "Workspace data could not be read",
+                                                    _ => "",
+                                                }),
+                                            )]
+                                            .into_iter()
+                                            .chain(
+                                                [0usize, 1usize, 2usize, 3usize, 4usize, 5usize]
+                                                    .into_iter()
+                                                    .flat_map(|slot: usize| {
+                                                        [
+                                                            (
+                                                                e[79usize + 5usize * slot],
+                                                                catalog_state
+                                                                    .0
+                                                                    .get(list_state.0 + slot)
+                                                                    .map_or(
+                                                                        std::string::String::new(),
+                                                                        |(_id, _icon, name, _kind, _dim): &(
+                                                                            u64,
+                                                                            u8,
+                                                                            std::string::String,
+                                                                            u8,
+                                                                            u8,
+                                                                        )| name.clone(),
+                                                                    ),
+                                                            ),
+                                                            (
+                                                                e[80usize + 5usize * slot],
+                                                                catalog_state
+                                                                    .0
+                                                                    .get(list_state.0 + slot)
+                                                                    .map_or(
+                                                                        std::string::String::new(),
+                                                                        |(_id, _icon, _name, kind, dim): &(
+                                                                            u64,
+                                                                            u8,
+                                                                            std::string::String,
+                                                                            u8,
+                                                                            u8,
+                                                                        )| {
+                                                                            std::string::String::from(
+                                                                                if kind == 1u8 {
+                                                                                    "Operating System"
+                                                                                } else if kind == 2u8 {
+                                                                                    "Command Line Interface"
+                                                                                } else if dim == 1u8 {
+                                                                                    "Graphical User Interface - 2D"
+                                                                                } else {
+                                                                                    "Graphical User Interface - 3D"
+                                                                                },
+                                                                            )
+                                                                        },
+                                                                    ),
+                                                            ),
+                                                        ]
+                                                    }),
+                                            )
+                                            .for_each(
+                                                |(entity, wanted): (
+                                                    bevy::ecs::entity::Entity,
+                                                    std::string::String,
+                                                )| {
+                                                    dynamic_texts
+                                                        .get(entity)
+                                                        .into_iter()
+                                                        .for_each(|body: &bevy::sprite::Text2d| {
+                                                            if body.0 != wanted {
+                                                                commands
+                                                                    .entity(entity)
+                                                                    .insert(bevy::sprite::Text2d(wanted));
+                                                            }
+                                                        });
+                                                },
+                                            );
                                             (*dot_state).into_iter().for_each(
                                                 |(dot_entity, cur_dot_pos, cur_dot_vel, _): (
                                                     bevy::ecs::entity::Entity,
@@ -3665,7 +5977,7 @@ fn main() {
                                                             || anim_state
                                                                 .0
                                                                 .iter()
-                                                                .zip([0u8, 1u8, 2u8, 3u8])
+                                                                .zip(0u8..17u8)
                                                                 .any(|(v, idx): (&f32, u8)| {
                                                                     (*v - f32::from(u8::from(
                                                                         hovered
@@ -3678,7 +5990,7 @@ fn main() {
                                                             || anim_state
                                                                 .1
                                                                 .iter()
-                                                                .zip([0u8, 1u8, 2u8, 3u8])
+                                                                .zip(0u8..17u8)
                                                                 .any(|(v, idx): (&f32, u8)| {
                                                                     (*v - f32::from(u8::from(
                                                                         (hovered
@@ -3731,6 +6043,29 @@ fn main() {
                                                                 > 0.0
                                                             || (anim_state.2[4]
                                                                 - if final_menu {
+                                                                    1.0
+                                                                } else {
+                                                                    0.0
+                                                                })
+                                                                .abs()
+                                                                > 0.0
+                                                            || (anim_state.2[5]
+                                                                - if final_mode == 2u8
+                                                                    && final_modal
+                                                                    && wizard_state.0 == 1u8
+                                                                {
+                                                                    1.0
+                                                                } else {
+                                                                    0.0
+                                                                })
+                                                                .abs()
+                                                                > 0.0
+                                                            || (anim_state.2[6]
+                                                                - if final_mode == 2u8
+                                                                    && final_modal
+                                                                    && wizard_state.0 == 1u8
+                                                                    && wizard_state.2 == 3u8
+                                                                {
                                                                     1.0
                                                                 } else {
                                                                     0.0
