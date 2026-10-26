@@ -273,16 +273,12 @@ jobs:
           timeout 260 bash "${RT}/probe.sh" > "${RT}/probe.log" 2>&1
           hb "probe rc=$?"
           grep -aE '^::' "${RT}/probe.log" | while IFS= read -r line; do echo "${line}"; done
-          grep -aE '^HB ' "${RT}/probe.log" | while IFS= read -r line; do echo "::notice title=hb::${line#HB }"; done
-          hb "verdict alive15s/27s=$(tr ' ' '/' < "${RT}/verdict1" 2>/dev/null)"
-          if [ -s "${RT}/wtail" ]; then
-            while IFS= read -r line; do printf '::notice title=wtype::%s\n' "${line//%/%25}"; done < "${RT}/wtail"
-          fi
-          if [ -s "${RT}/panics" ]; then
-            while IFS= read -r line; do printf '::error title=app-panic::%s\n' "${line//%/%25}"; done < "${RT}/panics"
-          else
-            hb "no panic or error lines in app stderr"
-          fi
+          {
+            grep -aE '^HB ' "${RT}/probe.log" | sed 's/^HB //'
+            if [ -s "${RT}/wtail" ]; then sed 's/^/wtype: /' "${RT}/wtail"; else echo "wtype: no log"; fi
+            if [ -s "${RT}/panics" ]; then sed 's/^/PANIC: /' "${RT}/panics"; else echo "app stderr: no panic or error lines"; fi
+            echo "verdict alive15s/27s=$(tr ' ' '/' < "${RT}/verdict1" 2>/dev/null)"
+          } | tr -d '\000-\010\013\014\016-\037' | cut -c1-220 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=probe-report::${msg}"; done
           if [ "$(cut -d' ' -f1 "${RT}/verdict1" 2>/dev/null)" = "yes" ]; then
             hb "smoke result: application launched and kept running under headless Wayland"
           else
