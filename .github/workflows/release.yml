@@ -181,6 +181,7 @@ jobs:
           BIN="${RUNNER_TEMP}/stage-debug/${NAME}-debug"
           RT="${RUNNER_TEMP}/runtime"
           export RT
+          export BIN
           rm -rf "${RT}"
           mkdir -p "${RT}/xdg" "${RT}/home/.config/sway" "${RT}/home/.local/share"
           chmod 700 "${RT}/xdg"
@@ -208,6 +209,7 @@ jobs:
           sudo ydotoold --socket-path="${RT}/ydo.sock" >> "${RT}/ydo.log" 2>&1 &
           sleep 2
           sudo chmod 666 "${RT}/ydo.sock" 2>/dev/null || true
+          hb "bin=${BIN} present=$(test -x "${BIN}" && echo yes || echo no)"
           cat > "${RT}/probe.sh" <<'PROBE'
           hb() { echo "HB $1"; }
           shot() {
@@ -271,6 +273,7 @@ jobs:
           else
             echo "::error title=runtime::7s Escape hold in Home did not exit the app, or the probe died early"
           fi
+          grep -E "ydotool|uinput|socket" "${RT}/ydo.log" 2>/dev/null | tail -8 | while IFS= read -r line; do printf '::notice title=ydo::%s\n' "${line//%/%25}"; done
           kill ${SWAY_PID} 2>/dev/null || true
           exit 0
       - name: Stage 11
