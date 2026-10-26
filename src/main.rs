@@ -729,7 +729,7 @@ fn main() {
                                     bevy::asset::RenderAssetUsages::RENDER_WORLD,
                                 )
                                 .expect("embedded UI texture must decode"),
-                            )
+                            ),
                             images.add(
                                 bevy::image::Image::from_buffer(
                                     &[
@@ -764,7 +764,7 @@ fn main() {
                                     bevy::asset::RenderAssetUsages::RENDER_WORLD,
                                 )
                                 .expect("embedded UI texture must decode"),
-                            )
+                            ),
                             images.add(
                                 bevy::image::Image::from_buffer(
                                     &[
@@ -794,7 +794,7 @@ fn main() {
                                     bevy::asset::RenderAssetUsages::RENDER_WORLD,
                                 )
                                 .expect("embedded UI texture must decode"),
-                            )
+                            ),
                         ]);
                     }
 
@@ -1894,6 +1894,7 @@ fn main() {
                                             ),
                                             bevy::camera::visibility::Visibility::Hidden,
                                         ))
+                                        .id(),
                                     commands
                                         .spawn((
                                             bevy::sprite::Sprite {
@@ -2983,7 +2984,6 @@ fn main() {
                                             bevy::transform::components::Transform::from_xyz(0.0, 0.0, 3.0),
                                             bevy::camera::visibility::Visibility::Hidden,
                                         ))
-                                        .id(),
                                         .id(),
                                 ]);
 
@@ -5787,7 +5787,13 @@ fn main() {
                                             );
 
 
-                                            [(
+                                            ui_entities
+                                                .as_ref()
+                                                .copied()
+                                                .into_iter()
+                                                .for_each(
+                                                    |e: [bevy::ecs::entity::Entity; 110]| {
+                                                    [(
                                                 e[57],
                                                 draft_state.0.clone(),
                                             ), (
@@ -5881,6 +5887,8 @@ fn main() {
                                                                     .insert(bevy::sprite::Text2d(wanted));
                                                             }
                                                         });
+                                                },
+                                            );
                                                 },
                                             );
                                             (*dot_state).into_iter().for_each(
