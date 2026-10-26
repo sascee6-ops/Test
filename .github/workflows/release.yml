@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - arena/784e0a1e-test
   workflow_dispatch:
     inputs:
       build_mode:
@@ -139,7 +138,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
       - name: Stage 7
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -152,14 +151,14 @@ jobs:
             --config 'profile.dev.debug-assertions=true' \
             --config 'profile.dev.overflow-checks=true'
       - name: Stage 8
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage-debug"
           install -m 755 "${RUNNER_TEMP}/target-debug/x86_64-unknown-linux-gnu/debug/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           tar -czf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz" -C "${RUNNER_TEMP}/stage-debug" "x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 9
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
         shell: bash
         run: |
           tar -tzvf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz"
@@ -173,7 +172,7 @@ jobs:
           file "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           ldd "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 10
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
         shell: bash
         run: |
           set +e +o pipefail
@@ -288,7 +287,7 @@ jobs:
           kill ${SWAY_PID} 2>/dev/null || true
           exit 0
       - name: Stage 11
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug
