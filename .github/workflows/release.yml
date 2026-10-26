@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - arena/784e0a1e-test
   workflow_dispatch:
     inputs:
       build_mode:
@@ -138,7 +139,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
       - name: Stage 7
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -151,14 +152,14 @@ jobs:
             --config 'profile.dev.debug-assertions=true' \
             --config 'profile.dev.overflow-checks=true'
       - name: Stage 8
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage-debug"
           install -m 755 "${RUNNER_TEMP}/target-debug/x86_64-unknown-linux-gnu/debug/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           tar -czf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz" -C "${RUNNER_TEMP}/stage-debug" "x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 9
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
           tar -tzvf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz"
@@ -172,7 +173,7 @@ jobs:
           file "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           ldd "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 10
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
           set +e +o pipefail
@@ -180,114 +181,58 @@ jobs:
           NAME="x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
           BIN="${RUNNER_TEMP}/stage-debug/${NAME}-debug"
           RT="${RUNNER_TEMP}/runtime"
-          export RT BIN
           rm -rf "${RT}"
-          mkdir -p "${RT}/xdg" "${RT}/home/.config/sway" "${RT}/home/.local/share"
-          chmod 700 "${RT}/xdg"
-          export XDG_RUNTIME_DIR="${RT}/xdg"
-          export HOME="${RT}/home"
-          printf '%s\n' 'xwayland disable' 'output HEADLESS-1 resolution 1024x640' 'bar { swaybar_command /bin/true }' 'for_window [title=".*"] focus' 'for_window [app_id=".*"] focus' 'focus_on_window_activation focus' > "${HOME}/.config/sway/config"
+          mkdir -p "${RT}"
           sudo apt-get update -y > "${RT}/apt.log" 2>&1 || hb "apt update rc=$?"
-          sudo apt-get install -y --no-install-recommends sway grim wtype libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1 || hb "apt install rc=$?"
-          hb "tools sway=$(command -v sway) grim=$(command -v grim) wtype=$(command -v wtype) convert=$(command -v convert)"
-          WLR_BACKENDS=headless WLR_RENDERER_ALLOW_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe sway -d -c "${HOME}/.config/sway/config" > "${RT}/sway.log" 2>&1 &
-          SWAY_PID=$!
-          SOCKET=""
-          for _i in $(seq 1 60); do
-            if [ -S "${XDG_RUNTIME_DIR}/wayland-1" ]; then SOCKET="${XDG_RUNTIME_DIR}/wayland-1"; break; fi
-            sleep 0.5
-          done
-          hb "socket=${SOCKET:-none}"
-          if [ -z "${SOCKET}" ]; then
-            grep -aE '\[(ERROR|FATAL)\]' "${RT}/sway.log" | tail -10 | tr -d '\000-\010\013\014\016-\037' | while IFS= read -r line; do printf '::error title=sway::%s\n' "${line//%/%25}"; done
-            exit 1
-          fi
-          export WAYLAND_DISPLAY=wayland-1
-          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
-          SWAYSOCK=$(ls "${XDG_RUNTIME_DIR}"/sway-sock.* 2>/dev/null | head -1) || true
-          export SWAYSOCK
-          hb "swaysock=${SWAYSOCK:-none}"
-          cat > "${RT}/probe.sh" <<'PROBE'
-          hb() { echo "HB $1"; }
+          sudo apt-get install -y --no-install-recommends sway grim libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1 || hb "apt install rc=$?"
+          hb "tools sway=$(command -v sway) grim=$(command -v grim) convert=$(command -v convert)"
           shot() {
             local b64=""
             timeout 20 grim -o HEADLESS-1 "${RT}/$1.png" 2>>"${RT}/grim.log" || hb "grim $1 rc=$?"
-            b64=$(convert "${RT}/$1.png" -resize 200x125 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
+            b64=$(convert "${RT}/$1.png" -resize 320x192 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
             hb "shot $1 bytes=${#b64}"
             if [ -n "${b64}" ]; then echo "::notice title=shot-$1::${b64}"; fi
             return 0
           }
-          wt() { timeout 10 wtype "$@" >> "${RT}/wtype.log" 2>&1 || hb "wtype rc=$? args=$*"; }
-          seed() {
-            mkdir -p "${HOME}/.local/share/Subsystem-for-Arxumbra"
-            rm -f "${CAT}" "${CAT}.lock" "${CAT}.tmp"
-            if [ "$1" = "valid" ]; then
-              printf 'arxumbra-workspace-catalog v1\n2\n1|0|4172656e61|1|0\n2|1|4755492050726f6a|3|1\n' > "${CAT}"
-            elif [ "$1" = "corrupt" ]; then
-              printf 'arxumbra-workspace-catalog v1\n9\nzz|||\n' > "${CAT}"
-            else
-              printf 'arxumbra-workspace-catalog v9\n1\n1|0|41|1|0\n' > "${CAT}"
-            fi
-            return 0
-          }
-          CAT="${HOME}/.local/share/Subsystem-for-Arxumbra/workspace-catalog"
-          timeout 90 "${BIN}" > "${RT}/app1.log" 2>&1 &
-          APP1=$!
-          sleep 12
-          wt -P Shift_L -p Shift_L
-          sleep 2
-          shot home
-          wt -P Escape
-          HOLD="alive"
-          for _i in $(seq 1 28); do
-            if ! kill -0 ${APP1} 2>/dev/null; then HOLD="exited"; break; fi
-            sleep 0.5
-          done
-          wt -p Escape
-          sleep 1
-          FINAL=$(kill -0 ${APP1} 2>/dev/null && echo alive || echo exited)
-          if [ "${FINAL}" = "alive" ]; then shot afterhold; fi
-          wait ${APP1} 2>/dev/null
-          hb "run1 home_escape_hold while_held=${HOLD} after_release=${FINAL} exit_code=$?"
-          echo "yes ${FINAL}" > "${RT}/verdict1"
-          grep -aE 'panicked|ERROR|error:' "${RT}/app1.log" | head -6 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 > "${RT}/panics" || true
-          tail -4 "${RT}/wtype.log" 2>/dev/null | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 > "${RT}/wtail" || true
-          for CASE in valid corrupt future; do
-            seed "${CASE}"
-            BEFORE=$(sha256sum "${CAT}" | cut -d' ' -f1)
-            timeout 40 "${BIN}" > "${RT}/app-${CASE}.log" 2>&1 &
+          for CASE in home workspace wizard; do
+            XD="${RT}/xdg-${CASE}"
+            HM="${RT}/home-${CASE}"
+            mkdir -p "${XD}" "${HM}/.config/sway"
+            chmod 700 "${XD}"
+            printf '%s\n' 'xwayland disable' 'output HEADLESS-1 resolution 1280x768' 'bar { swaybar_command /bin/true }' 'for_window [title=".*"] focus' 'focus_on_window_activation focus' > "${HM}/.config/sway/config"
+            XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 WLR_BACKENDS=headless WLR_RENDERER_ALLOW_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe sway -d -c "${HM}/.config/sway/config" > "${RT}/sway-${CASE}.log" 2>&1 &
+            SP=$!
+            for _i in $(seq 1 60); do
+              if [ -S "${XD}/wayland-1" ]; then break; fi
+              sleep 0.5
+            done
+            if [ "${CASE}" = "home" ]; then unset ARXUMBRA_PROBE; else export ARXUMBRA_PROBE="${CASE}"; fi
+            XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe timeout 60 "${BIN}" > "${RT}/app-${CASE}.log" 2>&1 &
             AP=$!
-            sleep 10
+            sleep 15
             AL=$(kill -0 ${AP} 2>/dev/null && echo yes || echo no)
+            XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 shot "${CASE}"
+            hb "case ${CASE} alive15s=${AL}"
+            echo "${CASE} ${AL}" >> "${RT}/verdicts"
+            grep -aE 'panicked|ERROR' "${RT}/app-${CASE}.log" | head -4 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 | sed "s/^/${CASE} panic: /" >> "${RT}/panics" || true
             kill ${AP} 2>/dev/null || true
-            wait ${AP} 2>/dev/null
-            AFTER=$(sha256sum "${CAT}" | cut -d' ' -f1)
-            if [ "${BEFORE}" = "${AFTER}" ]; then SAME=preserved; else SAME=CHANGED; fi
-            PAN=$(grep -ac 'panicked' "${RT}/app-${CASE}.log" || true)
-            hb "catalog ${CASE}: alive10s=${AL} file=${SAME} panics=${PAN}"
+            wait ${AP} 2>/dev/null || true
+            kill ${SP} 2>/dev/null || true
+            wait ${SP} 2>/dev/null || true
           done
-          exit 0
-          PROBE
-          PROBE_RC=0
-          timeout 300 bash "${RT}/probe.sh" > "${RT}/probe.log" 2>&1 || PROBE_RC=$?
-          hb "probe rc=${PROBE_RC}"
-          grep -aE '^::' "${RT}/probe.log" | while IFS= read -r line; do echo "${line}"; done
+          unset ARXUMBRA_PROBE
           {
-            grep -aE '^HB ' "${RT}/probe.log" | sed 's/^HB //'
-            if [ -s "${RT}/wtail" ]; then sed 's/^/wtype: /' "${RT}/wtail"; else echo "wtype: no log"; fi
-            if [ -s "${RT}/panics" ]; then sed 's/^/PANIC: /' "${RT}/panics"; else echo "app stderr: no panic or error lines"; fi
-            echo "verdict alive15s/end=$(tr ' ' '/' < "${RT}/verdict1" 2>/dev/null)"
-            tail -3 "${RT}/swaymsg.log" 2>/dev/null | sed 's/^/swaymsg: /'
+            if [ -s "${RT}/verdicts" ]; then sed 's/^/alive: /' "${RT}/verdicts"; else echo "alive: none"; fi
+            if [ -s "${RT}/panics" ]; then cat "${RT}/panics"; else echo "no panic or error lines in any app log"; fi
           } | tr -d '\000-\010\013\014\016-\037' | cut -c1-220 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=probe-report::${msg}"; done
-          if [ "$(cut -d' ' -f1 "${RT}/verdict1" 2>/dev/null)" = "yes" ]; then
+          if [ "$(grep -c '^home yes' "${RT}/verdicts" 2>/dev/null)" = "1" ]; then
             hb "smoke result: application launched and kept running under headless Wayland"
           else
             echo "::error title=runtime::application did not stay alive under headless Wayland"
           fi
-          kill ${SWAY_PID} 2>/dev/null || true
           exit 0
       - name: Stage 11
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug

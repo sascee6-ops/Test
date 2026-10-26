@@ -24,11 +24,11 @@ fn main() {
                     position: bevy::window::WindowPosition::Automatic,
                     resolution: bevy::window::WindowResolution::new(1920, 1080),
                     title: std::string::String::from(if cfg!(target_os = "linux") {
-                        "Linux-Subsystem-for-Arxumbra"
+                        "Subsystem for Arxumbra"
                     } else if cfg!(target_os = "macos") {
-                        "macOS-Subsystem-for-Arxumbra"
+                        "Subsystem for Arxumbra"
                     } else {
-                        "Windows-Subsystem-for-Arxumbra"
+                        "Subsystem for Arxumbra"
                     }),
                     name: std::option::Option::Some(std::string::String::from(
                         "Subsystem-for-Arxumbra",
@@ -940,11 +940,11 @@ fn main() {
                                         .spawn((
                                             bevy::sprite::Text2d(std::string::String::from(
                                                 if cfg!(target_os = "linux") {
-                                                    "Linux-Subsystem-for-Arxumbra"
+                                                    "Subsystem for Arxumbra"
                                                 } else if cfg!(target_os = "macos") {
-                                                    "macOS-Subsystem-for-Arxumbra"
+                                                    "Subsystem for Arxumbra"
                                                 } else {
-                                                    "Windows-Subsystem-for-Arxumbra"
+                                                    "Subsystem for Arxumbra"
                                                 },
                                             )),
                                             bevy::text::TextFont {
@@ -3258,6 +3258,23 @@ fn main() {
                         },
                     );
 
+                    if cfg!(debug_assertions) {
+                        std::env::var("ARXUMBRA_PROBE")
+                            .ok()
+                            .into_iter()
+                            .for_each(|probe: std::string::String| {
+                                if probe == "workspace" || probe == "wizard" {
+                                    app_state[0] = 2u8;
+                                    app_state[1] = 0u8;
+                                }
+                                if probe == "wizard" {
+                                    app_state[2] = 1u8;
+                                    draft_state.0 = std::string::String::from("Arena Test");
+                                    draft_state.1 = 10u16;
+                                    draft_state.2 = true;
+                                }
+                            });
+                    }
                     std::iter::once((
                         metrics_state.2.x,
                         metrics_state.2.y,
@@ -5025,245 +5042,245 @@ fn main() {
                                                                     (
                                                                         e[45],
                                                                         bevy::math::Vec2::splat(44.0),
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 50.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 34.0, 14.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 50.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 34.0, 14.0),
                                                                         bevy::color::Color::srgba(0.133, 0.133, 0.133, modal_t),
                                                                         modal_t > 0.0,
                                                                     ),
                                                                     (
                                                                         e[46],
                                                                         bevy::math::Vec2::splat(24.0),
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 50.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 34.0, 15.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 50.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 34.0, 15.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t),
                                                                         modal_t > 0.0,
                                                                     ),
                                                                     (
                                                                         e[48],
                                                                         bevy::math::Vec2::new((modal_rect.width() - 56.0).max(1.0), 1.0),
-                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 68.0, 14.0),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y - 68.0, 14.0),
                                                                         bevy::color::Color::srgba(0.176, 0.176, 0.176, modal_t),
                                                                         modal_t > 0.0,
                                                                     ),
                                                                     (
                                                                         e[50],
                                                                         bevy::math::Vec2::splat(68.0),
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 62.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 150.0, 14.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 62.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 150.0, 14.0),
                                                                         bevy::color::Color::srgba(0.125 + 0.135 * f32::from(wizard_state.1 == 0u8), 0.125 + 0.135 * f32::from(wizard_state.1 == 0u8), 0.125 + 0.135 * f32::from(wizard_state.1 == 0u8), modal_t * (1.0 - anim_state.2[5])),
                                                                         modal_t > 0.0 && anim_state.2[5] < 1.0,
                                                                     ),
                                                                     (
                                                                         e[51],
                                                                         bevy::math::Vec2::splat(40.0),
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 62.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 150.0, 15.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 62.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 150.0, 15.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * (1.0 - anim_state.2[5])),
                                                                         modal_t > 0.0 && anim_state.2[5] < 1.0,
                                                                     ),
                                                                     (
                                                                         e[52],
                                                                         bevy::math::Vec2::splat(68.0),
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 146.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 150.0, 14.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 146.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 150.0, 14.0),
                                                                         bevy::color::Color::srgba(0.125 + 0.135 * f32::from(wizard_state.1 == 1u8), 0.125 + 0.135 * f32::from(wizard_state.1 == 1u8), 0.125 + 0.135 * f32::from(wizard_state.1 == 1u8), modal_t * (1.0 - anim_state.2[5])),
                                                                         modal_t > 0.0 && anim_state.2[5] < 1.0,
                                                                     ),
                                                                     (
                                                                         e[53],
                                                                         bevy::math::Vec2::splat(40.0),
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 146.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 150.0, 15.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 146.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 150.0, 15.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * (1.0 - anim_state.2[5])),
                                                                         modal_t > 0.0 && anim_state.2[5] < 1.0,
                                                                     ),
                                                                     (
                                                                         e[55],
                                                                         bevy::math::Vec2::new((modal_rect.width() - 56.0).max(1.0), 46.0),
-                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 237.0, 14.0),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y - 237.0, 14.0),
                                                                         bevy::color::Color::srgba(0.125, 0.125, 0.125, modal_t * (1.0 - anim_state.2[5])),
                                                                         modal_t > 0.0 && anim_state.2[5] < 1.0,
                                                                     ),
                                                                     (
                                                                         e[56],
                                                                         bevy::math::Vec2::new((modal_rect.width() - 56.0).max(1.0), 46.0),
-                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 237.0, 14.5),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y - 237.0, 14.5),
                                                                         bevy::color::Color::srgba(0.78, 0.78, 0.78, modal_t * (1.0 - anim_state.2[5]) * f32::from(draft_state.2 || feedback_state.0 != 0u8)),
                                                                         modal_t > 0.0 && anim_state.2[5] < 1.0,
                                                                     ),
                                                                     (
                                                                         e[58],
                                                                         bevy::math::Vec2::new(2.0, 20.0),
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 44.0 + layout_info.get(e[57]).map(|info: &bevy::text::TextLayoutInfo| info.glyphs.get(usize::from(draft_state.1)).map(|glyph: &bevy::text::PositionedGlyph| glyph.position.x).unwrap_or(info.size.x) / info.scale_factor.max(1.0)).unwrap_or(0.0) - vw * 0.5, vh * 0.5 - modal_rect.min.y + 237.0, 15.5),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 44.0 + layout_info.get(e[57]).map(|info: &bevy::text::TextLayoutInfo| info.glyphs.get(usize::from(draft_state.1)).map(|glyph: &bevy::text::PositionedGlyph| glyph.position.x).unwrap_or(info.size.x) / info.scale_factor.max(1.0)).unwrap_or(0.0) - vw * 0.5, vh * 0.5 - modal_rect.min.y - 237.0, 15.5),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * (1.0 - anim_state.2[5])),
                                                                         modal_t > 0.0 && anim_state.2[5] < 1.0 && draft_state.2,
                                                                     ),
                                                                     (
                                                                         e[60],
                                                                         bevy::math::Vec2::new(120.0, 44.0),
-                                                                        bevy::math::Vec3::new(modal_rect.max.x - 88.0 - vw * 0.5, vh * 0.5 - modal_rect.max.y - 50.0, 14.0),
+                                                                        bevy::math::Vec3::new(modal_rect.max.x - 88.0 - vw * 0.5, vh * 0.5 - modal_rect.max.y + 50.0, 14.0),
                                                                         bevy::color::Color::srgba(0.260 + 0.605 * f32::from(wizard_state.0 == 1u8 && wizard_state.2 != 0u8 && (wizard_state.2 != 3u8 || wizard_state.3 != 0u8) || wizard_state.0 == 0u8 && feedback_state.0 == 0u8), 0.260 + 0.605 * f32::from(wizard_state.0 == 1u8 && wizard_state.2 != 0u8 && (wizard_state.2 != 3u8 || wizard_state.3 != 0u8) || wizard_state.0 == 0u8 && feedback_state.0 == 0u8), 0.260 + 0.605 * f32::from(wizard_state.0 == 1u8 && wizard_state.2 != 0u8 && (wizard_state.2 != 3u8 || wizard_state.3 != 0u8) || wizard_state.0 == 0u8 && feedback_state.0 == 0u8), modal_t),
                                                                         modal_t > 0.0,
                                                                     ),
                                                                     (
                                                                         e[62],
                                                                         bevy::math::Vec2::new((modal_rect.width() - 56.0).max(1.0), 46.0),
-                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 108.0, 14.0),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y - 108.0, 14.0),
                                                                         bevy::color::Color::srgba(0.145 + 0.115 * f32::from(wizard_state.2 == 1u8), 0.145 + 0.115 * f32::from(wizard_state.2 == 1u8), 0.145 + 0.115 * f32::from(wizard_state.2 == 1u8), modal_t * anim_state.2[5]),
                                                                         modal_t > 0.0 && anim_state.2[5] > 0.0,
                                                                     ),
                                                                     (
                                                                         e[64],
                                                                         bevy::math::Vec2::new((modal_rect.width() - 56.0).max(1.0), 46.0),
-                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 162.0, 14.0),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y - 162.0, 14.0),
                                                                         bevy::color::Color::srgba(0.145 + 0.115 * f32::from(wizard_state.2 == 2u8), 0.145 + 0.115 * f32::from(wizard_state.2 == 2u8), 0.145 + 0.115 * f32::from(wizard_state.2 == 2u8), modal_t * anim_state.2[5]),
                                                                         modal_t > 0.0 && anim_state.2[5] > 0.0,
                                                                     ),
                                                                     (
                                                                         e[66],
                                                                         bevy::math::Vec2::new((modal_rect.width() - 56.0).max(1.0), 46.0),
-                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 216.0, 14.0),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y - 216.0, 14.0),
                                                                         bevy::color::Color::srgba(0.145 + 0.115 * f32::from(wizard_state.2 == 3u8), 0.145 + 0.115 * f32::from(wizard_state.2 == 3u8), 0.145 + 0.115 * f32::from(wizard_state.2 == 3u8), modal_t * anim_state.2[5]),
                                                                         modal_t > 0.0 && anim_state.2[5] > 0.0,
                                                                     ),
                                                                     (
                                                                         e[68],
                                                                         bevy::math::Vec2::new((modal_rect.width() - 92.0).max(1.0), 40.0),
-                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 267.0, 14.0),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y - 267.0, 14.0),
                                                                         bevy::color::Color::srgba(0.125 + 0.135 * f32::from(wizard_state.3 == 1u8), 0.125 + 0.135 * f32::from(wizard_state.3 == 1u8), 0.125 + 0.135 * f32::from(wizard_state.3 == 1u8), modal_t * anim_state.2[5] * anim_state.2[6]),
                                                                         modal_t > 0.0 && anim_state.2[5] > 0.0 && anim_state.2[6] > 0.0,
                                                                     ),
                                                                     (
                                                                         e[70],
                                                                         bevy::math::Vec2::new((modal_rect.width() - 92.0).max(1.0), 40.0),
-                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y + 315.0, 14.0),
+                                                                        bevy::math::Vec3::new(modal_rect.center().x - vw * 0.5, vh * 0.5 - modal_rect.min.y - 315.0, 14.0),
                                                                         bevy::color::Color::srgba(0.125 + 0.135 * f32::from(wizard_state.3 == 2u8), 0.125 + 0.135 * f32::from(wizard_state.3 == 2u8), 0.125 + 0.135 * f32::from(wizard_state.3 == 2u8), modal_t * anim_state.2[5] * anim_state.2[6]),
                                                                         modal_t > 0.0 && anim_state.2[5] > 0.0 && anim_state.2[6] > 0.0,
                                                                     ),
                                                                     (
                                                                         e[72],
                                                                         bevy::math::Vec2::new(104.0, 44.0),
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 80.0 - vw * 0.5, vh * 0.5 - modal_rect.max.y - 50.0, 14.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 80.0 - vw * 0.5, vh * 0.5 - modal_rect.max.y + 50.0, 14.0),
                                                                         bevy::color::Color::srgba(0.215, 0.215, 0.215, modal_t * anim_state.2[5]),
                                                                         modal_t > 0.0 && anim_state.2[5] > 0.0,
                                                                     ),
                                                                     (
                                                                         e[76],
                                                                         bevy::math::Vec2::new((panel_rect.width() - 56.0).max(1.0), 48.0),
-                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 + 0.0, 2.0),
+                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 - 0.0, 2.0),
                                                                         bevy::color::Color::srgba(0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 0usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 0usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 0usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 0usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
                                                                     ),
                                                                     (
                                                                         e[77],
                                                                         bevy::math::Vec2::splat(26.0),
-                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 0.0, 3.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 - 0.0, 3.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 0usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 0u8),
                                                                     ),
                                                                     (
                                                                         e[78],
                                                                         bevy::math::Vec2::splat(26.0),
-                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 0.0, 3.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 - 0.0, 3.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 0usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 1u8),
                                                                     ),
                                                                     (
                                                                         e[81],
                                                                         bevy::math::Vec2::new((panel_rect.width() - 56.0).max(1.0), 48.0),
-                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 + 56.0, 2.0),
+                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 - 56.0, 2.0),
                                                                         bevy::color::Color::srgba(0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 1usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 1usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 1usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 1usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
                                                                     ),
                                                                     (
                                                                         e[82],
                                                                         bevy::math::Vec2::splat(26.0),
-                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 56.0, 3.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 - 56.0, 3.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 1usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 0u8),
                                                                     ),
                                                                     (
                                                                         e[83],
                                                                         bevy::math::Vec2::splat(26.0),
-                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 56.0, 3.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 - 56.0, 3.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 1usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 1u8),
                                                                     ),
                                                                     (
                                                                         e[86],
                                                                         bevy::math::Vec2::new((panel_rect.width() - 56.0).max(1.0), 48.0),
-                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 + 112.0, 2.0),
+                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 - 112.0, 2.0),
                                                                         bevy::color::Color::srgba(0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 2usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 2usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 2usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 2usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
                                                                     ),
                                                                     (
                                                                         e[87],
                                                                         bevy::math::Vec2::splat(26.0),
-                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 112.0, 3.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 - 112.0, 3.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 2usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 0u8),
                                                                     ),
                                                                     (
                                                                         e[88],
                                                                         bevy::math::Vec2::splat(26.0),
-                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 112.0, 3.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 - 112.0, 3.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 2usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 1u8),
                                                                     ),
                                                                     (
                                                                         e[91],
                                                                         bevy::math::Vec2::new((panel_rect.width() - 56.0).max(1.0), 48.0),
-                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 + 168.0, 2.0),
+                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 - 168.0, 2.0),
                                                                         bevy::color::Color::srgba(0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 3usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 3usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 3usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 3usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
                                                                     ),
                                                                     (
                                                                         e[92],
                                                                         bevy::math::Vec2::splat(26.0),
-                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 168.0, 3.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 - 168.0, 3.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 3usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 0u8),
                                                                     ),
                                                                     (
                                                                         e[93],
                                                                         bevy::math::Vec2::splat(26.0),
-                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 168.0, 3.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 - 168.0, 3.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 3usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 1u8),
                                                                     ),
                                                                     (
                                                                         e[96],
                                                                         bevy::math::Vec2::new((panel_rect.width() - 56.0).max(1.0), 48.0),
-                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 + 224.0, 2.0),
+                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 - 224.0, 2.0),
                                                                         bevy::color::Color::srgba(0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 4usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 4usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 4usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 4usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
                                                                     ),
                                                                     (
                                                                         e[97],
                                                                         bevy::math::Vec2::splat(26.0),
-                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 224.0, 3.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 - 224.0, 3.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 4usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 0u8),
                                                                     ),
                                                                     (
                                                                         e[98],
                                                                         bevy::math::Vec2::splat(26.0),
-                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 224.0, 3.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 - 224.0, 3.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 4usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 1u8),
                                                                     ),
                                                                     (
                                                                         e[101],
                                                                         bevy::math::Vec2::new((panel_rect.width() - 56.0).max(1.0), 48.0),
-                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 + 280.0, 2.0),
+                                                                        bevy::math::Vec3::new(panel_rect.center().x - vw * 0.5, vh * 0.5 - 146.0 - 280.0, 2.0),
                                                                         bevy::color::Color::srgba(0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 5usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 5usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), 0.145 + 0.075 * f32::from(catalog_state.0.get(list_state.0 + 5usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_id == list_state.1)), ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 5usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| true),
                                                                     ),
                                                                     (
                                                                         e[102],
                                                                         bevy::math::Vec2::splat(26.0),
-                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 280.0, 3.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 - 280.0, 3.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 5usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 0u8),
                                                                     ),
                                                                     (
                                                                         e[103],
                                                                         bevy::math::Vec2::splat(26.0),
-                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 + 280.0, 3.0),
+                                                                        bevy::math::Vec3::new(panel_rect.min.x + 52.0 - vw * 0.5, vh * 0.5 - 146.0 - 280.0, 3.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, ws_t * panel_t),
                                                                         metrics_state.0 > 0.0 && panel_t > 0.0 && ws_t > 0.0 && final_mode == 2u8 && !final_modal && catalog_state.0.get(list_state.0 + 5usize).map_or(false, |(_id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *_icon == 1u8),
                                                                     ),
@@ -5549,73 +5566,73 @@ fn main() {
                                                                 ),
                                                                     (
                                                                         e[47],
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 86.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 34.0, 15.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 86.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 34.0, 15.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t),
                                                                         modal_t > 0.0,
                                                                     ),
                                                                     (
                                                                         e[49],
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 28.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 104.0, 15.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 28.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 104.0, 15.0),
                                                                         bevy::color::Color::srgba(0.62, 0.62, 0.62, modal_t * (1.0 - anim_state.2[5])),
                                                                         modal_t > 0.0 && anim_state.2[5] < 1.0,
                                                                     ),
                                                                     (
                                                                         e[54],
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 28.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 200.0, 15.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 28.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 200.0, 15.0),
                                                                         bevy::color::Color::srgba(0.62, 0.62, 0.62, modal_t * (1.0 - anim_state.2[5])),
                                                                         modal_t > 0.0 && anim_state.2[5] < 1.0,
                                                                     ),
                                                                     (
                                                                         e[57],
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 44.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 237.0, 15.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 44.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 237.0, 15.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * (1.0 - anim_state.2[5])),
                                                                         modal_t > 0.0 && anim_state.2[5] < 1.0,
                                                                     ),
                                                                     (
                                                                         e[59],
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 28.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 276.0, 15.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 28.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 276.0, 15.0),
                                                                         bevy::color::Color::srgba(0.7, 0.7, 0.7, modal_t * (1.0 - anim_state.2[5])),
                                                                         modal_t > 0.0 && anim_state.2[5] < 1.0 && feedback_state.0 != 0u8,
                                                                     ),
                                                                     (
                                                                         e[61],
-                                                                        bevy::math::Vec3::new(modal_rect.max.x - 88.0 - vw * 0.5, vh * 0.5 - modal_rect.max.y - 50.0, 15.0),
+                                                                        bevy::math::Vec3::new(modal_rect.max.x - 88.0 - vw * 0.5, vh * 0.5 - modal_rect.max.y + 50.0, 15.0),
                                                                         bevy::color::Color::srgba(0.086 + 0.534 * f32::from(!(wizard_state.0 == 1u8 && wizard_state.2 != 0u8 && (wizard_state.2 != 3u8 || wizard_state.3 != 0u8) || wizard_state.0 == 0u8 && feedback_state.0 == 0u8)), 0.086 + 0.534 * f32::from(!(wizard_state.0 == 1u8 && wizard_state.2 != 0u8 && (wizard_state.2 != 3u8 || wizard_state.3 != 0u8) || wizard_state.0 == 0u8 && feedback_state.0 == 0u8)), 0.086 + 0.534 * f32::from(!(wizard_state.0 == 1u8 && wizard_state.2 != 0u8 && (wizard_state.2 != 3u8 || wizard_state.3 != 0u8) || wizard_state.0 == 0u8 && feedback_state.0 == 0u8)), modal_t),
                                                                         modal_t > 0.0,
                                                                     ),
                                                                     (
                                                                         e[63],
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 46.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 108.0, 15.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 46.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 108.0, 15.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * anim_state.2[5]),
                                                                         modal_t > 0.0 && anim_state.2[5] > 0.0,
                                                                     ),
                                                                     (
                                                                         e[65],
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 46.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 162.0, 15.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 46.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 162.0, 15.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * anim_state.2[5]),
                                                                         modal_t > 0.0 && anim_state.2[5] > 0.0,
                                                                     ),
                                                                     (
                                                                         e[67],
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 46.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 216.0, 15.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 46.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 216.0, 15.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * anim_state.2[5]),
                                                                         modal_t > 0.0 && anim_state.2[5] > 0.0,
                                                                     ),
                                                                     (
                                                                         e[69],
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 64.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 267.0, 15.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 64.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 267.0, 15.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * anim_state.2[5] * anim_state.2[6]),
                                                                         modal_t > 0.0 && anim_state.2[5] > 0.0 && anim_state.2[6] > 0.0,
                                                                     ),
                                                                     (
                                                                         e[71],
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 64.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y + 315.0, 15.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 64.0 - vw * 0.5, vh * 0.5 - modal_rect.min.y - 315.0, 15.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * anim_state.2[5] * anim_state.2[6]),
                                                                         modal_t > 0.0 && anim_state.2[5] > 0.0 && anim_state.2[6] > 0.0,
                                                                     ),
                                                                     (
                                                                         e[73],
-                                                                        bevy::math::Vec3::new(modal_rect.min.x + 80.0 - vw * 0.5, vh * 0.5 - modal_rect.max.y - 50.0, 15.0),
+                                                                        bevy::math::Vec3::new(modal_rect.min.x + 80.0 - vw * 0.5, vh * 0.5 - modal_rect.max.y + 50.0, 15.0),
                                                                         bevy::color::Color::srgba(0.937, 0.937, 0.937, modal_t * anim_state.2[5]),
                                                                         modal_t > 0.0 && anim_state.2[5] > 0.0,
                                                                     ),
