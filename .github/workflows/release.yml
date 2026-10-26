@@ -207,11 +207,7 @@ jobs:
           cat > "${RT}/probe.sh" <<'PROBE'
           hb() { echo "HB $1"; }
           focuspid() {
-            swaymsg -t get_tree 2>/dev/null | python3 -c 'import json,sys
-def walk(n):
-    if n.get("focused"): print(n.get("pid"), n.get("name"), n.get("app_id"))
-    for c in n.get("nodes", []) + n.get("floating_nodes", []): walk(c)
-walk(json.load(sys.stdin))' 2>>"${RT}/swaymsg.log"
+            swaymsg -t get_tree 2>/dev/null | jq -r '.. | objects | select(has("focused")) | select(.focused) | "\(.pid) \(.name) \(.app_id)"' 2>>"${RT}/swaymsg.log" | head -2
           }
           shot() {
             local b64=""
