@@ -5371,12 +5371,12 @@ fn main() {
                                                                             std::format!(
                                                                                 "shown={} a={:.3} size={:.0},{:.0} pos={:.0},{:.0} got={}\n",
                                                                                 shown,
-                                                                                colour.alpha(),
+                                                                                colour.as_srgba().alpha,
                                                                                 size.x,
                                                                                 size.y,
                                                                                 pos.x,
                                                                                 pos.y,
-                                                                                sprites.get(entity).is_some()
+                                                                                sprites.get(entity).is_ok()
                                                                             ),
                                                                         )
                                                                         .ok();
