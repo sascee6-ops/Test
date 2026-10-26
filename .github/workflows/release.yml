@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - arena/784e0a1e-test
   workflow_dispatch:
     inputs:
       build_mode:
@@ -138,7 +139,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
       - name: Stage 7
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -151,14 +152,14 @@ jobs:
             --config 'profile.dev.debug-assertions=true' \
             --config 'profile.dev.overflow-checks=true'
       - name: Stage 8
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage-debug"
           install -m 755 "${RUNNER_TEMP}/target-debug/x86_64-unknown-linux-gnu/debug/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           tar -czf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz" -C "${RUNNER_TEMP}/stage-debug" "x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 9
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
           tar -tzvf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz"
@@ -172,7 +173,87 @@ jobs:
           file "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           ldd "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 10
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
+        shell: bash
+        run: |
+          set -u
+          NAME="x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
+          BIN="${RUNNER_TEMP}/stage-debug/${NAME}-debug"
+          RT="${RUNNER_TEMP}/runtime"
+          rm -rf "${RT}"
+          mkdir -p "${RT}/xdg" "${RT}/home/.config/sway" "${RT}/home/.local/share"
+          chmod 700 "${RT}/xdg"
+          export XDG_RUNTIME_DIR="${RT}/xdg"
+          export HOME="${RT}/home"
+          printf '%s\n' 'xwayland disable' 'output HEADLESS-1 resolution 1280x800' 'bar { swaybar_command /bin/true }' > "${HOME}/.config/sway/config"
+          sudo apt-get update -y > "${RT}/apt.log" 2>&1
+          sudo apt-get install -y --no-install-recommends sway wtype grim libegl1 libgles2 libgl1 libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1
+          echo "::notice title=runtime::apt_rc=$? sway=$(command -v sway) wtype=$(command -v wtype) grim=$(command -v grim) convert=$(command -v convert)"
+          WLR_BACKENDS=headless WLR_LIBINPUT_BACKENDS=libinput WLR_RENDERER_ALLOW_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe sway -V debug > "${RT}/sway.log" 2>&1 &
+          SWAY_PID=$!
+          SOCKET=""
+          for _i in $(seq 1 60); do
+            if [ -S "${XDG_RUNTIME_DIR}/wayland-1" ]; then SOCKET="${XDG_RUNTIME_DIR}/wayland-1"; break; fi
+            sleep 0.5
+          done
+          echo "::notice title=runtime::socket=${SOCKET:-none} sway_pid=${SWAY_PID}"
+          if [ -z "${SOCKET}" ]; then
+            echo "::error title=runtime::headless compositor did not start"
+            tail -40 "${RT}/sway.log" | while IFS= read -r line; do printf '::error title=sway::%s\n' "${line//%/%25}"; done
+            exit 1
+          fi
+          export WAYLAND_DISPLAY=wayland-1
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          shot() {
+            grim -o HEADLESS-1 "${RT}/$1.png" 2>>"${RT}/grim.log"
+            convert "${RT}/$1.png" -resize 200x125 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0
+          }
+          relay() {
+            tail -30 "$1" | while IFS= read -r line; do printf "::notice title=$2::%s\n" "${line//%/%25}"; done
+          }
+          timeout 90 "${BIN}" > "${RT}/app1.log" 2>&1 &
+          APP1=$!
+          sleep 18
+          echo "::notice title=shot-home::$(shot home)"
+          wtype -P ctrl -P e -p e -p ctrl
+          sleep 4
+          echo "::notice title=shot-wizard::$(shot wizard)"
+          wtype -s 40 'Arena Test'
+          sleep 3
+          echo "::notice title=shot-typed::$(shot typed)"
+          wtype -P escape
+          sleep 7
+          echo "::notice title=shot-after-escape::$(shot escaped)"
+          WIZARD_ALIVE=$(kill -0 ${APP1} 2>/dev/null && echo alive || echo exited)
+          wtype -p escape
+          sleep 1
+          kill ${APP1} 2>/dev/null
+          wait ${APP1} 2>/dev/null
+          echo "::notice title=runtime::run1 alive_after_7s_escape_in_wizard=${WIZARD_ALIVE}"
+          relay "${RT}/app1.log" app1
+          timeout 60 "${BIN}" > "${RT}/app2.log" 2>&1 &
+          APP2=$!
+          sleep 15
+          wtype -P escape
+          HOLD_EXIT="alive"
+          for _i in $(seq 1 24); do
+            if ! kill -0 ${APP2} 2>/dev/null; then HOLD_EXIT="exited"; break; fi
+            sleep 0.5
+          done
+          wtype -p escape 2>/dev/null
+          sleep 1
+          FINAL=$(kill -0 ${APP2} 2>/dev/null && echo alive || echo exited)
+          wait ${APP2} 2>/dev/null
+          RC2=$?
+          echo "::notice title=runtime::run2 escape_hold_while_held=${HOLD_EXIT} after_release=${FINAL} exit_code=${RC2}"
+          relay "${RT}/app2.log" app2
+          relay "${RT}/grim.log" grim
+          kill ${SWAY_PID} 2>/dev/null
+          if [ "${HOLD_EXIT}" != "exited" ]; then
+            echo "::error title=runtime::continuing 7s Escape hold in Home did not exit the application"
+          fi
+      - name: Stage 11
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug
