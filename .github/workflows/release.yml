@@ -187,7 +187,7 @@ jobs:
           chmod 700 "${RT}/xdg"
           export XDG_RUNTIME_DIR="${RT}/xdg"
           export HOME="${RT}/home"
-          printf '%s\n' 'xwayland disable' 'output HEADLESS-1 resolution 1024x640' 'bar { swaybar_command /bin/true }' > "${HOME}/.config/sway/config"
+          printf '%s\n' 'xwayland disable' 'output HEADLESS-1 resolution 1024x640' 'bar { swaybar_command /bin/true }' 'for_window [title=".*"] focus' 'for_window [app_id=".*"] focus' 'focus_on_window_activation focus' > "${HOME}/.config/sway/config"
           sudo apt-get update -y > "${RT}/apt.log" 2>&1 || hb "apt update rc=$?"
           sudo apt-get install -y --no-install-recommends sway grim wtype libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1 || hb "apt install rc=$?"
           hb "tools sway=$(command -v sway) grim=$(command -v grim) wtype=$(command -v wtype) convert=$(command -v convert)"
@@ -210,9 +210,6 @@ jobs:
           hb "swaysock=${SWAYSOCK:-none}"
           cat > "${RT}/probe.sh" <<'PROBE'
           hb() { echo "HB $1"; }
-          focuspid() {
-            swaymsg -t get_tree 2>/dev/null | jq -r '.. | objects | select(has("focused")) | select(.focused) | "\(.pid) \(.name) \(.app_id)"' 2>>"${RT}/swaymsg.log" | head -2
-          }
           shot() {
             local b64=""
             timeout 20 grim -o HEADLESS-1 "${RT}/$1.png" 2>>"${RT}/grim.log" || hb "grim $1 rc=$?"
@@ -223,22 +220,9 @@ jobs:
           }
           differs() { if cmp -s "${RT}/$1.png" "${RT}/$2.png"; then echo same; else echo DIFFER; fi; }
           wt() { timeout 10 wtype "$@" >> "${RT}/wtype.log" 2>&1 || hb "wtype rc=$? args=$*"; }
-          focusloop() {
-            local fp=""
-            for _j in 1 2 3 4 5 6; do
-              swaymsg "[pid=$1] focus" >> "${RT}/swaymsg.log" 2>&1
-              sleep 1
-              fp=$(focuspid)
-              case "${fp}" in *"$1"*) break ;; esac
-            done
-            echo "${fp}"
-          }
           timeout 90 "${BIN}" > "${RT}/app1.log" 2>&1 &
           APP1=$!
-          sleep 12
-          hb "focus_before_force=$(focuspid)"
-          hb "focus_after_force=$(focusloop ${APP1})"
-          sleep 3
+          sleep 15
           A1=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)
           hb "run1 alive at 15s=${A1}"
           shot home
@@ -246,11 +230,6 @@ jobs:
           sleep 4
           shot afterctrle
           hb "ctrl_e_effect=$(differs home afterctrle)"
-          sleep 12
-          shot late
-          sleep 8
-          shot late2
-          hb "dot_drift_8s=$(differs late late2)"
           kill ${APP1} 2>/dev/null || true
           wait ${APP1} 2>/dev/null
           hb "run1 exit_code=$?"
@@ -260,8 +239,7 @@ jobs:
           timeout 60 "${BIN}" > "${RT}/app2.log" 2>&1 &
           APP2=$!
           sleep 12
-          hb "focus2_after_force=$(focusloop ${APP2})"
-          sleep 2
+          shot home2
           wt -P Escape
           HOLD="alive"
           for _i in $(seq 1 24); do
