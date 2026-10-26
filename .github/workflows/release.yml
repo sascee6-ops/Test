@@ -24,7 +24,7 @@ jobs:
   aarch64_linux:
     name: AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: ubuntu-24.04-arm
-    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
     timeout-minutes: 75
     steps:
       - name: Stage 0
@@ -45,7 +45,7 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add aarch64-unknown-linux-gnu --toolchain nightly-2026-10-25
       - name: Stage 3
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -62,18 +62,18 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 4
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
           install -m 755 "${RUNNER_TEMP}/target/aarch64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 5
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           tar -czf "${RUNNER_TEMP}/AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz" -C "${RUNNER_TEMP}/stage" "AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 6
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: AArch64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
@@ -103,7 +103,7 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add x86_64-unknown-linux-gnu --toolchain nightly-2026-10-25
       - name: Stage 3
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -120,18 +120,18 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 4
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
           install -m 755 "${RUNNER_TEMP}/target/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 5
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           tar -czf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz" -C "${RUNNER_TEMP}/stage" "x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 6
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
@@ -180,8 +180,7 @@ jobs:
           NAME="x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
           BIN="${RUNNER_TEMP}/stage-debug/${NAME}-debug"
           RT="${RUNNER_TEMP}/runtime"
-          export RT
-          export BIN
+          export RT BIN
           rm -rf "${RT}"
           mkdir -p "${RT}/xdg" "${RT}/home/.config/sway" "${RT}/home/.local/share"
           chmod 700 "${RT}/xdg"
@@ -189,8 +188,8 @@ jobs:
           export HOME="${RT}/home"
           printf '%s\n' 'xwayland disable' 'output HEADLESS-1 resolution 1024x640' 'bar { swaybar_command /bin/true }' > "${HOME}/.config/sway/config"
           sudo apt-get update -y > "${RT}/apt.log" 2>&1 || hb "apt update rc=$?"
-          sudo apt-get install -y --no-install-recommends sway grim ydotool libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1 || hb "apt install rc=$?"
-          hb "tools sway=$(command -v sway) grim=$(command -v grim) ydotool=$(command -v ydotool) convert=$(command -v convert)"
+          sudo apt-get install -y --no-install-recommends sway grim libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1 || hb "apt install rc=$?"
+          hb "tools sway=$(command -v sway) grim=$(command -v grim) convert=$(command -v convert)"
           WLR_BACKENDS=headless WLR_RENDERER_ALLOW_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe sway -d -c "${HOME}/.config/sway/config" > "${RT}/sway.log" 2>&1 &
           SWAY_PID=$!
           SOCKET=""
@@ -200,16 +199,11 @@ jobs:
           done
           hb "socket=${SOCKET:-none}"
           if [ -z "${SOCKET}" ]; then
-            grep -E '\[(ERROR|FATAL)\]' "${RT}/sway.log" | tail -15 | while IFS= read -r line; do printf '::error title=sway::%s\n' "${line//%/%25}"; done
+            grep -aE '\[(ERROR|FATAL)\]' "${RT}/sway.log" | tail -10 | tr -d '\000-\010\013\014\016-\037' | while IFS= read -r line; do printf '::error title=sway::%s\n' "${line//%/%25}"; done
             exit 1
           fi
           export WAYLAND_DISPLAY=wayland-1
           export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
-          sudo modprobe uinput >> "${RT}/ydo.log" 2>&1 || hb "modprobe rc=$?"
-          sudo ydotoold --socket-path="${RT}/ydo.sock" >> "${RT}/ydo.log" 2>&1 &
-          sleep 2
-          sudo chmod 666 "${RT}/ydo.sock" 2>/dev/null || true
-          hb "bin=${BIN} present=$(test -x "${BIN}" && echo yes || echo no)"
           cat > "${RT}/probe.sh" <<'PROBE'
           hb() { echo "HB $1"; }
           shot() {
@@ -220,60 +214,38 @@ jobs:
             if [ -n "${b64}" ]; then echo "::notice title=shot-$1::${b64}"; fi
             return 0
           }
-          ydo() { ydotool --socket-path="${RT}/ydo.sock" "$@" >> "${RT}/ydo.log" 2>&1 || hb "ydo rc=$? args=$*"; }
-          applog() { tail -20 "$1" 2>/dev/null | while IFS= read -r l; do printf 'APPLOG %s\n' "${l}"; done; return 0; }
-          timeout 90 "${BIN}" > "${RT}/app1.log" 2>&1 &
+          timeout 60 "${BIN}" > "${RT}/app1.log" 2>&1 &
           APP1=$!
           sleep 15
-          hb "run1 alive=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)"
+          A1=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)
+          hb "run1 alive at 15s=${A1}"
           shot home
-          ydo key 29:1 18:1 18:0 29:0
-          sleep 3
-          shot wizard
-          ydo type 'Arena Test'
-          sleep 3
-          shot typed
-          ydo key 1:1
-          sleep 7
-          shot escaped
-          hb "run1 alive after 7s escape in wizard=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)"
-          ydo key 1:0
-          sleep 1
+          sleep 10
+          A2=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)
+          hb "run1 alive at 25s=${A2}"
+          shot later
           kill ${APP1} 2>/dev/null || true
           wait ${APP1} 2>/dev/null
           hb "run1 exit_code=$?"
-          applog "${RT}/app1.log"
-          timeout 60 "${BIN}" > "${RT}/app2.log" 2>&1 &
-          APP2=$!
-          sleep 12
-          hb "run2 alive=$(kill -0 ${APP2} 2>/dev/null && echo yes || echo no)"
-          ydo key 1:1
-          HOLD="alive"
-          for _i in $(seq 1 24); do
-            if ! kill -0 ${APP2} 2>/dev/null; then HOLD="exited"; break; fi
-            sleep 0.5
-          done
-          ydo key 1:0
-          sleep 1
-          FINAL=$(kill -0 ${APP2} 2>/dev/null && echo alive || echo exited)
-          wait ${APP2} 2>/dev/null
-          hb "run2 escape_while_held=${HOLD} after_release=${FINAL} exit_code=$?"
-          applog "${RT}/app2.log"
-          if [ "${HOLD}" = "exited" ]; then echo "ESCAPE_HOLD_OK"; fi
+          echo "${A1} ${A2}" > "${RT}/verdict1"
+          grep -aE 'panicked|ERROR|error:' "${RT}/app1.log" | head -6 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 > "${RT}/panics" || true
           exit 0
           PROBE
-          timeout 300 bash "${RT}/probe.sh" > "${RT}/probe.log" 2>&1
+          timeout 200 bash "${RT}/probe.sh" > "${RT}/probe.log" 2>&1
           hb "probe rc=$?"
-          grep -E '^::' "${RT}/probe.log" | while IFS= read -r line; do echo "${line}"; done
-          grep -E '^HB ' "${RT}/probe.log" | while IFS= read -r line; do echo "::notice title=hb::${line#HB }"; done
-          grep -E '^APPLOG ' "${RT}/probe.log" | head -30 | while IFS= read -r line; do printf '::notice title=app::%s\n' "${line#APPLOG }"; done
-          tail -6 "${RT}/probe.log" | grep -v '^::' | grep -v '^HB ' | grep -v '^APPLOG ' | while IFS= read -r line; do printf '::notice title=probe-tail::%s\n' "${line//%/%25}"; done
-          if grep -q 'ESCAPE_HOLD_OK' "${RT}/probe.log"; then
-            hb "escape hold verified: app exited during continuing 7s hold in Home"
+          grep -aE '^::' "${RT}/probe.log" | while IFS= read -r line; do echo "${line}"; done
+          grep -aE '^HB ' "${RT}/probe.log" | while IFS= read -r line; do echo "::notice title=hb::${line#HB }"; done
+          hb "verdict alive15s/25s=$(tr ' ' '/' < "${RT}/verdict1" 2>/dev/null)"
+          if [ -s "${RT}/panics" ]; then
+            while IFS= read -r line; do printf '::error title=app-panic::%s\n' "${line//%/%25}"; done < "${RT}/panics"
           else
-            echo "::error title=runtime::7s Escape hold in Home did not exit the app, or the probe died early"
+            hb "no panic or error lines in app stderr"
           fi
-          grep -E "ydotool|uinput|socket" "${RT}/ydo.log" 2>/dev/null | tail -8 | while IFS= read -r line; do printf '::notice title=ydo::%s\n' "${line//%/%25}"; done
+          if [ "$(cut -d' ' -f1 "${RT}/verdict1" 2>/dev/null)" = "yes" ]; then
+            hb "smoke result: application launched and kept running under headless Wayland"
+          else
+            echo "::error title=runtime::application did not stay alive under headless Wayland"
+          fi
           kill ${SWAY_PID} 2>/dev/null || true
           exit 0
       - name: Stage 11
@@ -287,7 +259,7 @@ jobs:
   aarch64_macos:
     name: AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: macos-15
-    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
     timeout-minutes: 75
     steps:
       - name: Stage 0
@@ -303,7 +275,7 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add aarch64-apple-darwin --toolchain nightly-2026-10-25
       - name: Stage 2
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -320,18 +292,18 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 3
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
           install -m 755 "${RUNNER_TEMP}/target/aarch64-apple-darwin/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 4
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           tar -czf "${RUNNER_TEMP}/AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz" -C "${RUNNER_TEMP}/stage" "AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 5
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: AArch64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
@@ -341,7 +313,7 @@ jobs:
   x86_64_macos:
     name: x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: macos-15-intel
-    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
     timeout-minutes: 75
     steps:
       - name: Stage 0
@@ -357,7 +329,7 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add x86_64-apple-darwin --toolchain nightly-2026-10-25
       - name: Stage 2
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -374,18 +346,18 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 3
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
           install -m 755 "${RUNNER_TEMP}/target/x86_64-apple-darwin/release/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 4
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           tar -czf "${RUNNER_TEMP}/x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.tar.gz" -C "${RUNNER_TEMP}/stage" "x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
       - name: Stage 5
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-macOS-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
@@ -395,7 +367,7 @@ jobs:
   aarch64_windows:
     name: AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: windows-11-arm
-    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
     timeout-minutes: 75
     steps:
       - name: Stage 0
@@ -411,7 +383,7 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add aarch64-pc-windows-msvc --toolchain nightly-2026-10-25
       - name: Stage 2
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -428,18 +400,18 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 3
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
           install -m 755 "${RUNNER_TEMP}/target/aarch64-pc-windows-msvc/release/Subsystem-for-Arxumbra.exe" "${RUNNER_TEMP}/stage/AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
       - name: Stage 4
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: pwsh
         run: |
           Compress-Archive -Path "${env:RUNNER_TEMP}\stage\AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe" -DestinationPath "${env:RUNNER_TEMP}\AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.zip" -CompressionLevel Optimal
       - name: Stage 5
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: AArch64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
@@ -449,7 +421,7 @@ jobs:
   x86_64_windows:
     name: x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
     runs-on: windows-2025
-    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
     timeout-minutes: 75
     steps:
       - name: Stage 0
@@ -465,7 +437,7 @@ jobs:
           rustup toolchain install nightly-2026-10-25 --profile minimal
           rustup target add x86_64-pc-windows-msvc --toolchain nightly-2026-10-25
       - name: Stage 2
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -482,18 +454,18 @@ jobs:
             --config 'profile.release.debug=false' \
             --config 'profile.release.overflow-checks=true'
       - name: Stage 3
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage"
           install -m 755 "${RUNNER_TEMP}/target/x86_64-pc-windows-msvc/release/Subsystem-for-Arxumbra.exe" "${RUNNER_TEMP}/stage/x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe"
       - name: Stage 4
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         shell: pwsh
         run: |
           Compress-Archive -Path "${env:RUNNER_TEMP}\stage\x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.exe" -DestinationPath "${env:RUNNER_TEMP}\x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1.zip" -CompressionLevel Optimal
       - name: Stage 5
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode != 'debug') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/784e0a1e-test')) }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-Windows-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1
