@@ -4079,7 +4079,7 @@ fn main() {
                                 std::fs::write(
                                     path,
                                     std::format!(
-                                        "mode={} menu={} modal={} held={} nav={:.3} panel={:.3} ws={:.3} modal_t={:.3} menu_t={:.3} s2_5={:.3} s2_6={:.3} step={} kind={} icon={} m0={:.1} vw={:.0} vh={:.0}\n",
+                                        "mode={} menu={} modal={} held={} nav={:.3} panel={:.3} ws={:.3} modal_t={:.3} menu_t={:.3} s2_5={:.3} s2_6={:.3} step={} kind={} icon={} m0={:.1} vw={:.0} vh={:.0} pnl={:.0},{:.0},{:.0},{:.0} mod={:.0},{:.0},{:.0},{:.0} mtr={:.1},{:.1}\n",
                                         app_state[0],
                                         app_state[1],
                                         app_state[2],
@@ -4096,7 +4096,17 @@ fn main() {
                                         wizard_state.1,
                                         metrics_state.0,
                                         metrics_state.2.x,
-                                        metrics_state.2.y
+                                        metrics_state.2.y,
+                                        panel_rect.min.x,
+                                        panel_rect.min.y,
+                                        panel_rect.max.x,
+                                        panel_rect.max.y,
+                                        modal_rect.min.x,
+                                        modal_rect.min.y,
+                                        modal_rect.max.x,
+                                        modal_rect.max.y,
+                                        metrics_state.1.x,
+                                        metrics_state.1.y
                                     ),
                                 )
                                 .ok();

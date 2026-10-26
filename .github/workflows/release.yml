@@ -185,12 +185,10 @@ jobs:
           mkdir -p "${RT}"
           sudo apt-get update -y > "${RT}/apt.log" 2>&1 || hb "apt update rc=$?"
           sudo apt-get install -y --no-install-recommends sway grim libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1 || hb "apt install rc=$?"
-          hb "tools sway=$(command -v sway) grim=$(command -v grim) convert=$(command -v convert)"
           shot() {
             local b64=""
             timeout 20 grim -o HEADLESS-1 "${RT}/$1.png" 2>>"${RT}/grim.log" || hb "grim $1 rc=$?"
             b64=$(convert "${RT}/$1.png" -resize 256x154 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
-            hb "shot $1 bytes=${#b64}"
             if [ -n "${b64}" ]; then echo "::notice title=shot-$1::${b64}"; fi
             return 0
           }
@@ -212,7 +210,6 @@ jobs:
             sleep 15
             AL=$(kill -0 ${AP} 2>/dev/null && echo yes || echo no)
             XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 shot "${CASE}"
-            hb "case ${CASE} alive15s=${AL}"
             echo "${CASE} ${AL}" >> "${RT}/verdicts"
             if [ -s "${RT}/state-${CASE}.txt" ]; then echo "${CASE} $(cat "${RT}/state-${CASE}.txt")" >> "${RT}/states"; else echo "${CASE} state-file-missing" >> "${RT}/states"; fi
             grep -aE 'panicked|ERROR' "${RT}/app-${CASE}.log" | head -4 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 | sed "s/^/${CASE} panic: /" >> "${RT}/panics" || true
