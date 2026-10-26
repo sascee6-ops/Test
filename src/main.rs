@@ -3931,25 +3931,32 @@ fn main() {
                                             if feedback_state.2 == 1u8 {
                                                 feedback_state.2 = 0u8;
                                                 std::iter::once((draft_state.0.trim().to_string(), catalog_state.0.iter().map(|(id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *id).max().unwrap_or(0u64).saturating_add(1u64))).for_each(|(trimmed, new_id): (std::string::String, u64)| {
-                                                    std::iter::once(catalog_state.0.iter().cloned().chain(std::iter::once((new_id, wizard_state.1, trimmed, wizard_state.2, wizard_state.3))).collect::<std::vec::Vec<(u64, u8, std::string::String, u8, u8)>>()).map(|candidate: std::vec::Vec<(u64, u8, std::string::String, u8, u8)>| (candidate, std::format!("arxumbra-workspace-catalog v1\n{}\n", candidate.len()) + &candidate.iter().map(|(id, icon, name, kind, dim): &(u64, u8, std::string::String, u8, u8)| std::format!("{}|{}|{}|{}|{}", id, icon, name.as_bytes().iter().map(|byte: &u8| std::format!("{:02x}", byte)).collect::<std::string::String>(), kind, dim)).collect::<std::vec::Vec<std::string::String>>().join("\n") + "\n")).for_each(|(candidate, payload): (std::vec::Vec<(u64, u8, std::string::String, u8, u8)>, std::string::String)| {
-                                                        std::iter::once(std::fs::create_dir_all(&dir).and_then(|()| std::fs::OpenOptions::new().write(true).create_new(true).open(dir.join("workspace-catalog.lock"))).and_then(|held: std::fs::File| std::fs::write(dir.join("workspace-catalog.tmp"), payload.as_bytes()).and_then(|()| std::fs::File::open(dir.join("workspace-catalog.tmp")).and_then(|flushed: std::fs::File| flushed.sync_all())).and_then(|()| std::fs::rename(dir.join("workspace-catalog.tmp"), dir.join("workspace-catalog"))).map(|()| held))).for_each(|outcome: std::result::Result<std::fs::File, std::io::Error>| {
-                                                            match outcome {
-                                                                std::result::Result::Ok(held) => {
-                                                                    std::fs::remove_file(dir.join("workspace-catalog.lock")).ok();
-                                                                    std::mem::drop(held);
-                                                                    catalog_state.0 = candidate;
-                                                                    list_state.1 = new_id;
-                                                                    app_state[2usize] = 0u8;
-                                                                    *draft_state = (std::string::String::new(), 0u16, false);
-                                                                    feedback_state.0 = 0u8;
-                                                                }
-                                                                std::result::Result::Err(_failure) => {
-                                                                    std::fs::remove_file(dir.join("workspace-catalog.tmp")).ok();
-                                                                    std::fs::remove_file(dir.join("workspace-catalog.lock")).ok();
-                                                                    feedback_state.0 = 8u8;
-                                                                }
+                                                    std::iter::once(catalog_state.0.iter().cloned().chain(std::iter::once((new_id, wizard_state.1, trimmed, wizard_state.2, wizard_state.3))).collect::<std::vec::Vec<(u64, u8, std::string::String, u8, u8)>>()).map(|candidate: std::vec::Vec<(u64, u8, std::string::String, u8, u8)>| (std::format!("arxumbra-workspace-catalog v1\n{}\n", candidate.len()) + &candidate.iter().map(|(id, icon, name, kind, dim): &(u64, u8, std::string::String, u8, u8)| std::format!("{}|{}|{}|{}|{}", id, icon, name.as_bytes().iter().map(|byte: &u8| std::format!("{:02x}", byte)).collect::<std::string::String>(), kind, dim)).collect::<std::vec::Vec<std::string::String>>().join("\n") + "\n", candidate)).for_each(|(payload, candidate): (std::string::String, std::vec::Vec<(u64, u8, std::string::String, u8, u8)>)| {
+                                                        match std::iter::once(std::fs::create_dir_all(&dir).and_then(|()| std::fs::OpenOptions::new().write(true).create_new(true).open(dir.join("workspace-catalog.lock"))).and_then(|held: std::fs::File| std::fs::write(dir.join("workspace-catalog.tmp"), payload.as_bytes()).and_then(|()| std::fs::File::open(dir.join("workspace-catalog.tmp")).and_then(|flushed: std::fs::File| flushed.sync_all())).and_then(|()| std::fs::rename(dir.join("workspace-catalog.tmp"), dir.join("workspace-catalog"))).map(|()| held))).map(|outcome: std::result::Result<std::fs::File, std::io::Error>| match outcome {
+                                                            std::result::Result::Ok(held) => {
+                                                                std::fs::remove_file(dir.join("workspace-catalog.lock")).ok();
+                                                                std::mem::drop(held);
+                                                                true
                                                             }
-                                                        });
+                                                            std::result::Result::Err(_failure) => {
+                                                                std::fs::remove_file(dir.join("workspace-catalog.tmp")).ok();
+                                                                std::fs::remove_file(dir.join("workspace-catalog.lock")).ok();
+                                                                false
+                                                            }
+                                                        })
+                                                        .next()
+                                                    {
+                                                            std::option::Option::Some(true) => {
+                                                                catalog_state.0 = candidate;
+                                                                list_state.1 = new_id;
+                                                                app_state[2usize] = 0u8;
+                                                                *draft_state = (std::string::String::new(), 0u16, false);
+                                                                feedback_state.0 = 0u8;
+                                                            }
+                                                            _ => {
+                                                                feedback_state.0 = 8u8;
+                                                            }
+                                                        }
                                                     });
                                                 });
                                             }
@@ -5874,16 +5881,27 @@ fn main() {
                                                     bevy::ecs::entity::Entity,
                                                     std::string::String,
                                                 )| {
-                                                    dynamic_texts
-                                                        .get(entity)
-                                                        .into_iter()
-                                                        .for_each(|body: &bevy::sprite::Text2d| {
-                                                            if body.0 != wanted {
-                                                                commands
-                                                                    .entity(entity)
-                                                                    .insert(bevy::sprite::Text2d(wanted));
-                                                            }
-                                                        });
+                                                    match std::iter::once(wanted)
+                                                        .map(|wanted: std::string::String| {
+                                                            (
+                                                                wanted.clone(),
+                                                                dynamic_texts.get(entity).map_or(
+                                                                    true,
+                                                                    |body: &bevy::sprite::Text2d| {
+                                                                        body.0 != wanted
+                                                                    },
+                                                                ),
+                                                            )
+                                                        })
+                                                        .next()
+                                                    {
+                                                        std::option::Option::Some((wanted, true)) => {
+                                                            commands
+                                                                .entity(entity)
+                                                                .insert(bevy::sprite::Text2d(wanted));
+                                                        }
+                                                        _ => {}
+                                                    }
                                                 },
                                             );
                                                 },
