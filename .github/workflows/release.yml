@@ -204,6 +204,9 @@ jobs:
           fi
           export WAYLAND_DISPLAY=wayland-1
           export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          SWAYSOCK=$(ls "${XDG_RUNTIME_DIR}"/sway-sock.* 2>/dev/null | head -1)
+          export SWAYSOCK
+          hb "swaysock=${SWAYSOCK:-none}"
           cat > "${RT}/probe.sh" <<'PROBE'
           hb() { echo "HB $1"; }
           focuspid() {
@@ -219,12 +222,22 @@ jobs:
           }
           differs() { if cmp -s "${RT}/$1.png" "${RT}/$2.png"; then echo same; else echo DIFFER; fi; }
           wt() { timeout 10 wtype "$@" >> "${RT}/wtype.log" 2>&1 || hb "wtype rc=$? args=$*"; }
+          focusloop() {
+            local fp=""
+            for _j in 1 2 3 4 5 6; do
+              swaymsg "[pid=$1] focus" >> "${RT}/swaymsg.log" 2>&1
+              sleep 1
+              fp=$(focuspid)
+              case "${fp}" in *"$1"*) break ;; esac
+            done
+            echo "${fp}"
+          }
           timeout 90 "${BIN}" > "${RT}/app1.log" 2>&1 &
           APP1=$!
           sleep 12
-          swaymsg "[pid=${APP1}] focus" >> "${RT}/swaymsg.log" 2>&1 || hb "swaymsg focus rc=$?"
+          hb "focus_before_force=$(focuspid)"
+          hb "focus_after_force=$(focusloop ${APP1})"
           sleep 3
-          hb "focused_node=$(focuspid)"
           A1=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)
           hb "run1 alive at 15s=${A1}"
           shot home
@@ -246,9 +259,8 @@ jobs:
           timeout 60 "${BIN}" > "${RT}/app2.log" 2>&1 &
           APP2=$!
           sleep 12
-          swaymsg "[pid=${APP2}] focus" >> "${RT}/swaymsg.log" 2>&1 || hb "swaymsg focus2 rc=$?"
+          hb "focus2_after_force=$(focusloop ${APP2})"
           sleep 2
-          hb "focused_node_run2=$(focuspid)"
           wt -P Escape
           HOLD="alive"
           for _i in $(seq 1 24); do
@@ -270,6 +282,7 @@ jobs:
             if [ -s "${RT}/wtail" ]; then sed 's/^/wtype: /' "${RT}/wtail"; else echo "wtype: no log"; fi
             if [ -s "${RT}/panics" ]; then sed 's/^/PANIC: /' "${RT}/panics"; else echo "app stderr: no panic or error lines"; fi
             echo "verdict alive15s/end=$(tr ' ' '/' < "${RT}/verdict1" 2>/dev/null)"
+            tail -3 "${RT}/swaymsg.log" 2>/dev/null | sed 's/^/swaymsg: /'
           } | tr -d '\000-\010\013\014\016-\037' | cut -c1-220 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=probe-report::${msg}"; done
           if [ "$(cut -d' ' -f1 "${RT}/verdict1" 2>/dev/null)" = "yes" ]; then
             hb "smoke result: application launched and kept running under headless Wayland"
