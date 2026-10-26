@@ -4099,6 +4099,7 @@ fn main() {
                                         metrics_state.2.y
                                     ),
                                 )
+                                .ok();
                             });
                     }
                                             [
