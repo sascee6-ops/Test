@@ -4071,47 +4071,6 @@ fn main() {
                                                 },
                                             );
 
-                    if cfg!(debug_assertions) {
-                        std::env::var("ARXUMBRA_STATE")
-                            .ok()
-                            .into_iter()
-                            .for_each(|path: std::string::String| {
-                                std::fs::write(
-                                    path,
-                                    std::format!(
-                                        "mode={} menu={} modal={} held={} nav={:.3} panel={:.3} ws={:.3} modal_t={:.3} menu_t={:.3} s2_5={:.3} s2_6={:.3} step={} kind={} icon={} m0={:.1} vw={:.0} vh={:.0} pnl={:.0},{:.0},{:.0},{:.0} mod={:.0},{:.0},{:.0},{:.0} mtr={:.1},{:.1}\n",
-                                        app_state[0],
-                                        app_state[1],
-                                        app_state[2],
-                                        app_state[3],
-                                        anim_state.2[0],
-                                        anim_state.2[1],
-                                        anim_state.2[2],
-                                        anim_state.2[3],
-                                        anim_state.2[4],
-                                        anim_state.2[5],
-                                        anim_state.2[6],
-                                        wizard_state.0,
-                                        wizard_state.2,
-                                        wizard_state.1,
-                                        metrics_state.0,
-                                        metrics_state.2.x,
-                                        metrics_state.2.y,
-                                        panel_rect.min.x,
-                                        panel_rect.min.y,
-                                        panel_rect.max.x,
-                                        panel_rect.max.y,
-                                        modal_rect.min.x,
-                                        modal_rect.min.y,
-                                        modal_rect.max.x,
-                                        modal_rect.max.y,
-                                        metrics_state.1.x,
-                                        metrics_state.1.y
-                                    ),
-                                )
-                                .ok();
-                            });
-                    }
                                             [
                                                 (
                                                     0usize,
@@ -4216,6 +4175,47 @@ fn main() {
                                                             f32,
                                                             f32,
                                                         )| {
+                    if cfg!(debug_assertions) {
+                        std::env::var("ARXUMBRA_STATE")
+                            .ok()
+                            .into_iter()
+                            .for_each(|path: std::string::String| {
+                                std::fs::write(
+                                    path,
+                                    std::format!(
+                                        "mode={} menu={} modal={} held={} nav={:.3} panel={:.3} ws={:.3} modal_t={:.3} menu_t={:.3} s2_5={:.3} s2_6={:.3} step={} kind={} icon={} m0={:.1} vw={:.0} vh={:.0} pnl={:.0},{:.0},{:.0},{:.0} mod={:.0},{:.0},{:.0},{:.0} mtr={:.1},{:.1}\n",
+                                        app_state[0],
+                                        app_state[1],
+                                        app_state[2],
+                                        app_state[3],
+                                        anim_state.2[0],
+                                        anim_state.2[1],
+                                        anim_state.2[2],
+                                        anim_state.2[3],
+                                        anim_state.2[4],
+                                        anim_state.2[5],
+                                        anim_state.2[6],
+                                        wizard_state.0,
+                                        wizard_state.2,
+                                        wizard_state.1,
+                                        metrics_state.0,
+                                        metrics_state.2.x,
+                                        metrics_state.2.y,
+                                        panel_rect.min.x,
+                                        panel_rect.min.y,
+                                        panel_rect.max.x,
+                                        panel_rect.max.y,
+                                        modal_rect.min.x,
+                                        modal_rect.min.y,
+                                        modal_rect.max.x,
+                                        modal_rect.max.y,
+                                        metrics_state.1.x,
+                                        metrics_state.1.y
+                                    ),
+                                )
+                                .ok();
+                            });
+                    }
                                                             [
                                                                 (
                                                                     e[0],
