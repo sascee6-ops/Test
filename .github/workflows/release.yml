@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - arena/784e0a1e-test
   workflow_dispatch:
     inputs:
       build_mode:
@@ -138,7 +139,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
       - name: Stage 7
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
           cargo +nightly-2026-10-25 build --quiet --locked \
@@ -151,14 +152,14 @@ jobs:
             --config 'profile.dev.debug-assertions=true' \
             --config 'profile.dev.overflow-checks=true'
       - name: Stage 8
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage-debug"
           install -m 755 "${RUNNER_TEMP}/target-debug/x86_64-unknown-linux-gnu/debug/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           tar -czf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz" -C "${RUNNER_TEMP}/stage-debug" "x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 9
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
           tar -tzvf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz"
@@ -172,7 +173,7 @@ jobs:
           file "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           ldd "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 10
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
           hb() { echo "::notice title=hb::$1"; }
@@ -187,8 +188,8 @@ jobs:
           export HOME="${RT}/home"
           printf '%s\n' 'xwayland disable' 'output HEADLESS-1 resolution 1024x640' 'bar { swaybar_command /bin/true }' > "${HOME}/.config/sway/config"
           sudo apt-get update -y > "${RT}/apt.log" 2>&1 || hb "apt update rc=$?"
-          sudo apt-get install -y --no-install-recommends sway grim libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1 || hb "apt install rc=$?"
-          hb "tools sway=$(command -v sway) grim=$(command -v grim) convert=$(command -v convert)"
+          sudo apt-get install -y --no-install-recommends sway grim wtype libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1 || hb "apt install rc=$?"
+          hb "tools sway=$(command -v sway) grim=$(command -v grim) wtype=$(command -v wtype) convert=$(command -v convert)"
           WLR_BACKENDS=headless WLR_RENDERER_ALLOW_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe sway -d -c "${HOME}/.config/sway/config" > "${RT}/sway.log" 2>&1 &
           SWAY_PID=$!
           SOCKET=""
@@ -205,6 +206,7 @@ jobs:
           export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
           cat > "${RT}/probe.sh" <<'PROBE'
           hb() { echo "HB $1"; }
+          CAT="${HOME}/.local/share/Subsystem-for-Arxumbra/workspace-catalog"
           shot() {
             local b64=""
             timeout 20 grim -o HEADLESS-1 "${RT}/$1.png" 2>>"${RT}/grim.log" || hb "grim $1 rc=$?"
@@ -213,28 +215,69 @@ jobs:
             if [ -n "${b64}" ]; then echo "::notice title=shot-$1::${b64}"; fi
             return 0
           }
+          seed() {
+            mkdir -p "${HOME}/.local/share/Subsystem-for-Arxumbra"
+            rm -f "${CAT}" "${CAT}.lock" "${CAT}.tmp"
+            if [ "$1" = "valid" ]; then
+              printf 'arxumbra-workspace-catalog v1\n2\n1|0|4172656e61|1|0\n2|1|4755492050726f6a|3|1\n' > "${CAT}"
+            elif [ "$1" = "corrupt" ]; then
+              printf 'arxumbra-workspace-catalog v1\n9\nzz|||\n' > "${CAT}"
+            else
+              printf 'arxumbra-workspace-catalog v9\n1\n1|0|41|1|0\n' > "${CAT}"
+            fi
+            return 0
+          }
           timeout 60 "${BIN}" > "${RT}/app1.log" 2>&1 &
           APP1=$!
           sleep 15
           A1=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)
           hb "run1 alive at 15s=${A1}"
           shot home
-          sleep 10
+          timeout 10 wtype -P ctrl -P e -p e -p ctrl >> "${RT}/wtype.log" 2>&1 || hb "wtype ctrl+e rc=$?"
+          sleep 4
+          shot wizard2
+          if cmp -s "${RT}/home.png" "${RT}/wizard2.png"; then
+            hb "input_effect=no (frames byte-identical)"
+          else
+            hb "input_effect=yes (frames differ after ctrl+e)"
+          fi
+          sleep 8
           A2=$(kill -0 ${APP1} 2>/dev/null && echo yes || echo no)
-          hb "run1 alive at 25s=${A2}"
+          hb "run1 alive at 27s=${A2}"
           shot later
           kill ${APP1} 2>/dev/null || true
           wait ${APP1} 2>/dev/null
           hb "run1 exit_code=$?"
           echo "${A1} ${A2}" > "${RT}/verdict1"
           grep -aE 'panicked|ERROR|error:' "${RT}/app1.log" | head -6 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 > "${RT}/panics" || true
+          tail -4 "${RT}/wtype.log" 2>/dev/null | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 > "${RT}/wtail" || true
+          for CASE in valid corrupt future; do
+            seed "${CASE}"
+            BEFORE=$(sha256sum "${CAT}" | cut -d' ' -f1)
+            timeout 40 "${BIN}" > "${RT}/app-${CASE}.log" 2>&1 &
+            AP=$!
+            sleep 10
+            AL=$(kill -0 ${AP} 2>/dev/null && echo yes || echo no)
+            kill ${AP} 2>/dev/null || true
+            wait ${AP} 2>/dev/null
+            AFTER=$(sha256sum "${CAT}" | cut -d' ' -f1)
+            if [ "${BEFORE}" = "${AFTER}" ]; then SAME=preserved; else SAME=CHANGED; fi
+            PAN=$(grep -ac 'panicked' "${RT}/app-${CASE}.log" || true)
+            hb "catalog ${CASE}: alive10s=${AL} file=${SAME} panics=${PAN}"
+            if [ -s "${RT}/app-${CASE}.log" ]; then
+              grep -aE 'panicked' "${RT}/app-${CASE}.log" | head -3 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 | while IFS= read -r line; do printf 'HB panic %s: %s\n' "${CASE}" "${line}"; done
+            fi
+          done
           exit 0
           PROBE
-          timeout 200 bash "${RT}/probe.sh" > "${RT}/probe.log" 2>&1
+          timeout 260 bash "${RT}/probe.sh" > "${RT}/probe.log" 2>&1
           hb "probe rc=$?"
           grep -aE '^::' "${RT}/probe.log" | while IFS= read -r line; do echo "${line}"; done
           grep -aE '^HB ' "${RT}/probe.log" | while IFS= read -r line; do echo "::notice title=hb::${line#HB }"; done
-          hb "verdict alive15s/25s=$(tr ' ' '/' < "${RT}/verdict1" 2>/dev/null)"
+          hb "verdict alive15s/27s=$(tr ' ' '/' < "${RT}/verdict1" 2>/dev/null)"
+          if [ -s "${RT}/wtail" ]; then
+            while IFS= read -r line; do printf '::notice title=wtype::%s\n' "${line//%/%25}"; done < "${RT}/wtail"
+          fi
           if [ -s "${RT}/panics" ]; then
             while IFS= read -r line; do printf '::error title=app-panic::%s\n' "${line//%/%25}"; done < "${RT}/panics"
           else
@@ -248,7 +291,7 @@ jobs:
           kill ${SWAY_PID} 2>/dev/null || true
           exit 0
       - name: Stage 11
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug
