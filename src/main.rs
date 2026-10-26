@@ -3522,7 +3522,7 @@ fn main() {
                                                         ]
                                                         .into_iter()
                                                         .filter(
-                                                            |(
+                                                            |&(
                                                                 _code,
                                                                 rect,
                                                                 radius,
@@ -3533,7 +3533,7 @@ fn main() {
                                                                 f32,
                                                                 bool,
                                                             )| {
-                                                                *enabled
+                                                                enabled
                                                                     && rect.contains(dot_pos)
                                                                     && ((dot_pos.x
                                                                         - rect.center().x)
@@ -3585,7 +3585,7 @@ fn main() {
                                                         ]
                                                         .into_iter()
                                                         .filter(
-                                                            |(
+                                                            |&(
                                                                 _code,
                                                                 rect,
                                                                 radius,
@@ -3596,7 +3596,7 @@ fn main() {
                                                                 f32,
                                                                 bool,
                                                             )| {
-                                                                *enabled
+                                                                enabled
                                                                     && rect.contains(dot_pos)
                                                                     && ((dot_pos.x
                                                                         - rect.center().x)
@@ -3639,7 +3639,7 @@ fn main() {
                                                         ]
                                                         .into_iter()
                                                         .filter(
-                                                            |(
+                                                            |&(
                                                                 _code,
                                                                 rect,
                                                                 radius,
@@ -3650,7 +3650,7 @@ fn main() {
                                                                 f32,
                                                                 bool,
                                                             )| {
-                                                                *enabled
+                                                                enabled
                                                                     && rect.contains(dot_pos)
                                                                     && ((dot_pos.x
                                                                         - rect.center().x)
@@ -3735,7 +3735,7 @@ fn main() {
                                                                                     0u16,
                                                                                     false,
                                                                                 );
-                                                                                *feedback_state = (0u8, feedback_state.1);
+                                                                                *feedback_state = (0u8, feedback_state.1, feedback_state.2);
                                                                                 (2u8, cur_menu, true)
                                                                             }
                                                                             std::option::Option::Some(4u8) if cur_modal => {
@@ -3744,7 +3744,7 @@ fn main() {
                                                                                     0u16,
                                                                                     false,
                                                                                 );
-                                                                                *feedback_state = (0u8, feedback_state.1);
+                                                                                *feedback_state = (0u8, feedback_state.1, feedback_state.2);
                                                                                 (2u8, cur_menu, false)
                                                                             }
                                                                             std::option::Option::Some(5u8) if cur_modal => {
@@ -5856,11 +5856,11 @@ fn main() {
                                                                             u8,
                                                                         )| {
                                                                             std::string::String::from(
-                                                                                if kind == 1u8 {
+                                                                                if *kind == 1u8 {
                                                                                     "Operating System"
-                                                                                } else if kind == 2u8 {
+                                                                                } else if *kind == 2u8 {
                                                                                     "Command Line Interface"
-                                                                                } else if dim == 1u8 {
+                                                                                } else if *dim == 1u8 {
                                                                                     "Graphical User Interface - 2D"
                                                                                 } else {
                                                                                     "Graphical User Interface - 3D"
