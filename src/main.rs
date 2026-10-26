@@ -5355,6 +5355,32 @@ fn main() {
                                                                     bevy::color::Color,
                                                                     bool,
                                                                 )| {
+                                                                    if cfg!(debug_assertions)
+                                                                        && (entity == e[42]
+                                                                            || entity == e[43]
+                                                                            || entity == e[45]
+                                                                            || entity == e[58])
+                                                                    {
+                                                                        std::fs::write(
+                                                                            std::format!(
+                                                                                "{}{}",
+                                                                                std::env::var("ARXUMBRA_APPLY")
+                                                                                    .unwrap_or_default(),
+                                                                                entity.index()
+                                                                            ),
+                                                                            std::format!(
+                                                                                "shown={} a={:.3} size={:.0},{:.0} pos={:.0},{:.0} got={}\n",
+                                                                                shown,
+                                                                                colour.alpha(),
+                                                                                size.x,
+                                                                                size.y,
+                                                                                pos.x,
+                                                                                pos.y,
+                                                                                sprites.get(entity).is_some()
+                                                                            ),
+                                                                        )
+                                                                        .ok();
+                                                                    }
                                                                     sprites
                                                                         .get(entity)
                                                                         .into_iter()

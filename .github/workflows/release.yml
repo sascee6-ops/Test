@@ -211,13 +211,16 @@ jobs:
               sleep 0.5
             done
             if [ "${CASE}" = "home" ]; then unset ARXUMBRA_PROBE; else export ARXUMBRA_PROBE="${CASE}"; fi
-            XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe ARXUMBRA_STATE="${RT}/state-${CASE}.txt" timeout 60 "${BIN}" > "${RT}/app-${CASE}.log" 2>&1 &
+            XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe ARXUMBRA_STATE="${RT}/state-${CASE}.txt" ARXUMBRA_APPLY="${RT}/apply-${CASE}-" timeout 60 "${BIN}" > "${RT}/app-${CASE}.log" 2>&1 &
             AP=$!
             sleep 15
             AL=$(kill -0 ${AP} 2>/dev/null && echo yes || echo no)
             XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 shot "${CASE}"
             echo "${CASE} ${AL}" >> "${RT}/verdicts"
             if [ -s "${RT}/state-${CASE}.txt" ]; then echo "${CASE} $(cat "${RT}/state-${CASE}.txt")" >> "${RT}/states"; else echo "${CASE} state-file-missing" >> "${RT}/states"; fi
+            for AF in "${RT}"/apply-${CASE}-*; do
+              if [ -s "${AF}" ]; then echo "${CASE} $(basename "${AF}") $(cat "${AF}")" >> "${RT}/states"; fi
+            done || true
             grep -aE 'panicked|ERROR' "${RT}/app-${CASE}.log" | head -4 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 | sed "s/^/${CASE} panic: /" >> "${RT}/panics" || true
             kill ${AP} 2>/dev/null || true
             wait ${AP} 2>/dev/null || true
