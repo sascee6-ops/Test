@@ -850,7 +850,7 @@ fn main() {
                                                 color: bevy::color::Color::srgba(
                                                     0.086, 0.086, 0.086, 1.0,
                                                 ),
-                                                image: right_round_solid,
+                                                image: right_round_solid.clone(),
                                                 custom_size: std::option::Option::Some(
                                                     bevy::math::Vec2::new(383.0, 766.0),
                                                 ),
@@ -906,7 +906,7 @@ fn main() {
                                                 color: bevy::color::Color::srgba(
                                                     0.937, 0.937, 0.937, 1.0,
                                                 ),
-                                                image: app_icon,
+                                                image: app_icon.clone(),
                                                 custom_size: std::option::Option::Some(
                                                     bevy::math::Vec2::splat(26.0),
                                                 ),
@@ -1093,7 +1093,7 @@ fn main() {
                                                 color: bevy::color::Color::srgba(
                                                     0.937, 0.937, 0.937, 1.0,
                                                 ),
-                                                image: home_icon,
+                                                image: home_icon.clone(),
                                                 custom_size: std::option::Option::Some(
                                                     bevy::math::Vec2::splat(22.0),
                                                 ),
@@ -1341,7 +1341,7 @@ fn main() {
                                                 color: bevy::color::Color::srgba(
                                                     0.880, 0.880, 0.880, 0.0,
                                                 ),
-                                                image: plus_icon,
+                                                image: plus_icon.clone(),
                                                 custom_size: std::option::Option::Some(
                                                     bevy::math::Vec2::splat(20.0),
                                                 ),
@@ -1465,7 +1465,7 @@ fn main() {
                                                 color: bevy::color::Color::srgba(
                                                     0.937, 0.937, 0.937, 0.0,
                                                 ),
-                                                image: registry_icon,
+                                                image: registry_icon.clone(),
                                                 custom_size: std::option::Option::Some(
                                                     bevy::math::Vec2::splat(25.0),
                                                 ),
@@ -1483,7 +1483,7 @@ fn main() {
                                                 color: bevy::color::Color::srgba(
                                                     0.937, 0.937, 0.937, 0.0,
                                                 ),
-                                                image: workspace_icon,
+                                                image: workspace_icon.clone(),
                                                 custom_size: std::option::Option::Some(
                                                     bevy::math::Vec2::splat(26.0),
                                                 ),
@@ -1646,7 +1646,7 @@ fn main() {
                                                 color: bevy::color::Color::srgba(
                                                     0.937, 0.937, 0.937, 0.0,
                                                 ),
-                                                image: flask_icon,
+                                                image: flask_icon.clone(),
                                                 custom_size: std::option::Option::Some(
                                                     bevy::math::Vec2::splat(25.0),
                                                 ),
@@ -1731,7 +1731,7 @@ fn main() {
                                                 color: bevy::color::Color::srgba(
                                                     0.360, 0.360, 0.360, 0.0,
                                                 ),
-                                                image: round_outline,
+                                                image: round_outline.clone(),
                                                 custom_size: std::option::Option::Some(
                                                     bevy::math::Vec2::new(148.0, 44.0),
                                                 ),
@@ -1759,7 +1759,7 @@ fn main() {
                                                 color: bevy::color::Color::srgba(
                                                     0.265, 0.265, 0.265, 0.0,
                                                 ),
-                                                image: round_solid,
+                                                image: round_solid.clone(),
                                                 custom_size: std::option::Option::Some(
                                                     bevy::math::Vec2::splat(32.0),
                                                 ),
@@ -1787,7 +1787,7 @@ fn main() {
                                                 color: bevy::color::Color::srgba(
                                                     0.910, 0.910, 0.910, 0.0,
                                                 ),
-                                                image: rocket_icon,
+                                                image: rocket_icon.clone(),
                                                 custom_size: std::option::Option::Some(
                                                     bevy::math::Vec2::splat(20.0),
                                                 ),
@@ -1872,7 +1872,7 @@ fn main() {
                                                 color: bevy::color::Color::srgba(
                                                     0.094, 0.094, 0.094, 0.0,
                                                 ),
-                                                image: panel_round_solid,
+                                                image: panel_round_solid.clone(),
                                                 custom_size: std::option::Option::Some(
                                                     bevy::math::Vec2::new(458.0, 298.0),
                                                 ),
@@ -3930,30 +3930,28 @@ fn main() {
                                             }
                                             if feedback_state.2 == 1u8 {
                                                 feedback_state.2 = 0u8;
-                                                std::iter::once((draft_state.0.trim(), catalog_state.0.iter().map(|(id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *id).max().unwrap_or(0u64).saturating_add(1u64)))
-                                                    .map(|(trimmed, new_id): (&str, u64)| (trimmed, new_id, catalog_state.0.iter().cloned().chain(std::iter::once((new_id, wizard_state.1, std::string::String::from(trimmed), wizard_state.2, wizard_state.3))).collect::<std::vec::Vec<(u64, u8, std::string::String, u8, u8)>>()))
-                                                    .map(|(trimmed, new_id, candidate): (&str, u64, std::vec::Vec<(u64, u8, std::string::String, u8, u8)>)| (new_id, candidate, std::format!("arxumbra-workspace-catalog v1\n{}\n", candidate.len()) + &candidate.iter().map(|(id, icon, name, kind, dim): &(u64, u8, std::string::String, u8, u8)| std::format!("{}|{}|{}|{}|{}", id, icon, name.as_bytes().iter().map(|byte: &u8| std::format!("{:02x}", byte)).collect::<std::string::String>(), kind, dim)).collect::<std::vec::Vec<std::string::String>>().join("\n") + "\n"))
-                                                    .for_each(|(new_id, candidate, payload): (u64, std::vec::Vec<(u64, u8, std::string::String, u8, u8)>, std::string::String)| {
-                                                        std::iter::once(std::fs::create_dir_all(&dir).and_then(|()| std::fs::OpenOptions::new().write(true).create_new(true).open(dir.join("workspace-catalog.lock"))).and_then(|held: std::fs::File| std::fs::write(dir.join("workspace-catalog.tmp"), payload.as_bytes()).and_then(|()| std::fs::File::open(dir.join("workspace-catalog.tmp")).and_then(|flushed: std::fs::File| flushed.sync_all())).and_then(|()| std::fs::rename(dir.join("workspace-catalog.tmp"), dir.join("workspace-catalog"))).map(|()| held)))
-                                                            .for_each(|outcome: std::result::Result<std::fs::File, std::io::Error>| {
-                                                                match outcome {
-                                                                    std::result::Result::Ok(held) => {
-                                                                        std::fs::remove_file(dir.join("workspace-catalog.lock")).ok();
-                                                                        std::mem::drop(held);
-                                                                        catalog_state.0 = candidate;
-                                                                        list_state.1 = new_id;
-                                                                        app_state[2usize] = 0u8;
-                                                                        *draft_state = (std::string::String::new(), 0u16, false);
-                                                                        feedback_state.0 = 0u8;
-                                                                    }
-                                                                    std::result::Result::Err(_failure) => {
-                                                                        std::fs::remove_file(dir.join("workspace-catalog.tmp")).ok();
-                                                                        std::fs::remove_file(dir.join("workspace-catalog.lock")).ok();
-                                                                        feedback_state.0 = 8u8;
-                                                                    }
+                                                std::iter::once((draft_state.0.trim().to_string(), catalog_state.0.iter().map(|(id, _icon, _name, _kind, _dim): &(u64, u8, std::string::String, u8, u8)| *id).max().unwrap_or(0u64).saturating_add(1u64))).for_each(|(trimmed, new_id): (std::string::String, u64)| {
+                                                    std::iter::once(catalog_state.0.iter().cloned().chain(std::iter::once((new_id, wizard_state.1, trimmed, wizard_state.2, wizard_state.3))).collect::<std::vec::Vec<(u64, u8, std::string::String, u8, u8)>>()).map(|candidate: std::vec::Vec<(u64, u8, std::string::String, u8, u8)>| (candidate, std::format!("arxumbra-workspace-catalog v1\n{}\n", candidate.len()) + &candidate.iter().map(|(id, icon, name, kind, dim): &(u64, u8, std::string::String, u8, u8)| std::format!("{}|{}|{}|{}|{}", id, icon, name.as_bytes().iter().map(|byte: &u8| std::format!("{:02x}", byte)).collect::<std::string::String>(), kind, dim)).collect::<std::vec::Vec<std::string::String>>().join("\n") + "\n")).for_each(|(candidate, payload): (std::vec::Vec<(u64, u8, std::string::String, u8, u8)>, std::string::String)| {
+                                                        std::iter::once(std::fs::create_dir_all(&dir).and_then(|()| std::fs::OpenOptions::new().write(true).create_new(true).open(dir.join("workspace-catalog.lock"))).and_then(|held: std::fs::File| std::fs::write(dir.join("workspace-catalog.tmp"), payload.as_bytes()).and_then(|()| std::fs::File::open(dir.join("workspace-catalog.tmp")).and_then(|flushed: std::fs::File| flushed.sync_all())).and_then(|()| std::fs::rename(dir.join("workspace-catalog.tmp"), dir.join("workspace-catalog"))).map(|()| held))).for_each(|outcome: std::result::Result<std::fs::File, std::io::Error>| {
+                                                            match outcome {
+                                                                std::result::Result::Ok(held) => {
+                                                                    std::fs::remove_file(dir.join("workspace-catalog.lock")).ok();
+                                                                    std::mem::drop(held);
+                                                                    catalog_state.0 = candidate;
+                                                                    list_state.1 = new_id;
+                                                                    app_state[2usize] = 0u8;
+                                                                    *draft_state = (std::string::String::new(), 0u16, false);
+                                                                    feedback_state.0 = 0u8;
                                                                 }
-                                                            });
+                                                                std::result::Result::Err(_failure) => {
+                                                                    std::fs::remove_file(dir.join("workspace-catalog.tmp")).ok();
+                                                                    std::fs::remove_file(dir.join("workspace-catalog.lock")).ok();
+                                                                    feedback_state.0 = 8u8;
+                                                                }
+                                                            }
+                                                        });
                                                     });
+                                                });
                                             }
                                         });
                                     });
