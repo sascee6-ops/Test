@@ -187,9 +187,9 @@ jobs:
           export HOME="${RT}/home"
           printf '%s\n' 'xwayland disable' 'output HEADLESS-1 resolution 1280x800' 'bar { swaybar_command /bin/true }' > "${HOME}/.config/sway/config"
           sudo apt-get update -y > "${RT}/apt.log" 2>&1
-          sudo apt-get install -y --no-install-recommends sway wtype grim libegl1 libgles2 libgl1 libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1
+          sudo apt-get install -y --no-install-recommends sway wtype grim libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1
           echo "::notice title=runtime::apt_rc=$? sway=$(command -v sway) wtype=$(command -v wtype) grim=$(command -v grim) convert=$(command -v convert)"
-          WLR_BACKENDS=headless WLR_LIBINPUT_BACKENDS=libinput WLR_RENDERER_ALLOW_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe sway -V debug > "${RT}/sway.log" 2>&1 &
+          WLR_BACKENDS=headless WLR_RENDERER_ALLOW_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe sway -d -c "${HOME}/.config/sway/config" > "${RT}/sway.log" 2>&1 &
           SWAY_PID=$!
           SOCKET=""
           for _i in $(seq 1 60); do
@@ -198,8 +198,10 @@ jobs:
           done
           echo "::notice title=runtime::socket=${SOCKET:-none} sway_pid=${SWAY_PID}"
           if [ -z "${SOCKET}" ]; then
-            echo "::error title=runtime::headless compositor did not start"
-            tail -40 "${RT}/sway.log" | while IFS= read -r line; do printf '::error title=sway::%s\n' "${line//%/%25}"; done
+            wait ${SWAY_PID} 2>/dev/null
+            echo "::error title=runtime::headless compositor did not start sway_rc=$?"
+            grep -E '\[(ERROR|FATAL)\]' "${RT}/sway.log" | tail -20 | while IFS= read -r line; do printf '::error title=sway::%s\n' "${line//%/%25}"; done
+            tail -12 "${RT}/sway.log" | while IFS= read -r line; do printf '::error title=sway-tail::%s\n' "${line//%/%25}"; done
             exit 1
           fi
           export WAYLAND_DISPLAY=wayland-1
