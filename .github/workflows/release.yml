@@ -233,7 +233,7 @@ jobs:
               sleep 0.25
               XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}c"
               cp "${RT}/${CASE}b.png" "${RT}/motionmid.png" 2>/dev/null || true
-              if [ "${CASE}" != "motion" ]; then cp "${RT}/${CASE}b.png" "${RT}/${CASE}mid.png" 2>/dev/null || true; fi
+              if [ "${CASE}" != "motion" ]; then cp "${RT}/${CASE}b.png" "${RT}/${CASE}.png" 2>/dev/null || true; fi
             else
               sleep 20
               XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 shot "${CASE}"
@@ -261,7 +261,6 @@ jobs:
             if [ -s "${RT}/verdicts" ]; then sed 's/^/alive: /' "${RT}/verdicts"; else echo "alive: none"; fi
             if [ -s "${RT}/panics" ]; then cut -c1-120 "${RT}/panics" | head -4; else echo "no panic or error lines in any app log"; fi
           } | tr -d '\000-\010\013\014\016-\037' | cut -c1-220 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=probe-report::${msg}"; done
-          fi
           if [ "$(grep -c '^home yes' "${RT}/verdicts" 2>/dev/null)" != "1" ]; then
             echo "::error title=runtime::application did not stay alive under headless Wayland"
           fi
