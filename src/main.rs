@@ -4029,7 +4029,14 @@ fn main() {
                                                     std::iter::once((
                                                         usize::from(idx),
                                                         f32::from(u8::from(
-                                                            hovered == idx.saturating_add(1),
+                                                            hovered == idx.saturating_add(1)
+                                                                || (idx == 0usize
+                                                                    && final_menu
+                                                                    && final_mode != 2u8)
+                                                                || (idx == 1usize
+                                                                    && !final_menu
+                                                                    && final_mode != 2u8)
+                                                                || (idx == 2usize && final_mode == 2u8),
                                                         )),
                                                         f32::from(u8::from(
                                                             (hovered == idx.saturating_add(1))
@@ -4106,7 +4113,7 @@ fn main() {
                                             [
                                                 (
                                                     0usize,
-                                                    1.0f32,
+                                                    if final_menu { 0.0f32 } else { 1.0f32 },
                                                     18.0f32,
                                                 ),
                                                 (
@@ -4217,9 +4224,9 @@ fn main() {
                                                                         1.0,
                                                                     ),
                                                                     bevy::color::Color::srgba(
-                                                                        0.180, 0.180, 0.180, menu_t,
+                                                                        0.180, 0.180, 0.180, 1.0,
                                                                     ),
-                                                                    menu_t > 0.0,
+                                                                    true,
                                                                 ),
                                                                 (
                                                                     e[1],
@@ -4233,9 +4240,9 @@ fn main() {
                                                                         1.1,
                                                                     ),
                                                                     bevy::color::Color::srgba(
-                                                                        0.086, 0.086, 0.086, menu_t,
+                                                                        0.086, 0.086, 0.086, 1.0,
                                                                     ),
-                                                                    menu_t > 0.0,
+                                                                    true,
                                                                 ),
                                                                 (
                                                                     e[2],
@@ -4246,9 +4253,9 @@ fn main() {
                                                                         2.0,
                                                                     ),
                                                                     bevy::color::Color::srgba(
-                                                                        0.149, 0.149, 0.149, menu_t,
+                                                                        0.149, 0.149, 0.149, 1.0,
                                                                     ),
-                                                                    menu_t > 0.0,
+                                                                    true,
                                                                 ),
                                                                 (
                                                                     e[3],
@@ -4262,9 +4269,9 @@ fn main() {
                                                                         0.937,
                                                                         0.937,
                                                                         0.937,
-                                                                        menu_t * (1.0 - ws_t),
+                                                                        (1.0 - ws_t),
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                    ws_t < 1.0,
                                                                 ),
                                                                 (
                                                                     e[4],
@@ -4278,9 +4285,9 @@ fn main() {
                                                                         0.937,
                                                                         0.937,
                                                                         0.937,
-                                                                        menu_t * ws_t,
+                                                                        ws_t,
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t > 0.0,
+                                                                    ws_t > 0.0,
                                                                 ),
                                                                 (
                                                                     e[7],
@@ -4294,9 +4301,9 @@ fn main() {
                                                                         2.0,
                                                                     ),
                                                                     bevy::color::Color::srgba(
-                                                                        0.176, 0.176, 0.176, menu_t,
+                                                                        0.176, 0.176, 0.176, 1.0,
                                                                     ),
-                                                                    menu_t > 0.0,
+                                                                    true,
                                                                 ),
                                                                 (
                                                                     e[8],
@@ -4353,9 +4360,9 @@ fn main() {
                                                                                     * anim_state.1
                                                                                         [0])
                                                                                 * (1.0 - nav_t),
-                                                                        menu_t * (1.0 - ws_t),
+                                                                        (1.0 - ws_t),
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                    ws_t < 1.0,
                                                                 ),
                                                                 (
                                                                     e[9],
@@ -4408,9 +4415,9 @@ fn main() {
                                                                             - 0.020
                                                                                 * anim_state.1[0]
                                                                             - 0.015 * (1.0 - nav_t),
-                                                                        menu_t * (1.0 - ws_t),
+                                                                        (1.0 - ws_t),
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                    ws_t < 1.0,
                                                                 ),
                                                                 (
                                                                     e[11],
@@ -4436,9 +4443,9 @@ fn main() {
                                                                                 * anim_state.0[0])
                                                                             * nav_t
                                                                             + 0.937 * (1.0 - nav_t),
-                                                                        menu_t * (1.0 - ws_t),
+                                                                        (1.0 - ws_t),
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                    ws_t < 1.0,
                                                                 ),
                                                                 (
                                                                     e[13],
@@ -4495,9 +4502,9 @@ fn main() {
                                                                                     * anim_state.1
                                                                                         [1])
                                                                                 * nav_t,
-                                                                        menu_t * (1.0 - ws_t),
+                                                                        (1.0 - ws_t),
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                    ws_t < 1.0,
                                                                 ),
                                                                 (
                                                                     e[14],
@@ -4550,9 +4557,9 @@ fn main() {
                                                                             - 0.020
                                                                                 * anim_state.1[1]
                                                                             - 0.015 * nav_t,
-                                                                        menu_t * (1.0 - ws_t),
+                                                                        (1.0 - ws_t),
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                    ws_t < 1.0,
                                                                 ),
                                                                 (
                                                                     e[16],
@@ -4578,9 +4585,9 @@ fn main() {
                                                                                 * anim_state.0[1])
                                                                             * (1.0 - nav_t)
                                                                             + 0.937 * nav_t,
-                                                                        menu_t * (1.0 - ws_t),
+                                                                        (1.0 - ws_t),
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                    ws_t < 1.0,
                                                                 ),
                                                                 (
                                                                     e[18],
@@ -4610,9 +4617,9 @@ fn main() {
                                                                                 * anim_state.0[3]
                                                                             - 0.030
                                                                                 * anim_state.1[3],
-                                                                        menu_t * ws_t,
+                                                                        ws_t,
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t > 0.0,
+                                                                    ws_t > 0.0,
                                                                 ),
                                                                 (
                                                                     e[19],
@@ -4636,9 +4643,9 @@ fn main() {
                                                                         0.275
                                                                             + 0.280
                                                                                 * anim_state.0[3],
-                                                                        menu_t * ws_t,
+                                                                        ws_t,
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t > 0.0,
+                                                                    ws_t > 0.0,
                                                                 ),
                                                                 (
                                                                     e[20],
@@ -4664,9 +4671,9 @@ fn main() {
                                                                                 * anim_state.0[3]
                                                                             - 0.025
                                                                                 * anim_state.1[3],
-                                                                        menu_t * ws_t,
+                                                                        ws_t,
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t > 0.0,
+                                                                    ws_t > 0.0,
                                                                 ),
                                                                 (
                                                                     e[21],
@@ -4686,9 +4693,9 @@ fn main() {
                                                                         0.880
                                                                             + 0.090
                                                                                 * anim_state.0[3],
-                                                                        menu_t * ws_t,
+                                                                        ws_t,
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t > 0.0,
+                                                                    ws_t > 0.0,
                                                                 ),
                                                                 (
                                                                     e[23],
@@ -5423,9 +5430,9 @@ fn main() {
                                                                         0.937,
                                                                         0.937,
                                                                         0.937,
-                                                                        menu_t * (1.0 - ws_t),
+                                                                        (1.0 - ws_t),
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                    ws_t < 1.0,
                                                                 ),
                                                                 (
                                                                     e[6],
@@ -5438,9 +5445,9 @@ fn main() {
                                                                         0.937,
                                                                         0.937,
                                                                         0.937,
-                                                                        menu_t * ws_t,
+                                                                        ws_t,
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t > 0.0,
+                                                                    ws_t > 0.0,
                                                                 ),
                                                                 (
                                                                     e[12],
@@ -5465,9 +5472,9 @@ fn main() {
                                                                                 * anim_state.0[0])
                                                                             * nav_t
                                                                             + 0.086 * (1.0 - nav_t),
-                                                                        menu_t * (1.0 - ws_t),
+                                                                        (1.0 - ws_t),
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                    ws_t < 1.0,
                                                                 ),
                                                                 (
                                                                     e[17],
@@ -5492,9 +5499,9 @@ fn main() {
                                                                                 * anim_state.0[1])
                                                                             * (1.0 - nav_t)
                                                                             + 0.086 * nav_t,
-                                                                        menu_t * (1.0 - ws_t),
+                                                                        (1.0 - ws_t),
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t < 1.0,
+                                                                    ws_t < 1.0,
                                                                 ),
                                                                 (
                                                                     e[22],
@@ -5513,9 +5520,9 @@ fn main() {
                                                                         0.880
                                                                             + 0.090
                                                                                 * anim_state.0[3],
-                                                                        menu_t * ws_t,
+                                                                        ws_t,
                                                                     ),
-                                                                    menu_t > 0.0 && ws_t > 0.0,
+                                                                    ws_t > 0.0,
                                                                 ),
                                                                 (
                                                                     e[28],

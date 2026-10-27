@@ -242,6 +242,62 @@ jobs:
             wait ${SP} 2>/dev/null || true
           done
           unset ARXUMBRA_PROBE
+          NAME2="${NAME}"
+          RELD="${RUNNER_TEMP}/stage-release"
+          ANAD="${RUNNER_TEMP}/stage-analysis"
+          mkdir -p "${RELD}" "${ANAD}"
+          sudo apt-get install -y --no-install-recommends rizin strace >> "${RT}/apt.log" 2>&1 || hb "analysis apt rc=$?"
+          T0=$(date +%s)
+          cargo +nightly-2026-10-25 build --quiet --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-rel-fat" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="fat"' --config 'profile.release.codegen-units=1' --config 'profile.release.panic="abort"' --config 'profile.release.strip=true' --config 'profile.release.debug=false' --config 'profile.release.overflow-checks=true' > "${RT}/rel-fat.log" 2>&1 || hb "rel fat build rc=$?"
+          T1=$(date +%s)
+          REL="${RELD}/${NAME2}"
+          cp "${RUNNER_TEMP}/target-rel-fat/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${REL}" 2>>"${RT}/rel-fat.log" || hb "rel cp rc=$?"
+          T2=$(date +%s)
+          cargo +nightly-2026-10-25 build --quiet --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-rel-thin" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="thin"' --config 'profile.release.codegen-units=8' --config 'profile.release.panic="abort"' --config 'profile.release.strip=true' --config 'profile.release.debug=false' --config 'profile.release.overflow-checks=true' > "${RT}/rel-thin.log" 2>&1 || hb "rel thin build rc=$?"
+          T3=$(date +%s)
+          THIN="${RELD}/${NAME2}-thinlto-experiment"
+          cp "${RUNNER_TEMP}/target-rel-thin/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${THIN}" 2>>"${RT}/rel-thin.log" || hb "thin cp rc=$?"
+          cargo +nightly-2026-10-25 build --quiet --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-ana" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="fat"' --config 'profile.release.codegen-units=1' --config 'profile.release.panic="abort"' --config 'profile.release.strip=false' --config 'profile.release.debug="line-tables-only"' --config 'profile.release.overflow-checks=true' > "${RT}/ana.log" 2>&1 || hb "analysis build rc=$?"
+          ANA="${ANAD}/${NAME2}-analysis"
+          cp "${RUNNER_TEMP}/target-ana/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${ANA}" 2>>"${RT}/ana.log" || hb "ana cp rc=$?"
+          {
+            echo "audit build_seconds fat=$((T1-T0)) thin=$((T3-T2))"
+            echo "audit sizes rel_fat=$(stat -c %s "${REL}" 2>/dev/null) rel_thin=$(stat -c %s "${THIN}" 2>/dev/null) analysis=$(stat -c %s "${ANA}" 2>/dev/null) debug=$(stat -c %s "${BIN}" 2>/dev/null)"
+            file "${REL}" 2>/dev/null | cut -c1-150
+            readelf -h "${REL}" 2>/dev/null | grep -aE 'Class|Machine|Type:' | tr -d '\000-\010\013\014\016-\037' | paste -sd ' ' - | cut -c1-160
+            readelf -lW "${REL}" 2>/dev/null | grep -aE 'GNU_STACK|GNU_RELRO' | tr -s ' ' | paste -sd ' ' - | cut -c1-160
+            readelf -dW "${REL}" 2>/dev/null | grep -aE 'NEEDED|BIND_NOW|RUNPATH|RPATH' | tr -s ' ' | paste -sd ';' - | cut -c1-220
+            echo "audit debug_sections=$(readelf -SW "${REL}" 2>/dev/null | grep -ac '\.debug_') dyn_syms=$(nm -D "${REL}" 2>/dev/null | grep -acE ' [TW] ')"
+            size "${REL}" 2>/dev/null | tail -1 | tr -s ' ' | sed 's/^/audit size: /' | cut -c1-120
+          } > "${RT}/audit" 2>"${RT}/audit.err"
+          SYM=$(rz-bin -s "${ANA}" 2>/dev/null | grep -aF 'Subsystem_for_Arxumbra' | grep -aF '4main' | head -1 | awk '{print $6}')
+          {
+            echo "audit rizin sym=${SYM}"
+            if [ -n "${SYM}" ]; then
+              timeout 900 rizin -q -c "aaa; afl~${SYM}; afi @ ${SYM}" "${ANA}" 2>/dev/null | grep -aE 'fcn|size|bbs|calls' | head -6 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180
+            else
+              echo "rizin symbol lookup empty; fallback rz-bin counts:"
+              rz-bin -s "${ANA}" 2>/dev/null | grep -ac 'Subsystem_for_Arxumbra' | sed 's/^/audit rizin app_syms=/'
+            fi
+          } >> "${RT}/audit" 2>>"${RT}/audit.err"
+          XD="${RT}/xdg-trace"
+          HM2="${RT}/home-trace"
+          mkdir -p "${XD}" "${HM2}/.config/sway"
+          chmod 700 "${XD}"
+          printf '%s\n' 'xwayland disable' 'output HEADLESS-1 resolution 1280x768' 'bar { swaybar_command /bin/true }' > "${HM2}/.config/sway/config"
+          XDG_RUNTIME_DIR="${XD}" HOME="${HM2}" WAYLAND_DISPLAY=wayland-1 WLR_BACKENDS=headless WLR_RENDERER_ALLOW_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe sway -d -c "${HM2}/.config/sway/config" > "${RT}/sway-trace.log" 2>&1 &
+          SP2=$!
+          for _i in $(seq 1 60); do
+            if [ -S "${XD}/wayland-1" ]; then break; fi
+            sleep 0.5
+          done
+          XDG_RUNTIME_DIR="${XD}" HOME="${HM2}" WAYLAND_DISPLAY=wayland-1 timeout 40 strace -f -c -o "${RT}/strace.txt" timeout 12 "${BIN}" > "${RT}/trace-app.log" 2>&1 || true
+          {
+            echo "audit strace top:"
+            grep -aE 'clock_nanosleep|poll|openat|write|read' "${RT}/strace.txt" 2>/dev/null | head -6 | tr -s ' ' | cut -c1-110
+          } >> "${RT}/audit" 2>>"${RT}/audit.err"
+          kill ${SP2} 2>/dev/null || true
+          wait ${SP2} 2>/dev/null || true
           if [ -s "${RT}/motionmid.png" ]; then
             b64=$(convert "${RT}/motionmid.png" -resize 240x144 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
             if [ -n "${b64}" ]; then echo "::notice title=shot-motionmid::${b64}"; fi
@@ -249,6 +305,7 @@ jobs:
           {
             if [ -s "${RT}/verdicts" ]; then sed 's/^/alive: /' "${RT}/verdicts"; else echo "alive: none"; fi
             if [ -s "${RT}/panics" ]; then cat "${RT}/panics"; else echo "no panic or error lines in any app log"; fi
+            if [ -s "${RT}/audit" ]; then cut -c1-190 "${RT}/audit" | head -16; else echo "audit missing"; fi
           } | tr -d '\000-\010\013\014\016-\037' | cut -c1-220 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=probe-report::${msg}"; done
           if [ "$(grep -c '^home yes' "${RT}/verdicts" 2>/dev/null)" = "1" ]; then
             hb "smoke result: application launched and kept running under headless Wayland"
