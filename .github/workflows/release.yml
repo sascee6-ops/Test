@@ -253,24 +253,24 @@ jobs:
             if [ -n "${RZURL}" ]; then
               curl -fsSL -o "${RT}/rizin.tar.xz" "${RZURL}" 2>>"${RT}/apt.log" || echo "rizin dl rc=$?" >> "${RT}/panics"
               mkdir -p "${RT}/rz"
-              tar -xJf "${RT}/rizin.tar.xz" -C "${RT}/rz" --strip-components=1 2>>"${RT}/apt.log" || echo "rizin unpack rc=$?" >> "${RT}/panics"
-              RZBIN=$(find "${RT}/rz" -type f -name rizin 2>/dev/null | head -1)
+              tar -xJf "${RT}/rizin.tar.xz" -C "${RT}/rz" 2>>"${RT}/apt.log" || echo "rizin unpack rc=$?" >> "${RT}/panics"
+              RZBIN=$(find "${RT}/rz" -name rizin -not -type d 2>/dev/null | head -1)
               if [ -n "${RZBIN}" ]; then
                 export PATH="$(dirname "${RZBIN}"):${PATH}"
               else
-                echo "rizin binary not found in unpack tree" >> "${RT}/panics"
+                { echo "rizin binary not found; tree:"; find "${RT}/rz" -maxdepth 3 2>/dev/null | head -8; } >> "${RT}/panics"
               fi
             else
               echo "rizin static url not found" >> "${RT}/panics"
             fi
           fi
           T0=$(date +%s)
-          cargo +nightly-2026-10-25 build --quiet --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-rel-fat" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="fat"' --config 'profile.release.codegen-units=1' --config 'profile.release.panic="abort"' --config 'profile.release.strip=true' --config 'profile.release.debug=false' --config 'profile.release.overflow-checks=true' > "${RT}/rel-fat.log" 2>&1 || echo "rel fat build rc=$?" >> "${RT}/panics"
+          cargo +nightly-2026-10-25 build --quiet --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-rel-fat" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="fat"' --config 'profile.release.codegen-units=1' --config 'profile.release.panic="abort"' --config 'profile.release.strip=true' --config 'profile.release.debug=false' --config 'profile.release.overflow-checks=true' > "${RT}/rel-fat.log" 2>&1 || { echo "rel fat build rc=$?" >> "${RT}/panics"; grep -a -A6 '^error' "${RT}/rel-fat.log" | head -24 | tr -d '\000-\010\013\014\016-\037' | cut -c1-160 | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r m; do echo "::notice title=builderr-fat::${m}"; done; }
           T1=$(date +%s)
           REL="${RELD}/${NAME2}"
           cp "${RUNNER_TEMP}/target-rel-fat/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${REL}" 2>>"${RT}/rel-fat.log" || { echo "rel cp rc=$? log tail:"; tail -4 "${RT}/rel-fat.log"; } >> "${RT}/panics"
           T2=$(date +%s)
-          cargo +nightly-2026-10-25 build --quiet --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-rel-thin" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="thin"' --config 'profile.release.codegen-units=8' --config 'profile.release.panic="abort"' --config 'profile.release.strip=true' --config 'profile.release.debug=false' --config 'profile.release.overflow-checks=true' > "${RT}/rel-thin.log" 2>&1 || echo "rel thin build rc=$?" >> "${RT}/panics"
+          cargo +nightly-2026-10-25 build --quiet --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-rel-thin" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="thin"' --config 'profile.release.codegen-units=8' --config 'profile.release.panic="abort"' --config 'profile.release.strip=true' --config 'profile.release.debug=false' --config 'profile.release.overflow-checks=true' > "${RT}/rel-thin.log" 2>&1 || { echo "rel thin build rc=$?" >> "${RT}/panics"; grep -a -A6 '^error' "${RT}/rel-thin.log" | head -24 | tr -d '\000-\010\013\014\016-\037' | cut -c1-160 | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r m; do echo "::notice title=builderr-thin::${m}"; done; }
           T3=$(date +%s)
           THIN="${RELD}/${NAME2}-thinlto-experiment"
           cp "${RUNNER_TEMP}/target-rel-thin/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${THIN}" 2>>"${RT}/rel-thin.log" || { echo "thin cp rc=$? log tail:"; tail -4 "${RT}/rel-thin.log"; } >> "${RT}/panics"
@@ -321,8 +321,8 @@ jobs:
           fi
           {
             if [ -s "${RT}/verdicts" ]; then sed 's/^/alive: /' "${RT}/verdicts"; else echo "alive: none"; fi
-            if [ -s "${RT}/panics" ]; then cat "${RT}/panics"; else echo "no panic or error lines in any app log"; fi
-            if [ -s "${RT}/audit" ]; then cut -c1-170 "${RT}/audit" | head -26; else echo "audit missing"; fi
+            if [ -s "${RT}/panics" ]; then cut -c1-130 "${RT}/panics" | head -6; else echo "no panic or error lines in any app log"; fi
+            if [ -s "${RT}/audit" ]; then cut -c1-150 "${RT}/audit" | head -18; else echo "audit missing"; fi
           } | tr -d '\000-\010\013\014\016-\037' | cut -c1-220 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=probe-report::${msg}"; done
           if [ "$(grep -c '^home yes' "${RT}/verdicts" 2>/dev/null)" != "1" ]; then
             echo "::error title=runtime::application did not stay alive under headless Wayland"
