@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - arena/784e0a1e-test
   workflow_dispatch:
     inputs:
       build_mode:
@@ -139,11 +138,10 @@ jobs:
           retention-days: 7
           if-no-files-found: error
       - name: Stage 7
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
         shell: bash
         run: |
-          set +e
-          cargo +nightly-2026-10-25 build --locked \
+          cargo +nightly-2026-10-25 build --quiet --locked \
             --bin Subsystem-for-Arxumbra \
             --target x86_64-unknown-linux-gnu \
             --target-dir "${RUNNER_TEMP}/target-debug" \
@@ -151,21 +149,16 @@ jobs:
             --config 'profile.dev.opt-level=0' \
             --config 'profile.dev.debug="line-tables-only"' \
             --config 'profile.dev.debug-assertions=true' \
-            --config 'profile.dev.overflow-checks=true' > "${RUNNER_TEMP}/build-debug.log" 2>&1
-          RC=$?
-          if [ "${RC}" != "0" ]; then
-            grep -aE 'error(\[E[0-9]+\])?:|-->|expected|found' "${RUNNER_TEMP}/build-debug.log" | head -14 | tr -d '\000-\010\013\014\016-\037' | cut -c1-190 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=build-errors::${msg}"; done
-          fi
-          exit ${RC}
+            --config 'profile.dev.overflow-checks=true'
       - name: Stage 8
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage-debug"
           install -m 755 "${RUNNER_TEMP}/target-debug/x86_64-unknown-linux-gnu/debug/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           tar -czf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz" -C "${RUNNER_TEMP}/stage-debug" "x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 9
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
         shell: bash
         run: |
           tar -tzvf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz"
@@ -179,7 +172,7 @@ jobs:
           file "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           ldd "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 10
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') }}
         shell: bash
         run: |
           set +e +o pipefail
@@ -295,11 +288,13 @@ jobs:
             echo "audit bind_now=$(readelf -dW "${REL}" 2>/dev/null | grep -acE 'BIND_NOW') relro_segs=$(readelf -lW "${REL}" 2>/dev/null | grep -ac GNU_RELRO) needed_n=$(readelf -dW "${REL}" 2>/dev/null | grep -ac NEEDED)"
             size "${REL}" 2>/dev/null | tail -1 | tr -s ' ' | sed 's/^/audit size: /' | cut -c1-120
           } > "${RT}/audit" 2>"${RT}/audit.err"
-          SYM=$(rz-bin -s "${ANA}" 2>/dev/null | grep -a 'Subsystem_for_Arxumbra' | grep -aE 'main' | head -1 | awk '{print $NF}')
+          SYMLINE=$(rz-bin -s "${ANA}" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -a 'Subsystem_for_Arxumbra' | grep -aE 'main' | head -1)
+          SYM=$(echo "${SYMLINE}" | awk '{print $NF}')
+          SADDR=$(echo "${SYMLINE}" | grep -ao '0x[0-9a-fA-F]\+' | head -1)
           {
             echo "audit rizin sym=${SYM}"
             if [ -n "${SYM}" ]; then
-              timeout 900 rizin -q -c "aaa; afl~${SYM}; afi @ ${SYM}" "${ANA}" 2>/dev/null | grep -aE 'fcn|size|bbs|calls' | head -6 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180
+              timeout 900 rizin -q -c "aaa; afi @ ${SADDR}" "${ANA}" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -aE 'fcn|size|bbs|calls' | head -6 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180
             else
               echo "rizin symbol lookup empty; fallback rz-bin counts:"
               rz-bin -s "${ANA}" 2>/dev/null | grep -ac 'Subsystem_for_Arxumbra' | sed 's/^/audit rizin app_syms=/'
@@ -334,7 +329,7 @@ jobs:
           if [ -s "${RT}/audit" ]; then
             {
               sed -n '1,8p' "${RT}/audit" | sed 's|^[^:]*: ||'
-              grep -aE 'audit rizin|fcn\.|af:|bbs:|calls:|app_syms|bind_now' "${RT}/audit" | head -5
+              grep -aE 'audit rizin|fcn\.|af:|bbs:|calls:|app_syms' "${RT}/audit" | head -4
               grep -aA3 'audit strace top' "${RT}/audit" | head -4
             } | cut -c1-150 | head -18 | tr -d '\000-\010\013\014\016-\037' | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=binary-audit::${msg}"; done
           fi
@@ -343,7 +338,7 @@ jobs:
           fi
           exit 0
       - name: Stage 11
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug
