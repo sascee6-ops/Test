@@ -329,8 +329,10 @@ jobs:
           {
             if [ -s "${RT}/verdicts" ]; then sed 's/^/alive: /' "${RT}/verdicts"; else echo "alive: none"; fi
             if [ -s "${RT}/panics" ]; then cut -c1-120 "${RT}/panics" | head -4; else echo "no panic or error lines in any app log"; fi
-            if [ -s "${RT}/audit" ]; then cut -c1-150 "${RT}/audit" | head -18; else echo "audit missing"; fi
           } | tr -d '\000-\010\013\014\016-\037' | cut -c1-220 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=probe-report::${msg}"; done
+          if [ -s "${RT}/audit" ]; then
+            cut -c1-180 "${RT}/audit" | head -22 | tr -d '\000-\010\013\014\016-\037' | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=binary-audit::${msg}"; done
+          fi
           if [ "$(grep -c '^home yes' "${RT}/verdicts" 2>/dev/null)" != "1" ]; then
             echo "::error title=runtime::application did not stay alive under headless Wayland"
           fi
