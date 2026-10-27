@@ -3307,6 +3307,28 @@ fn main() {
                                     wizard_state.2 = 3u8;
                                     wizard_state.3 = 1u8;
                                 }
+                                if probe == "stepmid"
+                                    || probe == "guimid"
+                                    || probe == "dismissmid"
+                                {
+                                    app_state[0] = 2u8;
+                                    app_state[1] = 0u8;
+                                    app_state[2] = 1u8;
+                                    draft_state.0 = std::string::String::from("Arena Test");
+                                    draft_state.1 = 10u16;
+                                    draft_state.2 = true;
+                                }
+                                if probe == "stepmid" && *clock_state > 18.0 {
+                                    wizard_state.0 = 1u8;
+                                }
+                                if probe == "guimid" && *clock_state > 18.0 {
+                                    wizard_state.0 = 1u8;
+                                    wizard_state.2 = 3u8;
+                                    wizard_state.3 = 1u8;
+                                }
+                                if probe == "dismissmid" && *clock_state > 18.0 {
+                                    app_state[2] = 0u8;
+                                }
                             });
                     }                    std::iter::once((
                         metrics_state.2.x,
