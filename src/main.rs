@@ -3270,6 +3270,7 @@ fn main() {
                                     app_state[1] = 1u8;
                                 }
                                 if probe == "workspace"
+                                    || probe == "catalog"
                                     || probe == "wizard"
                                     || probe == "wizard2"
                                     || probe == "wizardgui"
