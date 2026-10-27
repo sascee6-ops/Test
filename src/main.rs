@@ -4030,13 +4030,13 @@ fn main() {
                                                         usize::from(idx),
                                                         f32::from(u8::from(
                                                             hovered == idx.saturating_add(1)
-                                                                || (idx == 0usize
+                                                                || (idx == 0u8
                                                                     && final_menu
                                                                     && final_mode != 2u8)
-                                                                || (idx == 1usize
+                                                                || (idx == 1u8
                                                                     && !final_menu
                                                                     && final_mode != 2u8)
-                                                                || (idx == 2usize && final_mode == 2u8),
+                                                                || (idx == 2u8 && final_mode == 2u8),
                                                         )),
                                                         f32::from(u8::from(
                                                             (hovered == idx.saturating_add(1))
