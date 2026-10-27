@@ -189,12 +189,12 @@ jobs:
           RT="${RUNNER_TEMP}/runtime"
           rm -rf "${RT}"
           mkdir -p "${RT}"
-          sudo apt-get update -y > "${RT}/apt.log" 2>&1 || hb "apt update rc=$?"
-          sudo apt-get install -y --no-install-recommends sway grim libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1 || hb "apt install rc=$?"
+          sudo apt-get update -y > "${RT}/apt.log" 2>&1 || echo "apt update rc=$?" >> "${RT}/panics"
+          sudo apt-get install -y --no-install-recommends sway grim libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1 || echo "apt install rc=$?" >> "${RT}/panics"
           shot() {
             local b64=""
             timeout 20 grim -o HEADLESS-1 "${RT}/$1.png" 2>>"${RT}/grim.log"
-            b64=$(convert "${RT}/$1.png" -resize 240x144 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
+            b64=$(convert "${RT}/$1.png" -resize 224x134 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
             if [ -n "${b64}" ]; then echo "::notice title=shot-$1::${b64}"; fi
             return 0
           }
@@ -246,20 +246,46 @@ jobs:
           RELD="${RUNNER_TEMP}/stage-release"
           ANAD="${RUNNER_TEMP}/stage-analysis"
           mkdir -p "${RELD}" "${ANAD}"
-          sudo apt-get install -y --no-install-recommends rizin strace >> "${RT}/apt.log" 2>&1 || hb "analysis apt rc=$?"
+          sudo apt-get install -y --no-install-recommends strace >> "${RT}/apt.log" 2>&1 || echo "strace apt rc=$?" >> "${RT}/panics"
+          sudo apt-get install -y --no-install-recommends rizin >> "${RT}/apt.log" 2>&1 || echo "rizin apt unavailable rc=$?" >> "${RT}/panics"
+          if ! command -v rizin >/dev/null 2>&1; then
+            sudo apt-get install -y --no-install-recommends openjdk-17-jre-headless unzip >> "${RT}/apt.log" 2>&1 || echo "jdk apt rc=$?" >> "${RT}/panics"
+            GHUDIR="${RUNNER_TEMP}/ghidra"
+            mkdir -p "${GHUDIR}"
+            URL=$(curl -fsSL https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/latest 2>/dev/null | grep -ao 'https://github.com/NationalSecurityAgency/ghidra/releases/download/[^"]*\.zip' | head -1)
+            if [ -n "${URL}" ]; then
+              curl -fsSL -o "${RUNNER_TEMP}/ghidra.zip" "${URL}" 2>>"${RT}/apt.log" || echo "ghidra download rc=$?" >> "${RT}/panics"
+              unzip -q "${RUNNER_TEMP}/ghidra.zip" -d "${GHUDIR}" 2>>"${RT}/apt.log" || echo "ghidra unzip rc=$?" >> "${RT}/panics"
+            else
+              echo "ghidra release url not found" >> "${RT}/panics"
+            fi
+            GHBIN=$(ls "${GHUDIR}" 2>/dev/null | head -1)
+            cat > "${RT}/targeted.py" <<'PY'
+            fm = currentProgram.getFunctionManager()
+            n = 0
+            for f in fm.getFunctions(True):
+                nm = f.getName()
+                if 'Subsystem_for_Arxumbra' in nm and '4main' in nm:
+                    print("FN %s bytes=%d" % (nm[:150], f.getBody().getNumAddresses()))
+                    n += 1
+                    if n >= 10:
+                        break
+            print("FN_COUNT_MATCHED %d" % n)
+            PY
+          fi
           T0=$(date +%s)
           cargo +nightly-2026-10-25 build --quiet --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-rel-fat" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="fat"' --config 'profile.release.codegen-units=1' --config 'profile.release.panic="abort"' --config 'profile.release.strip=true' --config 'profile.release.debug=false' --config 'profile.release.overflow-checks=true' > "${RT}/rel-fat.log" 2>&1 || hb "rel fat build rc=$?"
           T1=$(date +%s)
           REL="${RELD}/${NAME2}"
-          cp "${RUNNER_TEMP}/target-rel-fat/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${REL}" 2>>"${RT}/rel-fat.log" || hb "rel cp rc=$?"
+          cp "${RUNNER_TEMP}/target-rel-fat/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${REL}" 2>>"${RT}/rel-fat.log" || { echo "rel cp rc=$? log tail:"; tail -4 "${RT}/rel-fat.log"; } >> "${RT}/panics"
           T2=$(date +%s)
           cargo +nightly-2026-10-25 build --quiet --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-rel-thin" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="thin"' --config 'profile.release.codegen-units=8' --config 'profile.release.panic="abort"' --config 'profile.release.strip=true' --config 'profile.release.debug=false' --config 'profile.release.overflow-checks=true' > "${RT}/rel-thin.log" 2>&1 || hb "rel thin build rc=$?"
           T3=$(date +%s)
           THIN="${RELD}/${NAME2}-thinlto-experiment"
-          cp "${RUNNER_TEMP}/target-rel-thin/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${THIN}" 2>>"${RT}/rel-thin.log" || hb "thin cp rc=$?"
+          cp "${RUNNER_TEMP}/target-rel-thin/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${THIN}" 2>>"${RT}/rel-thin.log" || { echo "thin cp rc=$? log tail:"; tail -4 "${RT}/rel-thin.log"; } >> "${RT}/panics"
           cargo +nightly-2026-10-25 build --quiet --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-ana" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="fat"' --config 'profile.release.codegen-units=1' --config 'profile.release.panic="abort"' --config 'profile.release.strip=false' --config 'profile.release.debug="line-tables-only"' --config 'profile.release.overflow-checks=true' > "${RT}/ana.log" 2>&1 || hb "analysis build rc=$?"
           ANA="${ANAD}/${NAME2}-analysis"
-          cp "${RUNNER_TEMP}/target-ana/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${ANA}" 2>>"${RT}/ana.log" || hb "ana cp rc=$?"
+          cp "${RUNNER_TEMP}/target-ana/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${ANA}" 2>>"${RT}/ana.log" || { echo "ana cp rc=$? log tail:"; tail -4 "${RT}/ana.log"; } >> "${RT}/panics"
           {
             echo "audit build_seconds fat=$((T1-T0)) thin=$((T3-T2))"
             echo "audit sizes rel_fat=$(stat -c %s "${REL}" 2>/dev/null) rel_thin=$(stat -c %s "${THIN}" 2>/dev/null) analysis=$(stat -c %s "${ANA}" 2>/dev/null) debug=$(stat -c %s "${BIN}" 2>/dev/null)"
@@ -270,6 +296,13 @@ jobs:
             echo "audit debug_sections=$(readelf -SW "${REL}" 2>/dev/null | grep -ac '\.debug_') dyn_syms=$(nm -D "${REL}" 2>/dev/null | grep -acE ' [TW] ')"
             size "${REL}" 2>/dev/null | tail -1 | tr -s ' ' | sed 's/^/audit size: /' | cut -c1-120
           } > "${RT}/audit" 2>"${RT}/audit.err"
+          if [ -n "${GHBIN:-}" ] && [ -x "${GHUDIR}/${GHBIN}/support/analyzeHeadless" ]; then
+            timeout 1800 "${GHUDIR}/${GHBIN}/support/analyzeHeadless" "${RT}/ghproj" proj -import "${ANA}" -scriptPath "${RT}" -postScript targeted.py -analysisTimeoutPerFile 900 > "${RT}/ghidra.out" 2>&1 || echo "ghidra headless rc=$?" >> "${RT}/panics"
+            {
+              echo "audit ghidra targeted:"
+              grep -aE '^FN' "${RT}/ghidra.out" 2>/dev/null | head -8 | cut -c1-170
+            } >> "${RT}/audit" 2>>"${RT}/audit.err"
+          fi
           SYM=$(rz-bin -s "${ANA}" 2>/dev/null | grep -aF 'Subsystem_for_Arxumbra' | grep -aF '4main' | head -1 | awk '{print $6}')
           {
             echo "audit rizin sym=${SYM}"
@@ -299,7 +332,7 @@ jobs:
           kill ${SP2} 2>/dev/null || true
           wait ${SP2} 2>/dev/null || true
           if [ -s "${RT}/motionmid.png" ]; then
-            b64=$(convert "${RT}/motionmid.png" -resize 240x144 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
+            b64=$(convert "${RT}/motionmid.png" -resize 224x134 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
             if [ -n "${b64}" ]; then echo "::notice title=shot-motionmid::${b64}"; fi
           fi
           {
@@ -307,9 +340,7 @@ jobs:
             if [ -s "${RT}/panics" ]; then cat "${RT}/panics"; else echo "no panic or error lines in any app log"; fi
             if [ -s "${RT}/audit" ]; then cut -c1-190 "${RT}/audit" | head -16; else echo "audit missing"; fi
           } | tr -d '\000-\010\013\014\016-\037' | cut -c1-220 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=probe-report::${msg}"; done
-          if [ "$(grep -c '^home yes' "${RT}/verdicts" 2>/dev/null)" = "1" ]; then
-            hb "smoke result: application launched and kept running under headless Wayland"
-          else
+          if [ "$(grep -c '^home yes' "${RT}/verdicts" 2>/dev/null)" != "1" ]; then
             echo "::error title=runtime::application did not stay alive under headless Wayland"
           fi
           exit 0
