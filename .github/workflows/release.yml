@@ -223,14 +223,19 @@ jobs:
               mkdir -p "${HM}/.local/share/Subsystem-for-Arxumbra"
               printf '%s\n' 'arxumbra-workspace-catalog v1' '3' '1|0|54656c656d6574727920526967|1|0' '2|1|556e6974792054657374|2|0' '3|0|56756c6b616e204c6f61646572|3|1' > "${HM}/.local/share/Subsystem-for-Arxumbra/workspace-catalog"
             fi
+            export ARXUMBRA_PROBE_MARK="${RT}/mark-${CASE}"
+            rm -f "${RT}/mark-${CASE}"
             XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe timeout 60 "${BIN}" > "${RT}/app-${CASE}.log" 2>&1 &
             AP=$!
             if [ "${CASE}" = "motion" ] || [ "${CASE}" = "stepmid" ] || [ "${CASE}" = "guimid" ] || [ "${CASE}" = "dismissmid" ]; then
-              sleep 18.05
+              for _w in $(seq 1 400); do
+                if [ -f "${RT}/mark-${CASE}" ]; then break; fi
+                sleep 0.05
+              done
               XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}a"
-              sleep 0.25
+              sleep 0.15
               XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}b"
-              sleep 0.25
+              sleep 0.15
               XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}c"
               cp "${RT}/${CASE}b.png" "${RT}/motionmid.png" 2>/dev/null || true
               if [ "${CASE}" != "motion" ]; then cp "${RT}/${CASE}b.png" "${RT}/${CASE}.png" 2>/dev/null || true; fi

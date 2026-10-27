@@ -3318,6 +3318,11 @@ fn main() {
                                     draft_state.1 = 10u16;
                                     draft_state.2 = true;
                                 }
+                                if *clock_state > 18.0 && *clock_state < 18.1 {
+                                    if let Ok(mark) = std::env::var("ARXUMBRA_PROBE_MARK") {
+                                        std::fs::write(mark, b"t").ok();
+                                    }
+                                }
                                 if probe == "stepmid" && *clock_state > 18.0 {
                                     wizard_state.0 = 1u8;
                                 }
