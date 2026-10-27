@@ -138,10 +138,11 @@ jobs:
           retention-days: 7
           if-no-files-found: error
       - name: Stage 7
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
-          cargo +nightly-2026-10-25 build --quiet --locked \
+          set +e
+          cargo +nightly-2026-10-25 build --locked \
             --bin Subsystem-for-Arxumbra \
             --target x86_64-unknown-linux-gnu \
             --target-dir "${RUNNER_TEMP}/target-debug" \
@@ -149,7 +150,12 @@ jobs:
             --config 'profile.dev.opt-level=0' \
             --config 'profile.dev.debug="line-tables-only"' \
             --config 'profile.dev.debug-assertions=true' \
-            --config 'profile.dev.overflow-checks=true'
+            --config 'profile.dev.overflow-checks=true' > "${RUNNER_TEMP}/build-debug.log" 2>&1
+          RC=$?
+          if [ "${RC}" != "0" ]; then
+            grep -aE 'error(\[E[0-9]+\])?:|-->' "${RUNNER_TEMP}/build-debug.log" | head -14 | tr -d '\000-\010\013\014\016-\037' | cut -c1-190 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=build-errors::${msg}"; done
+          fi
+          exit ${RC}
       - name: Stage 8
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
         shell: bash
@@ -172,7 +178,7 @@ jobs:
           file "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           ldd "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 10
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         shell: bash
         run: |
           set +e +o pipefail
@@ -191,7 +197,11 @@ jobs:
             if [ -n "${b64}" ]; then echo "::notice title=shot-$1::${b64}"; fi
             return 0
           }
-          for CASE in home workspace wizard catalog; do
+          rawshot() {
+            timeout 20 grim -o HEADLESS-1 "${RT}/$1.png" 2>>"${RT}/grim.log"
+            return 0
+          }
+          for CASE in home registry workspace catalog wizard wizardgui invalid motion; do
             XD="${RT}/xdg-${CASE}"
             HM="${RT}/home-${CASE}"
             mkdir -p "${XD}" "${HM}/.config/sway"
@@ -203,23 +213,27 @@ jobs:
               if [ -S "${XD}/wayland-1" ]; then break; fi
               sleep 0.5
             done
-            if [ "${CASE}" = "home" ]; then unset ARXUMBRA_PROBE; elif [ "${CASE}" = "catalog" ]; then export ARXUMBRA_PROBE="workspace"; else export ARXUMBRA_PROBE="${CASE}"; fi
+            if [ "${CASE}" = "home" ]; then unset ARXUMBRA_PROBE; else export ARXUMBRA_PROBE="${CASE}"; fi
             if [ "${CASE}" = "catalog" ]; then
               mkdir -p "${HM}/.local/share/Subsystem-for-Arxumbra"
               printf '%s\n' 'arxumbra-workspace-catalog v1' '3' '1|0|54656c656d6574727920526967|1|0' '2|1|556e6974792054657374|2|0' '3|0|56756c6b616e204c6f61646572|3|1' > "${HM}/.local/share/Subsystem-for-Arxumbra/workspace-catalog"
             fi
-            XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe ARXUMBRA_STATE="${RT}/state-${CASE}.txt" ARXUMBRA_APPLY="${RT}/apply-${CASE}-" timeout 60 "${BIN}" > "${RT}/app-${CASE}.log" 2>&1 &
+            XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe timeout 60 "${BIN}" > "${RT}/app-${CASE}.log" 2>&1 &
             AP=$!
-            sleep 20
+            if [ "${CASE}" = "motion" ]; then
+              sleep 18.05
+              XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}a"
+              sleep 0.25
+              XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}b"
+              sleep 0.25
+              XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}c"
+              cp "${RT}/${CASE}b.png" "${RT}/motionmid.png" 2>/dev/null || true
+            else
+              sleep 20
+              XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 shot "${CASE}"
+            fi
             AL=$(kill -0 ${AP} 2>/dev/null && echo yes || echo no)
-            XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 shot "${CASE}a"
-            sleep 6
-            XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 shot "${CASE}b"
             echo "${CASE} ${AL}" >> "${RT}/verdicts"
-            if [ -s "${RT}/state-${CASE}.txt" ]; then echo "${CASE} $(cat "${RT}/state-${CASE}.txt")" >> "${RT}/states"; else echo "${CASE} state-file-missing" >> "${RT}/states"; fi
-            for AF in "${RT}"/apply-${CASE}-*; do
-              if [ -s "${AF}" ]; then echo "${CASE} $(basename "${AF}") $(cat "${AF}")" >> "${RT}/states"; fi
-            done || true
             grep -aE 'panicked|ERROR' "${RT}/app-${CASE}.log" | head -4 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 | sed "s/^/${CASE} panic: /" >> "${RT}/panics" || true
             kill ${AP} 2>/dev/null || true
             wait ${AP} 2>/dev/null || true
@@ -227,9 +241,12 @@ jobs:
             wait ${SP} 2>/dev/null || true
           done
           unset ARXUMBRA_PROBE
+          if [ -s "${RT}/motionmid.png" ]; then
+            b64=$(convert "${RT}/motionmid.png" -resize 240x144 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
+            if [ -n "${b64}" ]; then echo "::notice title=shot-motionmid::${b64}"; fi
+          fi
           {
             if [ -s "${RT}/verdicts" ]; then sed 's/^/alive: /' "${RT}/verdicts"; else echo "alive: none"; fi
-            if [ -s "${RT}/states" ]; then cat "${RT}/states"; else echo "no state dumps"; fi
             if [ -s "${RT}/panics" ]; then cat "${RT}/panics"; else echo "no panic or error lines in any app log"; fi
           } | tr -d '\000-\010\013\014\016-\037' | cut -c1-220 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=probe-report::${msg}"; done
           if [ "$(grep -c '^home yes' "${RT}/verdicts" 2>/dev/null)" = "1" ]; then
@@ -239,7 +256,7 @@ jobs:
           fi
           exit 0
       - name: Stage 11
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug
