@@ -292,9 +292,10 @@ jobs:
             readelf -lW "${REL}" 2>/dev/null | grep -aE 'GNU_STACK|GNU_RELRO' | tr -s ' ' | paste -sd ' ' - | cut -c1-160
             readelf -dW "${REL}" 2>/dev/null | grep -aE 'NEEDED|BIND_NOW|RUNPATH|RPATH' | tr -s ' ' | paste -sd ';' - | cut -c1-220
             echo "audit debug_sections=$(readelf -SW "${REL}" 2>/dev/null | grep -ac '\.debug_') dyn_syms=$(nm -D "${REL}" 2>/dev/null | grep -acE ' [TW] ')"
+            echo "audit bind_now=$(readelf -dW "${REL}" 2>/dev/null | grep -acE 'BIND_NOW') relro_segs=$(readelf -lW "${REL}" 2>/dev/null | grep -ac GNU_RELRO) needed_n=$(readelf -dW "${REL}" 2>/dev/null | grep -ac NEEDED)"
             size "${REL}" 2>/dev/null | tail -1 | tr -s ' ' | sed 's/^/audit size: /' | cut -c1-120
           } > "${RT}/audit" 2>"${RT}/audit.err"
-          SYM=$(rz-bin -s "${ANA}" 2>/dev/null | grep -aF 'Subsystem_for_Arxumbra' | grep -aF '4main' | head -1 | awk '{print $6}')
+          SYM=$(rz-bin -s "${ANA}" 2>/dev/null | grep -a 'Subsystem_for_Arxumbra' | grep -aE 'main' | head -1 | awk '{print $NF}')
           {
             echo "audit rizin sym=${SYM}"
             if [ -n "${SYM}" ]; then
@@ -318,7 +319,7 @@ jobs:
           XDG_RUNTIME_DIR="${XD}" HOME="${HM2}" WAYLAND_DISPLAY=wayland-1 timeout 40 strace -f -c -o "${RT}/strace.txt" timeout 12 "${BIN}" > "${RT}/trace-app.log" 2>&1 || true
           {
             echo "audit strace top:"
-            grep -aE 'clock_nanosleep|poll|openat|write|read' "${RT}/strace.txt" 2>/dev/null | head -6 | tr -s ' ' | cut -c1-110
+            grep -aE 'clock_nanosleep|epoll_wait|epoll_ctl|poll|openat|write|read' "${RT}/strace.txt" 2>/dev/null | head -6 | tr -s ' ' | cut -c1-110
           } >> "${RT}/audit" 2>>"${RT}/audit.err"
           kill ${SP2} 2>/dev/null || true
           wait ${SP2} 2>/dev/null || true
@@ -333,7 +334,7 @@ jobs:
           if [ -s "${RT}/audit" ]; then
             {
               sed -n '1,8p' "${RT}/audit" | sed 's|^[^:]*: ||'
-              grep -aE 'audit rizin|fcn\.|af:|bbs:|calls:|app_syms' "${RT}/audit" | head -4
+              grep -aE 'audit rizin|fcn\.|af:|bbs:|calls:|app_syms|bind_now' "${RT}/audit" | head -5
               grep -aA3 'audit strace top' "${RT}/audit" | head -4
             } | cut -c1-150 | head -18 | tr -d '\000-\010\013\014\016-\037' | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=binary-audit::${msg}"; done
           fi
