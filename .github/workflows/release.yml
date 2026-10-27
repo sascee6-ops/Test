@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - arena/784e0a1e-test
   workflow_dispatch:
     inputs:
       build_mode:
