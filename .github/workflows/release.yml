@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - arena/784e0a1e-test
   workflow_dispatch:
     inputs:
       build_mode:
@@ -139,11 +138,10 @@ jobs:
           retention-days: 7
           if-no-files-found: error
       - name: Stage 7
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
         shell: bash
         run: |
-          set +e
-          cargo +nightly-2026-10-25 build --locked \
+          cargo +nightly-2026-10-25 build --quiet --locked \
             --bin Subsystem-for-Arxumbra \
             --target x86_64-unknown-linux-gnu \
             --target-dir "${RUNNER_TEMP}/target-debug" \
@@ -151,21 +149,16 @@ jobs:
             --config 'profile.dev.opt-level=0' \
             --config 'profile.dev.debug="line-tables-only"' \
             --config 'profile.dev.debug-assertions=true' \
-            --config 'profile.dev.overflow-checks=true' > "${RUNNER_TEMP}/build-debug.log" 2>&1
-          RC=$?
-          if [ "${RC}" != "0" ]; then
-            grep -aE 'error(\[E[0-9]+\])?:|-->|expected|found' "${RUNNER_TEMP}/build-debug.log" | head -14 | tr -d '\000-\010\013\014\016-\037' | cut -c1-190 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=build-errors::${msg}"; done
-          fi
-          exit ${RC}
+            --config 'profile.dev.overflow-checks=true'
       - name: Stage 8
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/stage-debug"
           install -m 755 "${RUNNER_TEMP}/target-debug/x86_64-unknown-linux-gnu/debug/Subsystem-for-Arxumbra" "${RUNNER_TEMP}/stage-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           tar -czf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz" -C "${RUNNER_TEMP}/stage-debug" "x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 9
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
         shell: bash
         run: |
           tar -tzvf "${RUNNER_TEMP}/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug.tar.gz"
@@ -179,173 +172,7 @@ jobs:
           file "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
           ldd "${RUNNER_TEMP}/verify-debug/x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug"
       - name: Stage 10
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
-        shell: bash
-        run: |
-          set +e +o pipefail
-          hb() { echo "::notice title=hb::$1"; }
-          NAME="x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1"
-          BIN="${RUNNER_TEMP}/stage-debug/${NAME}-debug"
-          RT="${RUNNER_TEMP}/runtime"
-          rm -rf "${RT}"
-          mkdir -p "${RT}"
-          sudo apt-get update -y > "${RT}/apt.log" 2>&1 || echo "apt update rc=$?" >> "${RT}/panics"
-          sudo apt-get install -y --no-install-recommends sway grim libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1 || echo "apt install rc=$?" >> "${RT}/panics"
-          shot() {
-            local b64=""
-            timeout 20 grim -o HEADLESS-1 "${RT}/$1.png" 2>>"${RT}/grim.log"
-            b64=$(convert "${RT}/$1.png" -resize 224x134 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
-            if [ -n "${b64}" ]; then echo "::notice title=shot-$1::${b64}"; fi
-            return 0
-          }
-          rawshot() {
-            timeout 20 grim -o HEADLESS-1 "${RT}/$1.png" 2>>"${RT}/grim.log"
-            return 0
-          }
-          for CASE in home registry workspace catalog wizard wizardgui invalid motion; do
-            XD="${RT}/xdg-${CASE}"
-            HM="${RT}/home-${CASE}"
-            mkdir -p "${XD}" "${HM}/.config/sway"
-            chmod 700 "${XD}"
-            printf '%s\n' 'xwayland disable' 'output HEADLESS-1 resolution 1280x768' 'bar { swaybar_command /bin/true }' 'for_window [title=".*"] focus' 'focus_on_window_activation focus' > "${HM}/.config/sway/config"
-            XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 WLR_BACKENDS=headless WLR_RENDERER_ALLOW_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe sway -d -c "${HM}/.config/sway/config" > "${RT}/sway-${CASE}.log" 2>&1 &
-            SP=$!
-            for _i in $(seq 1 60); do
-              if [ -S "${XD}/wayland-1" ]; then break; fi
-              sleep 0.5
-            done
-            if [ "${CASE}" = "home" ]; then unset ARXUMBRA_PROBE; else export ARXUMBRA_PROBE="${CASE}"; fi
-            if [ "${CASE}" = "wizardgui" ] && [ -s "${HM}/.local/share/Subsystem-for-Arxumbra/workspace-catalog" ]; then
-              echo "save wrote catalog yes" >> "${RT}/verdicts"
-            fi
-            if [ "${CASE}" = "catalog" ]; then
-              mkdir -p "${HM}/.local/share/Subsystem-for-Arxumbra"
-              printf '%s\n' 'arxumbra-workspace-catalog v1' '3' '1|0|54656c656d6574727920526967|1|0' '2|1|556e6974792054657374|2|0' '3|0|56756c6b616e204c6f61646572|3|1' > "${HM}/.local/share/Subsystem-for-Arxumbra/workspace-catalog"
-            fi
-            XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe timeout 60 "${BIN}" > "${RT}/app-${CASE}.log" 2>&1 &
-            AP=$!
-            if [ "${CASE}" = "motion" ]; then
-              sleep 18.05
-              XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}a"
-              sleep 0.25
-              XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}b"
-              sleep 0.25
-              XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}c"
-              cp "${RT}/${CASE}b.png" "${RT}/motionmid.png" 2>/dev/null || true
-            else
-              sleep 20
-              XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 shot "${CASE}"
-            fi
-            AL=$(kill -0 ${AP} 2>/dev/null && echo yes || echo no)
-            echo "${CASE} ${AL}" >> "${RT}/verdicts"
-            grep -aE 'panicked|ERROR' "${RT}/app-${CASE}.log" | head -4 | tr -d '\000-\010\013\014\016-\037' | cut -c1-180 | sed "s/^/${CASE} panic: /" >> "${RT}/panics" || true
-            kill ${AP} 2>/dev/null || true
-            wait ${AP} 2>/dev/null || true
-            kill ${SP} 2>/dev/null || true
-            wait ${SP} 2>/dev/null || true
-          done
-          unset ARXUMBRA_PROBE
-          NAME2="${NAME}"
-          RELD="${RUNNER_TEMP}/stage-release"
-          ANAD="${RUNNER_TEMP}/stage-analysis"
-          mkdir -p "${RELD}" "${ANAD}"
-          sudo apt-get install -y --no-install-recommends strace >> "${RT}/apt.log" 2>&1 || echo "strace apt rc=$?" >> "${RT}/panics"
-          sudo apt-get install -y --no-install-recommends rizin >> "${RT}/apt.log" 2>&1 || echo "rizin apt unavailable rc=$?" >> "${RT}/panics"
-          if ! command -v rizin >/dev/null 2>&1; then
-            RZURL=$(curl -fsSL https://api.github.com/repos/rizinorg/rizin/releases/latest 2>/dev/null | grep -ao 'https://github.com/rizinorg/rizin/releases/download/[^"]*-static-x86_64\.tar\.xz' | head -1 || true)
-            if [ -n "${RZURL}" ]; then
-              curl -fsSL -o "${RT}/rizin.tar.xz" "${RZURL}" 2>>"${RT}/apt.log" || echo "rizin dl rc=$?" >> "${RT}/panics"
-              mkdir -p "${RT}/rz"
-              tar -xJf "${RT}/rizin.tar.xz" -C "${RT}/rz" 2>>"${RT}/apt.log" || echo "rizin unpack rc=$?" >> "${RT}/panics"
-              RZBIN=$(find "${RT}/rz" -name rizin -not -type d 2>/dev/null | head -1)
-              if [ -n "${RZBIN}" ]; then
-                export PATH="$(dirname "${RZBIN}"):${PATH}"
-              else
-                { echo "rizin binary not found; tree:"; find "${RT}/rz" -maxdepth 3 2>/dev/null | head -8; } >> "${RT}/panics"
-              fi
-            else
-              echo "rizin static url not found" >> "${RT}/panics"
-            fi
-          fi
-          T0=$(date +%s)
-          cargo +nightly-2026-10-25 build --quiet --locked --release --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-rel-fat" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="fat"' --config 'profile.release.codegen-units=1' --config 'profile.release.panic="abort"' --config 'profile.release.strip=true' --config 'profile.release.debug=false' --config 'profile.release.overflow-checks=true' > "${RT}/rel-fat.log" 2>&1; RCF=$?
-          if [ "${RCF}" != "0" ]; then echo "rel fat build rc=${RCF}" >> "${RT}/panics"; fi
-          T1=$(date +%s)
-          REL="${RELD}/${NAME2}"
-          cp "${RUNNER_TEMP}/target-rel-fat/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${REL}" 2>>"${RT}/rel-fat.log" || { echo "rel cp rc=$? log tail:"; tail -4 "${RT}/rel-fat.log"; } >> "${RT}/panics"
-          T2=$(date +%s)
-          cargo +nightly-2026-10-25 build --quiet --locked --release --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-rel-thin" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="thin"' --config 'profile.release.codegen-units=8' --config 'profile.release.panic="abort"' --config 'profile.release.strip=true' --config 'profile.release.debug=false' --config 'profile.release.overflow-checks=true' > "${RT}/rel-thin.log" 2>&1 || echo "rel thin build rc=$?" >> "${RT}/panics"
-          T3=$(date +%s)
-          THIN="${RELD}/${NAME2}-thinlto-experiment"
-          cp "${RUNNER_TEMP}/target-rel-thin/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${THIN}" 2>>"${RT}/rel-thin.log" || { echo "thin cp rc=$? log tail:"; tail -4 "${RT}/rel-thin.log"; } >> "${RT}/panics"
-          cargo +nightly-2026-10-25 build --quiet --locked --release --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-ana" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="fat"' --config 'profile.release.codegen-units=1' --config 'profile.release.panic="abort"' --config 'profile.release.strip=false' --config 'profile.release.debug="line-tables-only"' --config 'profile.release.overflow-checks=true' > "${RT}/ana.log" 2>&1 || echo "analysis build rc=$?" >> "${RT}/panics"
-          ANA="${ANAD}/${NAME2}-analysis"
-          cp "${RUNNER_TEMP}/target-ana/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${ANA}" 2>>"${RT}/ana.log" || { echo "ana cp rc=$? log tail:"; tail -4 "${RT}/ana.log"; } >> "${RT}/panics"
-          if [ ! -s "${REL}" ] || ! command -v rizin >/dev/null 2>&1; then
-            echo "::notice title=diag::rc=${RCF:-?} reldir=$(test -d "${RUNNER_TEMP}/target-rel-fat/x86_64-unknown-linux-gnu/release" && echo y || echo n) trf=$(test -d "${RUNNER_TEMP}/target-rel-fat" && echo y || echo n) trf_ls=$(ls "${RUNNER_TEMP}/target-rel-fat" 2>/dev/null | paste -sd, - | cut -c1-50) fin=$(grep -ac Finished "${RT}/rel-fat.log" 2>/dev/null) cmp=$(grep -ac 'Compiling Subsystem' "${RT}/rel-fat.log" 2>/dev/null) err=$(grep -ac '^error' "${RT}/rel-fat.log" 2>/dev/null) warn=$(grep -ac '^warning' "${RT}/rel-fat.log" 2>/dev/null) tail1=$(tail -1 "${RT}/rel-fat.log" 2>/dev/null | cut -c1-70) rzbin=$(test -n "$(command -v rizin)" && echo y || echo n) rzls=$(ls "${RT}/rz" 2>/dev/null | paste -sd, - | cut -c1-50)" 
-          fi
-          {
-            echo "audit build_seconds fat=$((T1-T0)) thin=$((T3-T2))"
-            echo "audit sizes rel_fat=$(stat -c %s "${REL}" 2>/dev/null) rel_thin=$(stat -c %s "${THIN}" 2>/dev/null) analysis=$(stat -c %s "${ANA}" 2>/dev/null) debug=$(stat -c %s "${BIN}" 2>/dev/null)"
-            file "${REL}" 2>/dev/null | cut -c1-150
-            readelf -h "${REL}" 2>/dev/null | grep -aE 'Class|Machine|Type:' | tr -d '\000-\010\013\014\016-\037' | paste -sd ' ' - | cut -c1-160
-            readelf -lW "${REL}" 2>/dev/null | grep -aE 'GNU_STACK|GNU_RELRO' | tr -s ' ' | paste -sd ' ' - | cut -c1-160
-            readelf -dW "${REL}" 2>/dev/null | grep -aE 'NEEDED|BIND_NOW|RUNPATH|RPATH' | tr -s ' ' | paste -sd ';' - | cut -c1-220
-            echo "audit debug_sections=$(readelf -SW "${REL}" 2>/dev/null | grep -ac '\.debug_') dyn_syms=$(nm -D "${REL}" 2>/dev/null | grep -acE ' [TW] ')"
-            echo "audit bind_now=$(readelf -dW "${REL}" 2>/dev/null | grep -acE 'BIND_NOW') relro_segs=$(readelf -lW "${REL}" 2>/dev/null | grep -ac GNU_RELRO) needed_n=$(readelf -dW "${REL}" 2>/dev/null | grep -ac NEEDED)"
-            size "${REL}" 2>/dev/null | tail -1 | tr -s ' ' | sed 's/^/audit size: /' | cut -c1-120
-          } > "${RT}/audit" 2>"${RT}/audit.err"
-          SYMLINE=$(rz-bin -s "${ANA}" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -a 'Subsystem_for_Arxumbra' | grep -aE 'main' | head -1)
-          SYM=$(echo "${SYMLINE}" | awk '{print $NF}')
-          SADDR=$(echo "${SYMLINE}" | grep -ao '0x[0-9a-fA-F]\+' | head -1)
-          {
-            echo "audit rizin sym=${SYM}"
-            if [ -n "${SYM}" ]; then
-              timeout 600 rizin -q -c "af @ ${SADDR}; afi @ ${SADDR}; pd 8 @ ${SADDR}" "${ANA}" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -aE 'fcn|size:|bbs:|calls:|name:|: +(mov|lea|call|push|sub|cmp|jmp)' | head -8 | tr -d '\000-\010\013\014\016-\037' | cut -c1-150
-            else
-              echo "rizin symbol lookup empty; fallback rz-bin counts:"
-              rz-bin -s "${ANA}" 2>/dev/null | grep -ac 'Subsystem_for_Arxumbra' | sed 's/^/audit rizin app_syms=/'
-            fi
-          } >> "${RT}/audit" 2>>"${RT}/audit.err"
-          XD="${RT}/xdg-trace"
-          HM2="${RT}/home-trace"
-          mkdir -p "${XD}" "${HM2}/.config/sway"
-          chmod 700 "${XD}"
-          printf '%s\n' 'xwayland disable' 'output HEADLESS-1 resolution 1280x768' 'bar { swaybar_command /bin/true }' > "${HM2}/.config/sway/config"
-          XDG_RUNTIME_DIR="${XD}" HOME="${HM2}" WAYLAND_DISPLAY=wayland-1 WLR_BACKENDS=headless WLR_RENDERER_ALLOW_SOFTWARE=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe sway -d -c "${HM2}/.config/sway/config" > "${RT}/sway-trace.log" 2>&1 &
-          SP2=$!
-          for _i in $(seq 1 60); do
-            if [ -S "${XD}/wayland-1" ]; then break; fi
-            sleep 0.5
-          done
-          XDG_RUNTIME_DIR="${XD}" HOME="${HM2}" WAYLAND_DISPLAY=wayland-1 timeout 40 strace -f -c -o "${RT}/strace.txt" timeout 12 "${BIN}" > "${RT}/trace-app.log" 2>&1 || true
-          {
-            echo "audit strace top:"
-            grep -aE 'clock_nanosleep|epoll_wait|epoll_ctl|poll|openat|write|read' "${RT}/strace.txt" 2>/dev/null | head -6 | tr -s ' ' | cut -c1-110
-          } >> "${RT}/audit" 2>>"${RT}/audit.err"
-          kill ${SP2} 2>/dev/null || true
-          wait ${SP2} 2>/dev/null || true
-          if [ -s "${RT}/motionmid.png" ]; then
-            b64=$(convert "${RT}/motionmid.png" -resize 224x134 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
-            if [ -n "${b64}" ]; then echo "::notice title=shot-motionmid::${b64}"; fi
-          fi
-          {
-            if [ -s "${RT}/verdicts" ]; then sed 's/^/alive: /' "${RT}/verdicts"; else echo "alive: none"; fi
-            if [ -s "${RT}/panics" ]; then cut -c1-120 "${RT}/panics" | head -4; else echo "no panic or error lines in any app log"; fi
-          } | tr -d '\000-\010\013\014\016-\037' | cut -c1-220 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=probe-report::${msg}"; done
-          if [ -s "${RT}/audit" ]; then
-            {
-              sed -n '1,8p' "${RT}/audit" | sed 's|^[^:]*: ||'
-              grep -aE 'audit rizin|fcn|size:|bbs:|calls:|name:|0x[0-9a-f]+ +(mov|lea|call|push|sub|cmp|jmp)|app_syms' "${RT}/audit" | head -8
-              grep -aA3 'audit strace top' "${RT}/audit" | head -4
-            } | cut -c1-150 | head -18 | tr -d '\000-\010\013\014\016-\037' | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=binary-audit::${msg}"; done
-          fi
-          if [ "$(grep -c '^home yes' "${RT}/verdicts" 2>/dev/null)" != "1" ]; then
-            echo "::error title=runtime::application did not stay alive under headless Wayland"
-          fi
-          exit 0
-      - name: Stage 11
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/784e0a1e-test') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_mode == 'debug' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: x86_64-Linux-Subsystem-for-Arxumbra-v0.0.0.0.0.0-s1-debug
