@@ -215,6 +215,9 @@ jobs:
               sleep 0.5
             done
             if [ "${CASE}" = "home" ]; then unset ARXUMBRA_PROBE; else export ARXUMBRA_PROBE="${CASE}"; fi
+            if [ "${CASE}" = "wizardgui" ] && [ -s "${HM}/.local/share/Subsystem-for-Arxumbra/workspace-catalog" ]; then
+              echo "save wrote catalog yes" >> "${RT}/verdicts"
+            fi
             if [ "${CASE}" = "catalog" ]; then
               mkdir -p "${HM}/.local/share/Subsystem-for-Arxumbra"
               printf '%s\n' 'arxumbra-workspace-catalog v1' '3' '1|0|54656c656d6574727920526967|1|0' '2|1|556e6974792054657374|2|0' '3|0|56756c6b616e204c6f61646572|3|1' > "${HM}/.local/share/Subsystem-for-Arxumbra/workspace-catalog"
@@ -279,18 +282,7 @@ jobs:
           ANA="${ANAD}/${NAME2}-analysis"
           cp "${RUNNER_TEMP}/target-ana/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${ANA}" 2>>"${RT}/ana.log" || { echo "ana cp rc=$? log tail:"; tail -4 "${RT}/ana.log"; } >> "${RT}/panics"
           if [ ! -s "${REL}" ] || ! command -v rizin >/dev/null 2>&1; then
-            {
-              echo "diag rc_fat=${RCF:-?} pwd=$(pwd) runner_temp=${RUNNER_TEMP}"
-              ls "${RUNNER_TEMP}" 2>&1 | head -6
-              echo "diag target-rel-fat:"
-              ls "${RUNNER_TEMP}/target-rel-fat" 2>&1 | head -4
-              echo "diag log grep:"
-              grep -aE 'Finished|Compiling Subsystem|^error' "${RT}/rel-fat.log" 2>/dev/null | head -5 | cut -c1-140
-              echo "diag log tail:"
-              tail -2 "${RT}/rel-fat.log" 2>/dev/null | cut -c1-140
-              echo "diag rz tree:"
-              find "${RT}/rz" -maxdepth 3 2>/dev/null | head -5
-            } | tr -d '\000-\010\013\014\016-\037' | cut -c1-150 | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r m; do echo "::notice title=diag::${m}"; done
+            echo "::notice title=diag::rc=${RCF:-?} reldir=$(test -d "${RUNNER_TEMP}/target-rel-fat/x86_64-unknown-linux-gnu/release" && echo y || echo n) trf=$(test -d "${RUNNER_TEMP}/target-rel-fat" && echo y || echo n) trf_ls=$(ls "${RUNNER_TEMP}/target-rel-fat" 2>/dev/null | paste -sd, - | cut -c1-50) fin=$(grep -ac Finished "${RT}/rel-fat.log" 2>/dev/null) cmp=$(grep -ac 'Compiling Subsystem' "${RT}/rel-fat.log" 2>/dev/null) err=$(grep -ac '^error' "${RT}/rel-fat.log" 2>/dev/null) warn=$(grep -ac '^warning' "${RT}/rel-fat.log" 2>/dev/null) tail1=$(tail -1 "${RT}/rel-fat.log" 2>/dev/null | cut -c1-70) rzbin=$(test -n "$(command -v rizin)" && echo y || echo n) rzls=$(ls "${RT}/rz" 2>/dev/null | paste -sd, - | cut -c1-50)" 
           fi
           {
             echo "audit build_seconds fat=$((T1-T0)) thin=$((T3-T2))"
@@ -336,7 +328,7 @@ jobs:
           fi
           {
             if [ -s "${RT}/verdicts" ]; then sed 's/^/alive: /' "${RT}/verdicts"; else echo "alive: none"; fi
-            if [ -s "${RT}/panics" ]; then cut -c1-130 "${RT}/panics" | head -6; else echo "no panic or error lines in any app log"; fi
+            if [ -s "${RT}/panics" ]; then cut -c1-120 "${RT}/panics" | head -4; else echo "no panic or error lines in any app log"; fi
             if [ -s "${RT}/audit" ]; then cut -c1-150 "${RT}/audit" | head -18; else echo "audit missing"; fi
           } | tr -d '\000-\010\013\014\016-\037' | cut -c1-220 | sed 's/%/%25/g' | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r msg; do echo "::notice title=probe-report::${msg}"; done
           if [ "$(grep -c '^home yes' "${RT}/verdicts" 2>/dev/null)" != "1" ]; then
