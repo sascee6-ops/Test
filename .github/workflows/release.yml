@@ -229,15 +229,15 @@ jobs:
             AP=$!
             if [ "${CASE}" = "motion" ] || [ "${CASE}" = "stepmid" ] || [ "${CASE}" = "guimid" ] || [ "${CASE}" = "dismissmid" ]; then
               _w=0
-              for _w in $(seq 1 400); do
+              for _w in $(seq 1 700); do
                 if [ -f "${RT}/mark-${CASE}" ]; then break; fi
                 sleep 0.05
               done
               echo "${CASE} markwait=${_w} mark=$(cat "${RT}/mark-${CASE}" 2>/dev/null)" >> "${RT}/verdicts"
               XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}a"
-              sleep 0.15
+              sleep 0.05
               XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}b"
-              sleep 0.15
+              sleep 0.05
               XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}c"
               cp "${RT}/${CASE}b.png" "${RT}/motionmid.png" 2>/dev/null || true
               if [ "${CASE}" != "motion" ]; then cp "${RT}/${CASE}b.png" "${RT}/${CASE}.png" 2>/dev/null || true; fi
