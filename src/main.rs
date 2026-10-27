@@ -3320,7 +3320,7 @@ fn main() {
                                 }
                                 if *clock_state > 18.0 && *clock_state < 18.1 {
                                     if let Ok(mark) = std::env::var("ARXUMBRA_PROBE_MARK") {
-                                        std::fs::write(mark, b"t").ok();
+                                        std::fs::write(mark, std::format!("{:.2}", *clock_state).into_bytes()).ok();
                                     }
                                 }
                                 if probe == "stepmid" && *clock_state > 18.0 {

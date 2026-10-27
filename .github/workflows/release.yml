@@ -192,7 +192,7 @@ jobs:
           sudo apt-get update -y > "${RT}/apt.log" 2>&1 || echo "apt update rc=$?" >> "${RT}/panics"
           sudo apt-get install -y --no-install-recommends sway grim libegl1 libegl-mesa0 libgles2 libgl1 libgl1-mesa-dri mesa-libgallium libvulkan1 mesa-vulkan-drivers libxkbcommon0 imagemagick >> "${RT}/apt.log" 2>&1 || echo "apt install rc=$?" >> "${RT}/panics"
           shot() {
-            case "$1" in home|registry|wizard|wizardgui|invalid) ;; *) return 0;; esac
+            case "$1" in wizard|invalid) ;; *) return 0;; esac
             local b64=""
             timeout 20 grim -o HEADLESS-1 "${RT}/$1.png" 2>>"${RT}/grim.log"
             b64=$(convert "${RT}/$1.png" -resize 224x134 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
@@ -228,10 +228,12 @@ jobs:
             XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe timeout 60 "${BIN}" > "${RT}/app-${CASE}.log" 2>&1 &
             AP=$!
             if [ "${CASE}" = "motion" ] || [ "${CASE}" = "stepmid" ] || [ "${CASE}" = "guimid" ] || [ "${CASE}" = "dismissmid" ]; then
+              _w=0
               for _w in $(seq 1 400); do
                 if [ -f "${RT}/mark-${CASE}" ]; then break; fi
                 sleep 0.05
               done
+              echo "${CASE} markwait=${_w} mark=$(cat "${RT}/mark-${CASE}" 2>/dev/null)" >> "${RT}/verdicts"
               XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}a"
               sleep 0.15
               XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}b"
@@ -239,6 +241,10 @@ jobs:
               XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 rawshot "${CASE}c"
               cp "${RT}/${CASE}b.png" "${RT}/motionmid.png" 2>/dev/null || true
               if [ "${CASE}" != "motion" ]; then cp "${RT}/${CASE}b.png" "${RT}/${CASE}.png" 2>/dev/null || true; fi
+              if [ "${CASE}" = "stepmid" ]; then
+                cp "${RT}/${CASE}a.png" "${RT}/stepmida.png" 2>/dev/null || true
+                cp "${RT}/${CASE}c.png" "${RT}/stepmidc.png" 2>/dev/null || true
+              fi
             else
               sleep 20
               XDG_RUNTIME_DIR="${XD}" HOME="${HM}" WAYLAND_DISPLAY=wayland-1 shot "${CASE}"
@@ -256,7 +262,7 @@ jobs:
             b64=$(convert "${RT}/motionmid.png" -resize 224x134 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
             if [ -n "${b64}" ]; then echo "::notice title=shot-motionmid::${b64}"; fi
           fi
-          for M in stepmid guimid dismissmid; do
+          for M in motionmid stepmid stepmida stepmidc guimid dismissmid; do
             if [ -s "${RT}/${M}.png" ]; then
               b64=$(convert "${RT}/${M}.png" -resize 224x134 -colorspace Gray -depth 8 png:- 2>/dev/null | base64 -w0)
               if [ -n "${b64}" ]; then echo "::notice title=shot-${M}::${b64}"; fi
