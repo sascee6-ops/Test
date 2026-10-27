@@ -249,59 +249,16 @@ jobs:
           sudo apt-get install -y --no-install-recommends strace >> "${RT}/apt.log" 2>&1 || echo "strace apt rc=$?" >> "${RT}/panics"
           sudo apt-get install -y --no-install-recommends rizin >> "${RT}/apt.log" 2>&1 || echo "rizin apt unavailable rc=$?" >> "${RT}/panics"
           if ! command -v rizin >/dev/null 2>&1; then
-            sudo apt-get install -y --no-install-recommends openjdk-17-jre-headless unzip >> "${RT}/apt.log" 2>&1 || echo "jdk apt rc=$?" >> "${RT}/panics"
-            GHUDIR="${RUNNER_TEMP}/ghidra"
-            mkdir -p "${GHUDIR}"
-            URL=$(curl -fsSL https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/latest 2>/dev/null | grep -ao 'https://github.com/NationalSecurityAgency/ghidra/releases/download/[^"]*\.zip' | head -1)
-            if [ -n "${URL}" ]; then
-              curl -fsSL -o "${RUNNER_TEMP}/ghidra.zip" "${URL}" 2>>"${RT}/apt.log" || echo "ghidra download rc=$?" >> "${RT}/panics"
-              unzip -q "${RUNNER_TEMP}/ghidra.zip" -d "${GHUDIR}" 2>>"${RT}/apt.log" || echo "ghidra unzip rc=$?" >> "${RT}/panics"
+            RZURL=$(curl -fsSL https://api.github.com/repos/rizinorg/rizin/releases/latest 2>/dev/null | grep -ao 'https://github.com/rizinorg/rizin/releases/download/[^"]*-static-x86_64\.tar\.xz' | head -1 || true)
+            if [ -n "${RZURL}" ]; then
+              curl -fsSL -o "${RT}/rizin.tar.xz" "${RZURL}" 2>>"${RT}/apt.log" || echo "rizin dl rc=$?" >> "${RT}/panics"
+              mkdir -p "${RT}/rz"
+              tar -xJf "${RT}/rizin.tar.xz" -C "${RT}/rz" --strip-components=1 2>>"${RT}/apt.log" || echo "rizin unpack rc=$?" >> "${RT}/panics"
+              export PATH="${RT}/rz/bin:${PATH}"
+              command -v rizin >> "${RT}/apt.log" 2>&1 || echo "rizin still missing after unpack" >> "${RT}/panics"
             else
-              echo "ghidra release url not found" >> "${RT}/panics"
+              echo "rizin static url not found" >> "${RT}/panics"
             fi
-            GHBIN=$(ls "${GHUDIR}" 2>/dev/null | head -1)
-            cat > "${RT}/targeted.py" <<'PY'
-            fm = currentProgram.getFunctionManager()
-            n = 0
-            for f in fm.getFunctions(True):
-                nm = f.getName()
-                if 'Subsystem_for_Arxumbra' in nm and '4main' in nm:
-                    print("FN %s bytes=%d" % (nm[:150], f.getBody().getNumAddresses()))
-                    n += 1
-                    if n >= 10:
-                        break
-            print("FN_COUNT_MATCHED %d" % n)
-            PY
-          fi
-          T0=$(date +%s)
-          cargo +nightly-2026-10-25 build --quiet --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-rel-fat" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="fat"' --config 'profile.release.codegen-units=1' --config 'profile.release.panic="abort"' --config 'profile.release.strip=true' --config 'profile.release.debug=false' --config 'profile.release.overflow-checks=true' > "${RT}/rel-fat.log" 2>&1 || hb "rel fat build rc=$?"
-          T1=$(date +%s)
-          REL="${RELD}/${NAME2}"
-          cp "${RUNNER_TEMP}/target-rel-fat/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${REL}" 2>>"${RT}/rel-fat.log" || { echo "rel cp rc=$? log tail:"; tail -4 "${RT}/rel-fat.log"; } >> "${RT}/panics"
-          T2=$(date +%s)
-          cargo +nightly-2026-10-25 build --quiet --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-rel-thin" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="thin"' --config 'profile.release.codegen-units=8' --config 'profile.release.panic="abort"' --config 'profile.release.strip=true' --config 'profile.release.debug=false' --config 'profile.release.overflow-checks=true' > "${RT}/rel-thin.log" 2>&1 || hb "rel thin build rc=$?"
-          T3=$(date +%s)
-          THIN="${RELD}/${NAME2}-thinlto-experiment"
-          cp "${RUNNER_TEMP}/target-rel-thin/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${THIN}" 2>>"${RT}/rel-thin.log" || { echo "thin cp rc=$? log tail:"; tail -4 "${RT}/rel-thin.log"; } >> "${RT}/panics"
-          cargo +nightly-2026-10-25 build --quiet --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-ana" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="fat"' --config 'profile.release.codegen-units=1' --config 'profile.release.panic="abort"' --config 'profile.release.strip=false' --config 'profile.release.debug="line-tables-only"' --config 'profile.release.overflow-checks=true' > "${RT}/ana.log" 2>&1 || hb "analysis build rc=$?"
-          ANA="${ANAD}/${NAME2}-analysis"
-          cp "${RUNNER_TEMP}/target-ana/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${ANA}" 2>>"${RT}/ana.log" || { echo "ana cp rc=$? log tail:"; tail -4 "${RT}/ana.log"; } >> "${RT}/panics"
-          {
-            echo "audit build_seconds fat=$((T1-T0)) thin=$((T3-T2))"
-            echo "audit sizes rel_fat=$(stat -c %s "${REL}" 2>/dev/null) rel_thin=$(stat -c %s "${THIN}" 2>/dev/null) analysis=$(stat -c %s "${ANA}" 2>/dev/null) debug=$(stat -c %s "${BIN}" 2>/dev/null)"
-            file "${REL}" 2>/dev/null | cut -c1-150
-            readelf -h "${REL}" 2>/dev/null | grep -aE 'Class|Machine|Type:' | tr -d '\000-\010\013\014\016-\037' | paste -sd ' ' - | cut -c1-160
-            readelf -lW "${REL}" 2>/dev/null | grep -aE 'GNU_STACK|GNU_RELRO' | tr -s ' ' | paste -sd ' ' - | cut -c1-160
-            readelf -dW "${REL}" 2>/dev/null | grep -aE 'NEEDED|BIND_NOW|RUNPATH|RPATH' | tr -s ' ' | paste -sd ';' - | cut -c1-220
-            echo "audit debug_sections=$(readelf -SW "${REL}" 2>/dev/null | grep -ac '\.debug_') dyn_syms=$(nm -D "${REL}" 2>/dev/null | grep -acE ' [TW] ')"
-            size "${REL}" 2>/dev/null | tail -1 | tr -s ' ' | sed 's/^/audit size: /' | cut -c1-120
-          } > "${RT}/audit" 2>"${RT}/audit.err"
-          if [ -n "${GHBIN:-}" ] && [ -x "${GHUDIR}/${GHBIN}/support/analyzeHeadless" ]; then
-            timeout 1800 "${GHUDIR}/${GHBIN}/support/analyzeHeadless" "${RT}/ghproj" proj -import "${ANA}" -scriptPath "${RT}" -postScript targeted.py -analysisTimeoutPerFile 900 > "${RT}/ghidra.out" 2>&1 || echo "ghidra headless rc=$?" >> "${RT}/panics"
-            {
-              echo "audit ghidra targeted:"
-              grep -aE '^FN' "${RT}/ghidra.out" 2>/dev/null | head -8 | cut -c1-170
-            } >> "${RT}/audit" 2>>"${RT}/audit.err"
           fi
           SYM=$(rz-bin -s "${ANA}" 2>/dev/null | grep -aF 'Subsystem_for_Arxumbra' | grep -aF '4main' | head -1 | awk '{print $6}')
           {
