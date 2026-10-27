@@ -265,7 +265,8 @@ jobs:
             fi
           fi
           T0=$(date +%s)
-          cargo +nightly-2026-10-25 build --quiet --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-rel-fat" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="fat"' --config 'profile.release.codegen-units=1' --config 'profile.release.panic="abort"' --config 'profile.release.strip=true' --config 'profile.release.debug=false' --config 'profile.release.overflow-checks=true' > "${RT}/rel-fat.log" 2>&1 || echo "rel fat build rc=$?" >> "${RT}/panics"
+          cargo +nightly-2026-10-25 build --quiet --locked --bin Subsystem-for-Arxumbra --target x86_64-unknown-linux-gnu --target-dir "${RUNNER_TEMP}/target-rel-fat" --config 'build.incremental=false' --config 'profile.release.opt-level=3' --config 'profile.release.lto="fat"' --config 'profile.release.codegen-units=1' --config 'profile.release.panic="abort"' --config 'profile.release.strip=true' --config 'profile.release.debug=false' --config 'profile.release.overflow-checks=true' > "${RT}/rel-fat.log" 2>&1; RCF=$?
+          if [ "${RCF}" != "0" ]; then echo "rel fat build rc=${RCF}" >> "${RT}/panics"; fi
           T1=$(date +%s)
           REL="${RELD}/${NAME2}"
           cp "${RUNNER_TEMP}/target-rel-fat/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${REL}" 2>>"${RT}/rel-fat.log" || { echo "rel cp rc=$? log tail:"; tail -4 "${RT}/rel-fat.log"; } >> "${RT}/panics"
@@ -279,10 +280,14 @@ jobs:
           cp "${RUNNER_TEMP}/target-ana/x86_64-unknown-linux-gnu/release/Subsystem-for-Arxumbra" "${ANA}" 2>>"${RT}/ana.log" || { echo "ana cp rc=$? log tail:"; tail -4 "${RT}/ana.log"; } >> "${RT}/panics"
           if [ ! -s "${REL}" ] || ! command -v rizin >/dev/null 2>&1; then
             {
-              echo "diag rel-dir:"
-              ls "${RUNNER_TEMP}/target-rel-fat/x86_64-unknown-linux-gnu/release" 2>&1 | head -4
-              echo "diag fat log head:"
-              head -6 "${RT}/rel-fat.log" 2>/dev/null | cut -c1-150
+              echo "diag rc_fat=${RCF:-?} pwd=$(pwd) runner_temp=${RUNNER_TEMP}"
+              ls "${RUNNER_TEMP}" 2>&1 | head -6
+              echo "diag target-rel-fat:"
+              ls "${RUNNER_TEMP}/target-rel-fat" 2>&1 | head -4
+              echo "diag log grep:"
+              grep -aE 'Finished|Compiling Subsystem|^error' "${RT}/rel-fat.log" 2>/dev/null | head -5 | cut -c1-140
+              echo "diag log tail:"
+              tail -2 "${RT}/rel-fat.log" 2>/dev/null | cut -c1-140
               echo "diag rz tree:"
               find "${RT}/rz" -maxdepth 3 2>/dev/null | head -5
             } | tr -d '\000-\010\013\014\016-\037' | cut -c1-150 | paste -sd '~' - | sed 's/~/%0A/g' | while IFS= read -r m; do echo "::notice title=diag::${m}"; done
